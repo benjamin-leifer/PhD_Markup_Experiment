@@ -7,7 +7,7 @@ from tkinter import filedialog
 
 class arbin_import():
 
-    def __init__(self, path, name='cell', mass=.003, color = 'r', shape = 'o'):
+    def __init__(self, path, name='cell', mass=.003, theoretical_cap = 175, break_point = 4, color = 'r', shape = 'o'):
         self.path = path
         self.data = self.read_data()
         self.name = name
@@ -15,6 +15,8 @@ class arbin_import():
         self.color = color
         self.shape = shape
         self.cycle_Num_list = ['1:C/10', '2:C/10', '3:C/10', '4:C/5', '5:C/5', '6:C/5', '7:C/2', '8:C/2', '9:C/2',]
+        self.theoretical_cap = theoretical_cap
+        self.break_point = break_point
 
 
     def read_data(self):
@@ -45,14 +47,14 @@ class arbin_import():
             print(i)
             cycles.append(i)
             print(mAh)
-            self.max_capacity.append(mAh/self.mass*175)
+            self.max_capacity.append(mAh/self.mass*self.theoretical_cap)
             i = i + 1
-            if i==7:
+            if i==self.break_point:
                 break
 
         print(self.max_cap)
         print(self.max_cap.keys())
-        plt.scatter(self.cycle_Num_list[0:len(self.max_capacity)], self.max_capacity, c=self.color, marker='*' ,label=self.name)
+        #plt.scatter(self.cycle_Num_list[0:len(self.max_capacity)], self.max_capacity, c=self.color, marker='*' ,label=self.name+ ' Charge Capacity')
         #plt.show()
 
     def get_min_capacity_per_cycle(self):
@@ -68,25 +70,25 @@ class arbin_import():
             print(i)
             cycles.append(i)
             print(mAh)
-            self.max_dis_capacity.append(mAh / self.mass * 175)
+            self.max_dis_capacity.append(mAh / self.mass * self.theoretical_cap)
             i = i + 1
-            if i == 7:
+            if i == self.break_point:
                 break
 
         print(self.max_dis_cap)
         print(self.max_dis_cap.keys())
-        plt.scatter(self.cycle_Num_list[0:len(self.max_dis_capacity)], self.max_dis_capacity, c=self.color, marker=self.shape, label=self.name)
+        #plt.scatter(self.cycle_Num_list[0:len(self.max_dis_capacity)], self.max_dis_capacity, c=self.color, marker=self.shape, label=self.name+ ' Discharge Capacity')
         #plt.show()
     def get_coulombic_efficiency(self):
         self.ce = []
-        i = 1
+        i = 0
         for mAh in self.max_dis_cap:
             self.ce.append(self.max_capacity[i]/self.max_dis_capacity[i])
             i = i + 1
-            if i == 7:
+            if i == self.break_point:
                 break
         print(self.ce)
-        plt.scatter(self.cycle_Num_list[0:len(self.ce)], self.ce, c=self.color, marker=self.shape, label=self.name)
+        plt.scatter(self.cycle_Num_list[0:len(self.ce)], self.ce, c=self.color, marker=self.shape, label=self.name+' Coulombic Efficiency')
         #plt.show()
 
     def get_data(self):
@@ -106,13 +108,23 @@ class arbin_import():
 
 if __name__ == '__main__':
 
-    """
+
     root = tk.Tk()
     root.withdraw()
-    file_path = filedialog.askopenfilename()
-    """
+    file_list = []
+    for i in range(1):
+        file_path = filedialog.askopenfilename()
+        file_list.append(file_path)
+    print(file_list)
+
     colors = ['r', 'b', 'g', 'y', 'c', 'm', 'k', 'w', 'r', 'b', 'g', 'y', 'c', 'm', 'k', 'w']
     data = []
+    for i, file in enumerate(file_list):
+        data.append(arbin_import(file_list[i], name='Cell0'+str(4), mass=0.004113, theoretical_cap=160, color=colors[4], shape='o'))
+    #Capacity 1 -> 0.004113
+    #Capacity 2 -> 0.003339
+
+    """
     data.append(arbin_import(
         'All Cycling Results/BL_20230401_01_2023_04_01_163122/BL_20230401_01_Channel_51_Wb_1.CSV',
         name='Cell01 - Calendared',
@@ -125,17 +137,20 @@ if __name__ == '__main__':
         mass=0.003866,
         color=colors[2],
         shape='s'))
-
+    """
 
     for datum in data:
         datum.get_max_capacity_per_cycle()
         datum.get_min_capacity_per_cycle()
-        #datum.get_coulombic_efficiency()
+        datum.get_coulombic_efficiency()
     #data.get_max_capacity_per_cycle()
     plt.legend()
     plt.xlabel('Cycle Number:C-Rate')
-    plt.ylabel('Capacity (Charge and Discharge, mAh/g)')
-    plt.title('Capacity vs. Cycle Number')
+    #plt.ylabel('Capacity (Charge and Discharge, mAh/g)')
+    #plt.title('Capacity vs. Cycle Number - NMC622 2 Spacer')
+    plt.ylabel('Coulombic Efficiency')
+    plt.title('Coulombic Efficiency vs. Cycle Number - NMC622 2 Spacer')
     plt.xticks(fontsize=10)
-    plt.savefig('NMC622 2_spacer_calendared_ch_dc.png', dpi=500, bbox_inches='tight')
+    plt.legend(loc='lower right')
+    #plt.savefig('NMC622 2_spacer_calendared_ch_dc.png', dpi=500, bbox_inches='tight')
     plt.show()
