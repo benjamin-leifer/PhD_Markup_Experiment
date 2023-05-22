@@ -106,6 +106,22 @@ class arbin_import():
     def get_filesize(self):
         return os.path.getsize(self.path)
 
+    def find_max_voltage(self):
+        return self.data['Voltage (V)'].max()
+
+    def find_min_voltage(self):
+        return self.data['Voltage (V)'].min()
+
+    def find_max_current(self):
+        return self.data['Current (A)'].max()
+
+    def find_min_current(self):
+        return self.data['Current (A)'].min()
+
+    def get_full_charges(self):
+        cycles = self.data.groupby(['Cycle Index'])
+        print(cycles.head())
+
 if __name__ == '__main__':
 
 
