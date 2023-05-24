@@ -7,7 +7,7 @@ from tkinter import filedialog
 
 class arbin_import():
 
-    def __init__(self, path, name='cell', mass=.003, theoretical_cap = 175, break_point = 4, color = 'r', shape = 'o'):
+    def __init__(self, path, name='cell', mass=.003, theoretical_cap = 175, num_cycles = None, color = 'r', shape = 'o'):
         self.path = path
         self.data = self.read_data()
         self.name = name
@@ -16,7 +16,9 @@ class arbin_import():
         self.shape = shape
         self.cycle_Num_list = ['1:C/10', '2:C/10', '3:C/10', '4:C/5', '5:C/5', '6:C/5', '7:C/2', '8:C/2', '9:C/2',]
         self.theoretical_cap = theoretical_cap
-        self.break_point = break_point
+        if not num_cycles:
+            self.num_cyles = self.data['Cycle Index'].max()
+
 
 
     def read_data(self):
@@ -49,7 +51,7 @@ class arbin_import():
             print(mAh)
             self.max_capacity.append(mAh/self.mass*self.theoretical_cap)
             i = i + 1
-            if i==self.break_point:
+            if i==self.num_cyles:
                 break
 
         print(self.max_cap)
@@ -72,7 +74,7 @@ class arbin_import():
             print(mAh)
             self.max_dis_capacity.append(mAh / self.mass * self.theoretical_cap)
             i = i + 1
-            if i == self.break_point:
+            if i == self.num_cyles:
                 break
 
         print(self.max_dis_cap)
