@@ -144,23 +144,23 @@ def plotNyquist_calcRohm(data, i, label, offset):
 # **** Get data
 
 #file = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_NoCalendar_EIS_RT_C01.mpt'  # 'MIT cell C3_01_PEIS_C03.mpt'
-file = 'FullCell_EMD_ZnAnode_NoCalendar_EIS_RT_C01.mpt'
+file = '0614_01_EIS_0.5MTFSI_Blocking_C01.mpt'
 data = readMPTData(file)
-labels = 'No Calendar'
+labels = '0614_01_EIS_0.5MTFSI_Blocking_C01.mpt'
 
 #file2 = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_Calendar_30C_EIS_RT_C01.mpt'  # 'MIT cell B6_01_PEIS_C03.mpt' #B6 filename
-file2 = 'FullCell_EMD_ZnAnode_Calendar_30C_EIS_RT_C01.mpt'
+file2 = '0614_01_EIS_0.5MTFSI_Blocking_Redone_6_21_23_C01.mpt'
 data2 = readMPTData(file2)
-label2 = '30C Calendar'
+label2 = '0614_01_EIS_0.5MTFSI_Blocking_Redone_6_21_23_C01.mpt'
 
 #file3 = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_Calendar_60C_EIS_RT_C01.mpt'  # 'MIT cell B3_01_PEIS_C04.mpt' #B3 filename
-file3 = 'FullCell_EMD_ZnAnode_Calendar_60C_EIS_RT_C01.mpt'
+file3 = '0614_01_EIS_0.5MTFSI_Blocking_Remelt_Initial_Test_6_21_23_C01.mpt'
 data3 = readMPTData(file3)
-label3 = '60C Calendar'
+label3 = '0614_01_EIS_0.5MTFSI_Blocking_Remelt_Initial_Test_6_21_23_C01.mpt'
 
-file4 = 'FullCell_EMD_ZnAnode_Calendar_90C_EIS_RT_C01.mpt'
+file4 = '0614_01_EIS_0.5MTFSI_Blocking_Remelt_Initial_Test_6_21_23_Test2_C01.mpt'
 data4 = readMPTData(file4)
-label4 = '90C Calendar'
+label4 = '0614_01_EIS_0.5MTFSI_Blocking_Remelt_Initial_Test_6_21_23_Test2_C01.mpt'
 
 # fig3, (axD, ax) = plt.subplots(1,2,figsize=(5,5))
 fig3 = plt.figure()
@@ -184,9 +184,9 @@ axD.set_prop_cycle(
 # plotNyquist(data, 1, 'cell C1', 0, 157, 300)
 # plotNyquist(data, 1, 'cell C2', 0, 70, 300)
 plotNyquist_calcRohm(data, 1, labels, 0)
-plotNyquist_calcRohm(data2, 1, label2, 2000)
-plotNyquist_calcRohm(data3, 1, label3, 4000)
-plotNyquist_calcRohm(data4, 1, label4, 6000)
+plotNyquist_calcRohm(data2, 1, label2, 0)
+plotNyquist_calcRohm(data3, 1, label3, 0)
+plotNyquist_calcRohm(data4, 1, label4, 0)
 
 #
 # axD.annotate('1000 Hz', (140, 120), fontsize=9)
@@ -218,7 +218,7 @@ axD.tick_params(which='minor', direction='in', left=True, right=True, length=3)
 
 axD.set_aspect('equal', adjustable='box')
 # ax.set_aspect('equal', adjustable='box')
-
+plt.show()
 #plt.savefig('MIT EIS.png', dpi=500, bbox_inches='tight')
 # plt.savefig('MIT C2.png', dpi=500, bbox_inches = 'tight')
 # plt.savefig('MIT C5.png', dpi=500, bbox_inches = 'tight')

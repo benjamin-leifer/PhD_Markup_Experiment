@@ -144,7 +144,7 @@ def plotNyquist_calcRohm(data, i, label, offset):
 # **** Get data
 
 #file = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_NoCalendar_EIS_RT_C01.mpt'  # 'MIT cell C3_01_PEIS_C03.mpt'
-file = 'FullCell_EMD_ZnAnode_NoCalendar_EIS_RT_C01.mpt'
+file = '../../FullCell_EMD_ZnAnode_NoCalendar_EIS_RT_C01.mpt'
 data = readMPTData(file)
 labels = 'No Calendar'
 
