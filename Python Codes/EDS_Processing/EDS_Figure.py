@@ -22,8 +22,15 @@ report_1 = Presentation('MDB_Flake_Cycled_G_Area_1_Report.pptx')
 
 print('presentation loaded')
 
-slide_1 = report_1.slides[0]
-print(slide_1.shapes)
+for slidecount, slide in enumerate(report_1.slides):
+    print('slide %s' % slidecount)
+    for shape in slide.shapes:
+        if shape.shape_type == 17:
+            print('%s : %s' % (shape.shape_type, shape.text))
+        else:
+            print('%s : %s' % (shape.shape_type, shape.name))
+
+
 print('exploring slide 1')
 if __name__ == '__main__':
     print('main script')
