@@ -179,10 +179,19 @@ class arbin_import_Sym_Cell():
 if __name__ == '__main__':
     root = tk.Tk()
     root.withdraw()
-    file_path = filedialog.askopenfilename()
+    file_path_1 = filedialog.askopenfilename()
 
-    SymCell_06 = arbin_import_Sym_Cell(file_path, name='BL_Zn_SymCell_070823_Sanded', mass=0.00133, theoretical_cap=175, color='r', shape='o')
+    root = tk.Tk()
+    root.withdraw()
+    file_path_2 = filedialog.askopenfilename()
+
+
+    SymCell_06 = arbin_import_Sym_Cell(file_path_1, name='Calendar @120C', mass=0.00133, theoretical_cap=175, color='b', shape='o')
     SymCell_06.plot_voltage_vs_time()
+    SymCell_05 = arbin_import_Sym_Cell(file_path_2, name='Heated Press - 0.625mm Shims - Cell 2', mass=0.00133,
+                                       theoretical_cap=175, color='g', shape='o')
+    SymCell_05.plot_voltage_vs_time()
+
 
     plt.show()
 
