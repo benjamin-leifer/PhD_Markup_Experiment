@@ -185,12 +185,10 @@ if __name__ == '__main__':
     root.withdraw()
     file_path_2 = filedialog.askopenfilename()
 
-
-    SymCell_06 = arbin_import_Sym_Cell(file_path_1, name='Calendar @120C', mass=0.00133, theoretical_cap=175, color='b', shape='o')
-    SymCell_06.plot_voltage_vs_time()
-    SymCell_05 = arbin_import_Sym_Cell(file_path_2, name='Heated Press - 0.625mm Shims - Cell 2', mass=0.00133,
+    SymCell_05 = arbin_import_Sym_Cell(file_path_2, name='Zn Symmetric Cell - $0.05mA/cm^2$', mass=0.00133,
                                        theoretical_cap=175, color='g', shape='o')
     SymCell_05.plot_voltage_vs_time()
+    #$10^1$
 
 
     plt.show()
