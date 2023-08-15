@@ -69,6 +69,28 @@ class arbin_import_Sym_Cell():
 
         #plt.show()
 
+    def plot_voltage_vs_capacity(self):
+        fig, ax1 = plt.subplots()
+
+        color = self.color
+        ax1.set_xlabel('Capacity (mAh/g)')
+        ax1.set_ylabel('Voltage (V)', color=color)
+        ax1.plot(self.data['Discharge Capacity (Ah)'], self.data['Voltage (V)'], color=color, label=self.name)
+        ax1.tick_params(axis='y', labelcolor=color)
+
+        #ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+
+        #color = 'tab:blue'
+        #ax2.set_ylabel('Current (A)', color=color)  # we already handled the x-label with ax1
+        #ax2.plot(self.data[], self.data['Current (A)'], color=color)
+        #ax2.tick_params(axis='y', labelcolor=color)
+
+        ax1.tick_params(which='both', axis='both', direction='in', bottom=True, top=True, left=True, right=False)
+        #ax2.tick_params(which='both', axis='both', direction='in', bottom=False, top=False, left=False, right=True)
+
+        plt.title('Voltage vs. Capacity for %s' % self.name)
+        fig.tight_layout()  # otherwise the right y-label is slightly clipped
+
     def get_overpotentials(self):
         self.overpotentials = []
 
@@ -187,7 +209,7 @@ if __name__ == '__main__':
 
     SymCell_05 = arbin_import_Sym_Cell(file_path_2, name='Zn Symmetric Cell - $0.05mA/cm^2$', mass=0.00133,
                                        theoretical_cap=175, color='g', shape='o')
-    SymCell_05.plot_voltage_vs_time()
+    SymCell_05.plot_voltage_vs_capacity()
     #$10^1$
 
 
