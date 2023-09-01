@@ -194,7 +194,7 @@ axD.set_prop_cycle(
 
 axD.set_xlabel("'Ewe/V'", fontweight='bold')
 axD.set_ylabel("<I>/mA", fontweight='bold')
-axD.set_title('Cyclic Voltammogram for 0.5M Zn-TFSI GPE - 0812-03 @0.1mV/s', fontweight='bold')
+axD.set_title('Cyclic Voltammogram for 0.5M Zn-TFSI GPE - 0825-03 @5mV/s', fontweight='bold')
 
  #upper right
 #axD.legend(frameon=True, bbox_to_anchor=(.65, 0.2), loc='best', ncol=1, borderaxespad=0, fontsize=10)
