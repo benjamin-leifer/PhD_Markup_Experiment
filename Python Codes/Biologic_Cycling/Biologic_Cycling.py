@@ -51,6 +51,39 @@ This function reads a biologic .mpt data file
     print(data.head(5))
     return data
 
+def readMPTData_CV2(filename):
+    """
+This function reads a biologic .mpt data file
+
+    Parameters
+    ----------
+    filename : Name including .mpt of a biologic file to read
+
+    Returns
+    -------
+    data : dataframe of mpt data
+
+    """
+    # def readMPTData(filename, header_num):
+
+    #     data = pd.read_csv(filename, header= header_num, sep='\t',
+    #                       engine= 'python', encoding='cp1252')
+
+    # Open the file
+    with open(filename, 'r', encoding='cp1252') as readfile:
+        header_rows = readfile.readlines(18)
+        header_rows = str(header_rows).split()
+        df = pd.DataFrame(header_rows)
+        header_num = df.iloc[7]
+        header_num = int(header_num)
+
+        print(header_num)
+        header_num = header_num -4
+    data = pd.read_csv(filename, header=header_num, sep='\t',
+                       engine='python', encoding='cp1252')
+
+    print(data.head(5))
+    return data
 
 def plotNyquist_calcRohm(data, i, label, offset):
     """
@@ -150,17 +183,40 @@ file_path_1 = filedialog.askopenfilename()
 #file = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_NoCalendar_EIS_RT_C01.mpt'  # 'MIT cell C3_01_PEIS_C03.mpt'
 file = file_path_1
 data = readMPTData_CV(file)
-label = file_path_1[file_path_1.find('.mpt'):-10]
+label = '0.05 mA/cm^2'
 print(label)
-num_cycles = data['cycle number'].max()
-print(num_cycles)
+
 #dataset = data[data['cycle number'] == 1.0]
 #data_1stcycl_01 = data[data['cycle number'] == 1.0]
-
+cycling_start_time = data['time/s'].min()
+time = (data['time/s']-cycling_start_time)/3600
 # file = '0805_02_EIS_CV_0.5MTFSI_ZnSym_InsideGB_0hr_RT_-2.5--2.5V_t1_02_CV_C01.mpt'
 # data = readMPTData_CV(file)
 # label = 'GPE 0805-02'
 #data_1stcycl_02 = data[data['cycle number'] == 1.0]
+root = tk.Tk()
+root.withdraw()
+file_path_2 = filedialog.askopenfilename()
+#file = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_NoCalendar_EIS_RT_C01.mpt'  # 'MIT cell C3_01_PEIS_C03.mpt'
+file2 = file_path_2
+data2 = readMPTData_CV(file2)
+label2 = '0.1 mA/cm^2'
+
+#dataset = data[data['cycle number'] == 1.0]
+#data_1stcycl_01 = data[data['cycle number'] == 1.0]
+time2 = (data2['time/s']-cycling_start_time)/3600
+
+root = tk.Tk()
+root.withdraw()
+file_path_3 = filedialog.askopenfilename()
+#file = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_NoCalendar_EIS_RT_C01.mpt'  # 'MIT cell C3_01_PEIS_C03.mpt'
+file3 = file_path_3
+data3 = readMPTData_CV2(file3)
+label3 = '0.2 mA/cm^2'
+#dataset = data[data['cycle number'] == 1.0]
+#data_1stcycl_01 = data[data['cycle number'] == 1.0]
+time3 = (data3['time/s']-cycling_start_time)/3600
+
 # **** Plotting
 
 
@@ -192,9 +248,9 @@ axD.set_prop_cycle(
 # axD.annotate('0.1 Hz', (210, 1650), fontsize=9)
 
 
-axD.set_xlabel("'Ewe/V'", fontweight='bold')
-axD.set_ylabel("<I>/mA", fontweight='bold')
-axD.set_title('Cyclic Voltammogram for 0.5M Zn-TFSI GPE - 0901-02 @5mV/s', fontweight='bold')
+axD.set_xlabel("Time (hr)", fontweight='bold')
+axD.set_ylabel("Ewe/V", fontweight='bold')
+axD.set_title('Galvanostatic Cycling of 0.5M Zn-TFSI GPE - 0901-01', fontweight='bold')
 
  #upper right
 #axD.legend(frameon=True, bbox_to_anchor=(.65, 0.2), loc='best', ncol=1, borderaxespad=0, fontsize=10)
@@ -210,11 +266,15 @@ axD.tick_params(which='minor', direction='in', left=True, right=True, length=3)
 
 #axD.set_aspect('equal', adjustable='box')
 # ax.set_aspect('equal', adjustable='box')
+"""
 for cycle in range(int(num_cycles)):
     dataset = data[data['cycle number'] == cycle + 1.0]
     plt.plot(dataset['Ewe/V'], dataset['<I>/mA'], '-o',markersize = 4, label = label+' Cycle #'+str(cycle+1),)
 #plt.plot(data_1stcycl_02['Ewe/V'], data_1stcycl_02['<I>/mA'], '-o',markersize = 4, label = label)
-
+"""
+plt.plot(time, data['Ewe/V'], '-', markersize=4, label=label)
+plt.plot(time2, data2['Ewe/V'], '-', markersize=4, label=label2)
+plt.plot(time3, data3['Ewe/V'], '-', markersize=4, label=label3)
 axD.legend(frameon=True, borderaxespad=0, fontsize=10, bbox_to_anchor=(1.2, 0.5), loc='center')
 plt.tight_layout()
 plt.show()
