@@ -78,7 +78,7 @@ This function reads a biologic .mpt data file
         header_num = int(header_num)
 
         print(header_num)
-        header_num = header_num -4
+        header_num = header_num -5
     data = pd.read_csv(filename, header=header_num, sep='\t',
                        engine='python', encoding='cp1252')
 
@@ -171,6 +171,12 @@ def plotNyquist_calcRohm(data, i, label, offset):
 
     # return xfirst
 
+def setmatplotlib():
+    axD.set_xlabel("Time (hr)", fontweight='bold')
+    axD.set_ylabel("Ewe/V", fontweight='bold')
+    axD.set_title('Galvanostatic Cycling of 0.5M Zn-TFSI GPE - 0825-01', fontweight='bold')
+    axD.tick_params(axis='both', direction='in', bottom=True, top=True, left=True, right=True)
+    axD.tick_params(which='minor', direction='in', left=True, right=True, length=3)
 
 # ===========
 # MAIN PROGRAM
@@ -185,6 +191,7 @@ file = file_path_1
 data = readMPTData_CV(file)
 label = '0.05 mA/cm^2'
 print(label)
+print(data.info())
 
 #dataset = data[data['cycle number'] == 1.0]
 #data_1stcycl_01 = data[data['cycle number'] == 1.0]
@@ -217,6 +224,18 @@ label3 = '0.2 mA/cm^2'
 #data_1stcycl_01 = data[data['cycle number'] == 1.0]
 time3 = (data3['time/s']-cycling_start_time)/3600
 
+
+root = tk.Tk()
+root.withdraw()
+file_path_4 = filedialog.askopenfilename()
+#file = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_NoCalendar_EIS_RT_C01.mpt'  # 'MIT cell C3_01_PEIS_C03.mpt'
+file4= file_path_4
+data4 = readMPTData_CV(file4)
+print(data4.info())
+label4 = '0.1 mA/cm^2'
+#dataset = data[data['cycle number'] == 1.0]
+#data_1stcycl_01 = data[data['cycle number'] == 1.0]
+time4 = (data4['time/s']-cycling_start_time)/3600
 # **** Plotting
 
 
@@ -240,7 +259,8 @@ axD.set_prop_cycle(
 # axD.set_prop_cycle(color = [ 'khaki, 'turquoise', 'tab:blue',  'mediumpurple',  'orchid', 'pink'])
 
 
-
+colorlist = ['indianred', 'mediumpurple', 'tab:blue', 'lightsalmon', 'gold', 'limegreen', 'seagreen', 'turquoise',
+           'tab:blue', 'mediumpurple', 'orchid', 'pink']
 
 #
 # axD.annotate('1000 Hz', (140, 120), fontsize=9)
@@ -250,7 +270,7 @@ axD.set_prop_cycle(
 
 axD.set_xlabel("Time (hr)", fontweight='bold')
 axD.set_ylabel("Ewe/V", fontweight='bold')
-axD.set_title('Galvanostatic Cycling of 0.5M Zn-TFSI GPE - 0901-01', fontweight='bold')
+axD.set_title('Galvanostatic Cycling of 0.5M Zn-TFSI GPE - 0825-01', fontweight='bold')
 
  #upper right
 #axD.legend(frameon=True, bbox_to_anchor=(.65, 0.2), loc='best', ncol=1, borderaxespad=0, fontsize=10)
@@ -272,9 +292,33 @@ for cycle in range(int(num_cycles)):
     plt.plot(dataset['Ewe/V'], dataset['<I>/mA'], '-o',markersize = 4, label = label+' Cycle #'+str(cycle+1),)
 #plt.plot(data_1stcycl_02['Ewe/V'], data_1stcycl_02['<I>/mA'], '-o',markersize = 4, label = label)
 """
+"""
 plt.plot(time, data['Ewe/V'], '-', markersize=4, label=label)
 plt.plot(time2, data2['Ewe/V'], '-', markersize=4, label=label2)
 plt.plot(time3, data3['Ewe/V'], '-', markersize=4, label=label3)
+plt.plot(time4, data4['Ewe/V'], '-', markersize=4,label = label4)
+"""
+i=0
+# setmatplotlib()
+# plt.plot(time.tail(1000), data['Ewe/V'].tail(1000), '-', markersize=4, label=label, color = colorlist[i])
+# axD.legend(frameon=True, borderaxespad=0, fontsize=10, bbox_to_anchor=(1.2, 0.5), loc='center')
+# plt.tight_layout()
+# plt.show()
+i=1+i
+# setmatplotlib()
+# plt.plot(time2.tail(1000), data2['Ewe/V'].tail(1000), '-', markersize=4, label=label2, color = colorlist[i])
+# axD.legend(frameon=True, borderaxespad=0, fontsize=10, bbox_to_anchor=(1.2, 0.5), loc='center')
+# plt.tight_layout()
+# plt.show()
+i=1+i
+# setmatplotlib()
+# plt.plot(time3.tail(1000), data3['Ewe/V'].tail(1000), '-', markersize=4, label=label3, color = colorlist[i])
+# axD.legend(frameon=True, borderaxespad=0, fontsize=10, bbox_to_anchor=(1.2, 0.5), loc='center')
+# plt.tight_layout()
+# plt.show()
+i=1+i
+setmatplotlib()
+plt.plot(time4.tail(1000), data4['Ewe/V'].tail(1000), '-', markersize=4,label = label4, color = colorlist[i])
 axD.legend(frameon=True, borderaxespad=0, fontsize=10, bbox_to_anchor=(1.2, 0.5), loc='center')
 plt.tight_layout()
 plt.show()

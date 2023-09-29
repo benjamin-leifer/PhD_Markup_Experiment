@@ -51,6 +51,39 @@ This function reads a biologic .mpt data file
     print(data.head(5))
     return data
 
+def readMPTData_CV2(filename):
+    """
+This function reads a biologic .mpt data file
+
+    Parameters
+    ----------
+    filename : Name including .mpt of a biologic file to read
+
+    Returns
+    -------
+    data : dataframe of mpt data
+
+    """
+    # def readMPTData(filename, header_num):
+
+    #     data = pd.read_csv(filename, header= header_num, sep='\t',
+    #                       engine= 'python', encoding='cp1252')
+
+    # Open the file
+    with open(filename, 'r', encoding='cp1252') as readfile:
+        header_rows = readfile.readlines(18)
+        header_rows = str(header_rows).split()
+        df = pd.DataFrame(header_rows)
+        header_num = df.iloc[7]
+        header_num = int(header_num)
+
+        # print(header_num)
+        header_num = header_num - 5
+    data = pd.read_csv(filename, header=header_num, sep='\t',
+                       engine='python', encoding='cp1252')
+
+    print(data.head(5))
+    return data
 
 def plotNyquist_calcRohm(data, i, label, offset):
     """
@@ -142,30 +175,6 @@ def plotNyquist_calcRohm(data, i, label, offset):
 # ===========
 # MAIN PROGRAM
 # ===========
-
-# **** Get data
-root = tk.Tk()
-root.withdraw()
-file_path_1 = filedialog.askopenfilename()
-#file = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_NoCalendar_EIS_RT_C01.mpt'  # 'MIT cell C3_01_PEIS_C03.mpt'
-file = file_path_1
-data = readMPTData_CV(file)
-label = file_path_1[file_path_1.find('.mpt'):-10]
-print(label)
-num_cycles = data['cycle number'].max()
-print(num_cycles)
-#dataset = data[data['cycle number'] == 1.0]
-#data_1stcycl_01 = data[data['cycle number'] == 1.0]
-
-# file = '0805_02_EIS_CV_0.5MTFSI_ZnSym_InsideGB_0hr_RT_-2.5--2.5V_t1_02_CV_C01.mpt'
-# data = readMPTData_CV(file)
-# label = 'GPE 0805-02'
-#data_1stcycl_02 = data[data['cycle number'] == 1.0]
-# **** Plotting
-
-
-
-# fig3, (axD, ax) = plt.subplots(1,2,figsize=(5,5))
 fig3 = plt.figure()
 axD = fig3.add_subplot(111)
 
@@ -194,7 +203,7 @@ axD.set_prop_cycle(
 
 axD.set_xlabel("'Ewe/V'", fontweight='bold')
 axD.set_ylabel("<I>/mA", fontweight='bold')
-axD.set_title('Cyclic Voltammogram for 0.5M Zn-TFSI GPE - 0901-02 @5mV/s', fontweight='bold')
+axD.set_title('Cyclic Voltammogram for EMD/0.5M Zn-TFSI GPE/Zn - 0920-02 @ 5 mV/s', fontweight='bold')
 
  #upper right
 #axD.legend(frameon=True, bbox_to_anchor=(.65, 0.2), loc='best', ncol=1, borderaxespad=0, fontsize=10)
@@ -203,6 +212,51 @@ axD.set_title('Cyclic Voltammogram for 0.5M Zn-TFSI GPE - 0901-02 @5mV/s', fontw
 
 axD.tick_params(axis='both', direction='in', bottom=True, top=True, left=True, right=True)
 axD.tick_params(which='minor', direction='in', left=True, right=True, length=3)
+# **** Get data
+
+for i in range(4):
+    root = tk.Tk()
+    root.withdraw()
+    file_path_1 = filedialog.askopenfilename()
+    file = file_path_1
+    if i !=2:
+        data = readMPTData_CV(file)
+    else:
+        data = readMPTData_CV2(file)
+    label = 'CV Sweep Step #'+str(i+1)
+    print(label)
+    num_cycles = data['cycle number'].max()
+    i_max = data['<I>/mA'][2:].max()
+    print(str(i_max)+'imax')
+    i_min = data['<I>/mA'][2:].min()
+    print(str(i_min)+'imin')
+    print(num_cycles)
+    plt.plot(data['Ewe/V'], data['<I>/mA'], '-', markersize=2, label=label)
+
+"""
+root = tk.Tk()
+root.withdraw()
+file_path_1 = filedialog.askopenfilename()
+file = file_path_1
+data = readMPTData_CV(file)
+label = 'EMD/GPE/Zn 0920-02'
+num_cycles = data['cycle number'].max()
+#plt.plot((data['time/s']-data['time/s'][0])[2:]/3600, data['I/mA'][2:], '-', markersize=2,)
+"""
+
+#dataset = data[data['cycle number'] == 1.0]
+#data_1stcycl_01 = data[data['cycle number'] == 1.0]
+
+#file = '0805_02_EIS_CV_0.5MTFSI_ZnSym_InsideGB_0hr_RT_-2.5--2.5V_t1_02_CV_C01.mpt'
+#data = readMPTData_CV(file)
+#label = 'GPE 0805-02'
+#data_1stcycl_02 = data[data['cycle number'] == 1.0]
+# **** Plotting
+
+
+
+# fig3, (axD, ax) = plt.subplots(1,2,figsize=(5,5))
+
 
 # x = np.array([0,100,250])
 # axD.xaxis.set_ticks()
@@ -210,15 +264,16 @@ axD.tick_params(which='minor', direction='in', left=True, right=True, length=3)
 
 #axD.set_aspect('equal', adjustable='box')
 # ax.set_aspect('equal', adjustable='box')
+"""
 for cycle in range(int(num_cycles)):
     dataset = data[data['cycle number'] == cycle + 1.0]
     plt.plot(dataset['Ewe/V'], dataset['<I>/mA'], '-o',markersize = 4, label = label+' Cycle #'+str(cycle+1),)
+"""
 #plt.plot(data_1stcycl_02['Ewe/V'], data_1stcycl_02['<I>/mA'], '-o',markersize = 4, label = label)
 
 axD.legend(frameon=True, borderaxespad=0, fontsize=10, bbox_to_anchor=(1.2, 0.5), loc='center')
 plt.tight_layout()
 plt.show()
-
 
 
 if __name__ == '__main__':

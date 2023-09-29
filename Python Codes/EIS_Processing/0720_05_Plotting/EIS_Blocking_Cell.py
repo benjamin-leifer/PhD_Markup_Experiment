@@ -144,19 +144,16 @@ def plotNyquist_calcRohm(data, i, label, offset):
 # **** Get data
 
 #file = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_NoCalendar_EIS_RT_C01.mpt'  # 'MIT cell C3_01_PEIS_C03.mpt'
-file = '0720_05_EIS_0.5MTFSI_Blocking_InsideGB_0hr_25C_0x_Thin_Sample_C01.mpt'
+file = '0928_01_0.5MTFSI_ZnEMD_InsideGB_0hr_RT_EIS-Remade_from_091923-01_C01.mpt'
 data = readMPTData(file)
-labels = '25C Thin Cell'
+labels = '0928-01'
 
 #file2 = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_Calendar_30C_EIS_RT_C01.mpt'  # 'MIT cell B6_01_PEIS_C03.mpt' #B6 filename
-file2 = '0720_05_EIS_0.5MTFSI_Blocking_InsideGB_0hr_40C_0x_Thin_Sample_t2_C01.mpt'
+file2 = '0928_01_0.5MTFSI_ZnEMD_InsideGB_0hr_RT_EIS-Remade_from_091923-01_C01.mpt'
 data2 = readMPTData(file2)
-label2 = '40C Thin Cell'
+label2 = 'Post Chronoamperometry'
 
-#file3 = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_Calendar_60C_EIS_RT_C01.mpt'  # 'MIT cell B3_01_PEIS_C04.mpt' #B3 filename
-file3 = '0720_05_EIS_0.5MTFSI_Blocking_InsideGB_0hr_60C_0x_Thin_Sample_t2_C01.mpt'
-data3 = readMPTData(file3)
-label3 = '60C Thin Cell'
+
 
 # fig3, (axD, ax) = plt.subplots(1,2,figsize=(5,5))
 fig3 = plt.figure()
@@ -180,8 +177,8 @@ axD.set_prop_cycle(
 # plotNyquist(data, 1, 'cell C1', 0, 157, 300)
 # plotNyquist(data, 1, 'cell C2', 0, 70, 300)
 plotNyquist_calcRohm(data, 1, labels, 0)
-plotNyquist_calcRohm(data2, 1, label2, 0)
-plotNyquist_calcRohm(data3, 1, label3, 0)
+#plotNyquist_calcRohm(data2, 1, label2, 0)
+
 #plotNyquist_calcRohm(data4, 1, label4, 0)
 
 #
@@ -192,7 +189,7 @@ plotNyquist_calcRohm(data3, 1, label3, 0)
 
 axD.set_xlabel("z' / ohms", fontweight='bold')
 axD.set_ylabel("-z'' / ohms", fontweight='bold')
-axD.set_title('Nyquist Plot for EMD/0.5M Zn-TSFI GPE/Zn Blocking Cell Experiments', fontweight='bold')
+axD.set_title('Nyquist Plot for GPE-0928-01 Experiment', fontweight='bold')
 
 axD.legend(loc='best')  #upper right
 #axD.legend(frameon=True, bbox_to_anchor=(.65, 0.2), loc='best', ncol=1, borderaxespad=0, fontsize=10)
@@ -219,9 +216,9 @@ plt.show()
 # plt.savefig('MIT C2.png', dpi=500, bbox_inches = 'tight')
 # plt.savefig('MIT C5.png', dpi=500, bbox_inches = 'tight')
 # plt.savefig(str(labels)+'.png', dpi=500, bbox_inches = 'tight')
-label_list = [labels, label2, label3]
+label_list = [labels,]
 Rct_list = []
-for i, datum in enumerate([data, data2, data3]):
+for i, datum in enumerate([data, data2]):
     print('for ' + label_list[i] + ' Rct = ')
     Rct_list.append(plotNyquist(datum, 1, label_list[i], 2000*i, 2000, 10000))
 
