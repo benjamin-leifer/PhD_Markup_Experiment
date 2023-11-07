@@ -203,7 +203,7 @@ axD.set_prop_cycle(
 
 axD.set_xlabel("'Ewe/V'", fontweight='bold')
 axD.set_ylabel("<I>/mA", fontweight='bold')
-axD.set_title('Cyclic Voltammogram for EMD/0.5M Zn-TFSI GPE/Zn - 0920-02 @ 5 mV/s', fontweight='bold')
+axD.set_title('Cyclic Voltammogram for EMD/0.5M Zn-TFSI GPE/Zn - 1101-03 @ 1 mV/s', fontweight='bold')
 
  #upper right
 #axD.legend(frameon=True, bbox_to_anchor=(.65, 0.2), loc='best', ncol=1, borderaxespad=0, fontsize=10)
@@ -214,7 +214,7 @@ axD.tick_params(axis='both', direction='in', bottom=True, top=True, left=True, r
 axD.tick_params(which='minor', direction='in', left=True, right=True, length=3)
 # **** Get data
 
-for i in range(4):
+for i in range(1):
     root = tk.Tk()
     root.withdraw()
     file_path_1 = filedialog.askopenfilename()
@@ -223,7 +223,8 @@ for i in range(4):
         data = readMPTData_CV(file)
     else:
         data = readMPTData_CV2(file)
-    label = 'CV Sweep Step #'+str(i+1)
+    #label = 'CV Sweep Step #'+str(i+1)
+    label = 'EMD/GPE/Zn 1101-03'
     print(label)
     num_cycles = data['cycle number'].max()
     i_max = data['<I>/mA'][2:].max()
