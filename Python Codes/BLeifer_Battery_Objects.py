@@ -49,7 +49,7 @@ This function reads a biologic .mpt data file
 class Battery_Component(BaseModel):
     """
     A class used to represent a battery component
-
+    
     ...
     """
     name: str

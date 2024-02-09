@@ -171,6 +171,72 @@ def plotNyquist_calcRohm(data, i, label, offset):
 
     # return xfirst
 
+def add_CV_data_charge(data):
+    """
+    This function adds a column to the dataframe that indicates the direction of the CV cycle
+
+    Parameters
+    ----------
+    data : dataframe of mpt data
+
+    Returns
+    -------
+    data : dataframe of mpt data with added column
+
+    """
+    data['charge'] = 'discharge'
+    data.loc[data['<I>/mA'] > 0, 'direction'] = 'charge'
+    return data
+
+def add_CV_data_direction(data):
+    """
+    This function adds a column to the dataframe that indicates the direction of the CV cycle
+
+    Parameters
+    ----------
+    data : dataframe of mpt data
+
+    Returns
+    -------
+    data : dataframe of mpt data with added column
+
+    """
+    data['direction'] = 'forward'
+    data.loc[data['Ewe/V'] < data['Ewe/V'].shift(), 'direction'] = 'reverse'
+    return data
+
+
+def calc_CV_capacity_sweep(data):
+    """
+    This function calculates the capacity of a CV sweep
+
+    Parameters
+    ----------
+    data : dataframe of mpt data
+
+    Returns
+    -------
+    capacity : capacity of the CV sweep
+
+    """
+    capacity = data['<I>/mA'].sum()
+    return capacity
+
+def cumulative_current_of_step(data):
+    """
+    This function calculates the cumulative current of a CV sweep
+
+    Parameters
+    ----------
+    data : dataframe of mpt data
+
+    Returns
+    -------
+    capacity : capacity of the CV sweep
+
+    """
+    data['cumulative current'] = data['<I>/mA'].cumsum()
+    return data
 
 # ===========
 # MAIN PROGRAM
@@ -203,7 +269,12 @@ axD.set_prop_cycle(
 
 axD.set_xlabel("'Ewe/V'", fontweight='bold')
 axD.set_ylabel("<I>/mA", fontweight='bold')
-axD.set_title('Cyclic Voltammogram for EMD/0.5M Zn-TFSI GPE/Zn - 1101-03 @ 1 mV/s', fontweight='bold')
+label = 'Ch/0.5M Zn-TFSI GF/Zn - 012824-02'
+title = 'Cyclic Voltammogram for '+label+' @ 50 uV/s'
+axD.set_title(title, fontweight='bold')
+#axD.set_xlim(0, 1)
+#axD.set_ylim(-0.25, 0.25)
+
 
  #upper right
 #axD.legend(frameon=True, bbox_to_anchor=(.65, 0.2), loc='best', ncol=1, borderaxespad=0, fontsize=10)
@@ -224,7 +295,7 @@ for i in range(1):
     else:
         data = readMPTData_CV2(file)
     #label = 'CV Sweep Step #'+str(i+1)
-    label = 'EMD/GPE/Zn 1101-03'
+    #label = 'Ch/0.5M Zn-TFSI GF/Zn - 012824-02'
     print(label)
     num_cycles = data['cycle number'].max()
     i_max = data['<I>/mA'][2:].max()
@@ -232,7 +303,11 @@ for i in range(1):
     i_min = data['<I>/mA'][2:].min()
     print(str(i_min)+'imin')
     print(num_cycles)
-    plt.plot(data['Ewe/V'], data['<I>/mA'], '-', markersize=2, label=label)
+    add_CV_data_charge(data)
+    add_CV_data_direction(data)
+    cumulative_current_of_step(data)
+    print(data.head(5))
+    plt.plot(data['Ewe/V'], data['<I>/mA'], '*-', markersize=2, label=label, color='blue')
 
 """
 root = tk.Tk()
@@ -272,7 +347,7 @@ for cycle in range(int(num_cycles)):
 """
 #plt.plot(data_1stcycl_02['Ewe/V'], data_1stcycl_02['<I>/mA'], '-o',markersize = 4, label = label)
 
-axD.legend(frameon=True, borderaxespad=0, fontsize=10, bbox_to_anchor=(1.2, 0.5), loc='center')
+axD.legend(frameon=True, borderaxespad=0, fontsize=10, loc='lower center')
 plt.tight_layout()
 plt.show()
 
