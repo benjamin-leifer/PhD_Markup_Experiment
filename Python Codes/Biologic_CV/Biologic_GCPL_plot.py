@@ -77,8 +77,8 @@ This function reads a biologic .mpt data file
         header_num = df.iloc[7]
         header_num = int(header_num)
 
-        # print(header_num)
-        header_num = header_num - 5
+        print(header_num)
+        header_num = header_num - 6
     data = pd.read_csv(filename, header=header_num, sep='\t',
                        engine='python', encoding='cp1252')
 
@@ -292,12 +292,12 @@ axD.set_prop_cycle(
 # axD.annotate('1000 Hz', (140, 120), fontsize=9)
 # axD.annotate('1 Hz', (75, 20), fontsize=9)
 # axD.annotate('0.1 Hz', (210, 1650), fontsize=9)
-
+"""
 
 axD.set_ylabel("'Ewe/V'", fontweight='bold')
 axD.set_xlabel("mAh/g", fontweight='bold')
-label = 'Ch/0.5M Zn-TFSI GF/Zn - 012824-02'
-title = 'Cyclic Voltammogram for '+label+' @ 50 uV/s'
+label = 'Ch/0.5M Zn-TFSI GF/Zn - 012824-01'
+title = 'Cycling Performance for '+label+' at 10 mA/g'
 axD.set_title(title, fontweight='bold')
 #axD.set_xlim(0, 1)
 #axD.set_ylim(-0.25, 0.25)
@@ -310,15 +310,16 @@ axD.set_title(title, fontweight='bold')
 
 axD.tick_params(axis='both', direction='in', bottom=True, top=True, left=True, right=True)
 axD.tick_params(which='minor', direction='in', left=True, right=True, length=3)
+"""
 # **** Get data
-
+label = 'Ch/0.5M Zn-TFSI GF/Zn - 012824-02'
 for i in range(1):
     root = tk.Tk()
     root.withdraw()
     file_path_1 = filedialog.askopenfilename()
     file = file_path_1
     if i !=2:
-        data = readMPTData_CV(file)
+        data = readMPTData_CV2(file)
     else:
         data = readMPTData_CV2(file)
     #label = 'CV Sweep Step #'+str(i+1)
@@ -330,6 +331,7 @@ for i in range(1):
     i_min = data['<I>/mA'][2:].min()
     print(str(i_min)+'imin')
     print(num_cycles)
+    """
     add_CV_data_charge(data)
     add_CV_data_direction(data)
     add_CV_redox_step(data)
@@ -338,6 +340,7 @@ for i in range(1):
     #plt.plot(data['Ewe/V'], data['<I>/mA'], '*-', markersize=2, label=label, color='blue')
     for name, group in data.groupby(['charge', 'redox step']):
         plt.plot(abs(group['cumulative current of Step (mAh/g)']), group['Ewe/V'], '-o', markersize=2, label=label+str(name))
+    """
 
 """
 root = tk.Tk()
@@ -349,7 +352,7 @@ label = 'EMD/GPE/Zn 0920-02'
 num_cycles = data['cycle number'].max()
 #plt.plot((data['time/s']-data['time/s'][0])[2:]/3600, data['I/mA'][2:], '-', markersize=2,)
 """
-
+"""
 #dataset = data[data['cycle number'] == 1.0]
 #data_1stcycl_01 = data[data['cycle number'] == 1.0]
 
@@ -371,14 +374,87 @@ num_cycles = data['cycle number'].max()
 #axD.set_aspect('equal', adjustable='box')
 # ax.set_aspect('equal', adjustable='box')
 """
-for cycle in range(int(num_cycles)):
-    dataset = data[data['cycle number'] == cycle + 1.0]
-    plt.plot(dataset['Ewe/V'], dataset['<I>/mA'], '-o',markersize = 4, label = label+' Cycle #'+str(cycle+1),)
-"""
-#plt.plot(data_1stcycl_02['Ewe/V'], data_1stcycl_02['<I>/mA'], '-o',markersize = 4, label = label)
 
+
+#plt.plot(data_1stcycl_02['Ewe/V'], data_1stcycl_02['<I>/mA'], '-o',markersize = 4, label = label)
+grouped = data.groupby('cycle number')
+max_discharge_per_cycle = grouped['Q discharge/mA.h'].max()/0.00015
+max_charge_per_cycle = grouped['Q charge/mA.h'].max()/0.00015
+# Calculate the bounds for max_charge_per_cycle
+lower_bound_charge = max_charge_per_cycle.min() * 0.8
+upper_bound_charge = max_charge_per_cycle.max() * 1.5
+
+# Use the between() function to get a mask of the rows where max_charge_per_cycle is between lower_bound_charge and upper_bound_charge
+mask_charge = max_charge_per_cycle.between(lower_bound_charge, upper_bound_charge)
+
+# Use the mask to get a new Series with only the rows where max_charge_per_cycle is between lower_bound_charge and upper_bound_charge
+filtered_max_charge_per_cycle = max_charge_per_cycle[mask_charge]
+
+# Calculate the bounds for max_discharge_per_cycle
+lower_bound_discharge = max_discharge_per_cycle.min() * 0.8
+upper_bound_discharge = max_discharge_per_cycle.max() * 1.5
+
+# Use the between() function to get a mask of the rows where max_discharge_per_cycle is between lower_bound_discharge and upper_bound_discharge
+mask_discharge = max_discharge_per_cycle.between(lower_bound_discharge, upper_bound_discharge)
+
+# Use the mask to get a new Series with only the rows where max_discharge_per_cycle is between lower_bound_discharge and upper_bound_discharge
+filtered_max_discharge_per_cycle = max_discharge_per_cycle[mask_discharge]
+
+filtered_max_discharge_per_cycle.iloc[1:-1].plot(label='Discharge')
+filtered_max_charge_per_cycle.iloc[1:-1].plot(label='Charge')
+axD.set_xlabel('Cycle Number (#)')
+axD.set_ylabel('Capacity (mAh/g)')
+#axD.set_title('Capacity vs. Cycle Number')
 axD.legend(frameon=True, borderaxespad=0, fontsize=10,)# loc='lower center')
 plt.tight_layout()
+plt.show()
+
+import matplotlib.pyplot as plt
+
+# List of cycles to plot
+cycles_to_plot = [3, 5, 10, 25, 50, 68]
+
+# Filter the dataframe for the specific cycles
+filtered_data = data[data['cycle number'].isin(cycles_to_plot)]
+
+# Exclude rows where Q discharge is 0 for discharge and Q charge is 0 for charge
+filtered_data_discharge = filtered_data[filtered_data['Q discharge/mA.h'] != 0]
+filtered_data_charge = filtered_data[filtered_data['Q charge/mA.h'] != 0]
+# Exclude rows where current is 0
+filtered_data_discharge = filtered_data_discharge[filtered_data_discharge['<I>/mA'] != 0]
+filtered_data_charge = filtered_data_charge[filtered_data_charge['<I>/mA'] != 0]
+# Group the filtered dataframe by the cycle number
+grouped_discharge = filtered_data_discharge.groupby('cycle number')
+grouped_charge = filtered_data_charge.groupby('cycle number')
+
+# Create figures for charge and discharge
+fig_discharge = plt.figure()
+fig_charge = plt.figure()
+
+ax_discharge = fig_discharge.add_subplot(111)
+ax_charge = fig_charge.add_subplot(111)
+
+# Plot the charge and discharge curves for each cycle on separate plots
+for cycle, group in grouped_discharge:
+    discharge = group['Q discharge/mA.h']/.00015
+    discharge_V = group['Ewe/V']
+    ax_discharge.plot(discharge, discharge_V, label=f'Discharge Cycle {cycle}')
+
+for cycle, group in grouped_charge:
+    charge = group['Q charge/mA.h']/.00015
+    charge_V = group['Ewe/V']
+    ax_charge.plot(charge, charge_V, label=f'Charge Cycle {cycle}')
+
+ax_discharge.set_ylabel('Voltage vs. Zn/Zn2+ (V)')
+ax_discharge.set_xlabel('Capacity (mAh/g)')
+ax_discharge.legend()
+ax_discharge.set_title('Discharge Curves for Multiple Cycles of '+label)
+
+ax_charge.set_ylabel('Voltage vs. Zn/Zn2+ (V)')
+ax_charge.set_xlabel('Capacity (mAh/g)')
+ax_charge.legend()
+ax_charge.set_title('Charge Curves for Multiple Cycles of '+label)
+
 plt.show()
 
 
