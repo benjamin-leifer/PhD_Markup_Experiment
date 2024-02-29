@@ -312,14 +312,14 @@ axD.tick_params(axis='both', direction='in', bottom=True, top=True, left=True, r
 axD.tick_params(which='minor', direction='in', left=True, right=True, length=3)
 """
 # **** Get data
-label = 'Ch/0.5M Zn-TFSI GF/Zn - 012824-02'
+label = 'Ch/0.5M Zn-TFSI GPE/Zn - 022524-04'
 for i in range(1):
     root = tk.Tk()
     root.withdraw()
     file_path_1 = filedialog.askopenfilename()
     file = file_path_1
     if i !=2:
-        data = readMPTData_CV2(file)
+        data = readMPTData_CV(file)
     else:
         data = readMPTData_CV2(file)
     #label = 'CV Sweep Step #'+str(i+1)
@@ -378,8 +378,8 @@ num_cycles = data['cycle number'].max()
 
 #plt.plot(data_1stcycl_02['Ewe/V'], data_1stcycl_02['<I>/mA'], '-o',markersize = 4, label = label)
 grouped = data.groupby('cycle number')
-max_discharge_per_cycle = grouped['Q discharge/mA.h'].max()/0.00015
-max_charge_per_cycle = grouped['Q charge/mA.h'].max()/0.00015
+max_discharge_per_cycle = grouped['Q discharge/mA.h'].max()/0.0006
+max_charge_per_cycle = grouped['Q charge/mA.h'].max()/0.0006
 # Calculate the bounds for max_charge_per_cycle
 lower_bound_charge = max_charge_per_cycle.min() * 0.8
 upper_bound_charge = max_charge_per_cycle.max() * 1.5
@@ -412,7 +412,7 @@ plt.show()
 import matplotlib.pyplot as plt
 
 # List of cycles to plot
-cycles_to_plot = [3, 5, 10, 25, 50, 68]
+cycles_to_plot = range(1, 13)
 
 # Filter the dataframe for the specific cycles
 filtered_data = data[data['cycle number'].isin(cycles_to_plot)]
@@ -436,12 +436,12 @@ ax_charge = fig_charge.add_subplot(111)
 
 # Plot the charge and discharge curves for each cycle on separate plots
 for cycle, group in grouped_discharge:
-    discharge = group['Q discharge/mA.h']/.00015
+    discharge = group['Q discharge/mA.h']/.0006
     discharge_V = group['Ewe/V']
     ax_discharge.plot(discharge, discharge_V, label=f'Discharge Cycle {cycle}')
 
 for cycle, group in grouped_charge:
-    charge = group['Q charge/mA.h']/.00015
+    charge = group['Q charge/mA.h']/.0006
     charge_V = group['Ewe/V']
     ax_charge.plot(charge, charge_V, label=f'Charge Cycle {cycle}')
 

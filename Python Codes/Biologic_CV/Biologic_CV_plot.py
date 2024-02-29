@@ -296,8 +296,8 @@ axD.set_prop_cycle(
 
 axD.set_ylabel("'Ewe/V'", fontweight='bold')
 axD.set_xlabel("mAh/g", fontweight='bold')
-label = 'Ch/0.5M Zn-TFSI GF/Zn - 012824-02'
-title = 'Cyclic Voltammogram for '+label+' @ 50 uV/s'
+label = 'Zn/2M ZnCl PVA/Zn - 022724-02'
+title = 'Cyclic Voltammogram for '+label+' @ 5 mV/s'
 axD.set_title(title, fontweight='bold')
 #axD.set_xlim(0, 1)
 #axD.set_ylim(-0.25, 0.25)
@@ -312,7 +312,7 @@ axD.tick_params(axis='both', direction='in', bottom=True, top=True, left=True, r
 axD.tick_params(which='minor', direction='in', left=True, right=True, length=3)
 # **** Get data
 
-for i in range(1):
+for i in range(4):
     root = tk.Tk()
     root.withdraw()
     file_path_1 = filedialog.askopenfilename()
@@ -320,7 +320,7 @@ for i in range(1):
     if i !=2:
         data = readMPTData_CV(file)
     else:
-        data = readMPTData_CV2(file)
+        data = readMPTData_CV(file)
     #label = 'CV Sweep Step #'+str(i+1)
     #label = 'Ch/0.5M Zn-TFSI GF/Zn - 012824-02'
     print(label)
@@ -335,9 +335,11 @@ for i in range(1):
     add_CV_redox_step(data)
     cumulative_current_of_step(data)
     print(data.head(5))
-    #plt.plot(data['Ewe/V'], data['<I>/mA'], '*-', markersize=2, label=label, color='blue')
+    plt.plot(data['Ewe/V'], data['<I>/mA'], '*-', markersize=2, label=label)
+    """
     for name, group in data.groupby(['charge', 'redox step']):
         plt.plot(abs(group['cumulative current of Step (mAh/g)']), group['Ewe/V'], '-o', markersize=2, label=label+str(name))
+    """
 
 """
 root = tk.Tk()
