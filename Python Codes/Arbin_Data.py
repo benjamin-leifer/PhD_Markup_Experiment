@@ -35,7 +35,11 @@ class arbin_import():
         plt.title('Voltage vs. Time')
         #self.data.plot(x='Test Time (s)', y='Voltage (V)')
         plt.show()
-
+    def get_ocv_and_max_voltage(self):
+        self.ocv = self.data['Voltage (V)'].iloc[0]
+        self.max_voltage = self.data['Voltage (V)'].max()
+        print(self.ocv)
+        print(self.max_voltage)
     def get_max_capacity_per_cycle(self):
         #split data into cycles
         #find max capacity for each cycle
@@ -130,7 +134,7 @@ if __name__ == '__main__':
     root = tk.Tk()
     root.withdraw()
     file_list = []
-    for i in range(1):
+    for i in range(2):
         file_path = filedialog.askopenfilename()
         file_list.append(file_path)
     print(file_list)
@@ -156,11 +160,14 @@ if __name__ == '__main__':
         color=colors[2],
         shape='s'))
     """
-
     for datum in data:
-        datum.get_max_capacity_per_cycle()
-        datum.get_min_capacity_per_cycle()
-        datum.get_coulombic_efficiency()
+        print(datum.get_filename())
+        datum.get_ocv_and_max_voltage()
+    """
+    #for datum in data:
+        #datum.get_max_capacity_per_cycle()
+        #datum.get_min_capacity_per_cycle()
+        #datum.get_coulombic_efficiency()
     #data.get_max_capacity_per_cycle()
     plt.legend()
     plt.xlabel('Cycle Number:C-Rate')
@@ -172,3 +179,4 @@ if __name__ == '__main__':
     plt.legend(loc='lower right')
     #plt.savefig('NMC622 2_spacer_calendared_ch_dc.png', dpi=500, bbox_inches='tight')
     plt.show()
+    """
