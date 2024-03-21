@@ -271,6 +271,8 @@ def cumulative_current_of_step(data,active_mass=0.00015):
 fig3 = plt.figure()
 axD = fig3.add_subplot(111)
 
+active_mass = 0.0006
+
 # plt.rcParams['axes.linewidth'] = 2
 # plt.rcParams['lines.linewidth'] = 2
 ##plt.rcParams.update({'font.size': 22})
@@ -312,7 +314,7 @@ axD.tick_params(axis='both', direction='in', bottom=True, top=True, left=True, r
 axD.tick_params(which='minor', direction='in', left=True, right=True, length=3)
 """
 # **** Get data
-label = 'Ch/0.5M Zn-TFSI GPE/Zn - 022524-04'
+label = 'Ch/GPE/Zn 022524-03 @ 50C'
 for i in range(1):
     root = tk.Tk()
     root.withdraw()
@@ -321,7 +323,7 @@ for i in range(1):
     if i !=2:
         data = readMPTData_CV(file)
     else:
-        data = readMPTData_CV2(file)
+        data = readMPTData_CV(file)
     #label = 'CV Sweep Step #'+str(i+1)
     #label = 'Ch/0.5M Zn-TFSI GF/Zn - 012824-02'
     print(label)
@@ -341,7 +343,21 @@ for i in range(1):
     for name, group in data.groupby(['charge', 'redox step']):
         plt.plot(abs(group['cumulative current of Step (mAh/g)']), group['Ewe/V'], '-o', markersize=2, label=label+str(name))
     """
+import tkinter as tk
+from tkinter import simpledialog
 
+def get_dataset_label():
+    root = tk.Tk()
+    # Hide the main window
+    root.withdraw()
+    # Create a simple dialog
+    dataset_label = simpledialog.askstring(title="Dataset Label",
+                                           prompt="Enter the label of the dataset:")
+    return dataset_label
+
+# Use the function
+label = get_dataset_label()
+print(f"The label of the dataset is: {label}")
 """
 root = tk.Tk()
 root.withdraw()
@@ -375,11 +391,22 @@ num_cycles = data['cycle number'].max()
 # ax.set_aspect('equal', adjustable='box')
 """
 
+color = 'green'
+# Set tick parameters
+plt.rc('xtick', direction='in', top=True)
+plt.rc('ytick', direction='in', right=True)
+plt.rc('xtick.minor', visible=True, size=3)
+plt.rc('ytick.minor', visible=True, size=3)
+# Set grid style
+plt.rc('grid', linestyle='-', linewidth='0.5', color='black')
 
 #plt.plot(data_1stcycl_02['Ewe/V'], data_1stcycl_02['<I>/mA'], '-o',markersize = 4, label = label)
-grouped = data.groupby('cycle number')
-max_discharge_per_cycle = grouped['Q discharge/mA.h'].max()/0.0006
-max_charge_per_cycle = grouped['Q charge/mA.h'].max()/0.0006
+cycles_to_plot = range(1, int(num_cycles)+1)
+
+
+grouped = data[data['cycle number'].isin(cycles_to_plot)].groupby('cycle number')
+max_discharge_per_cycle = grouped['Q discharge/mA.h'].max()/active_mass
+max_charge_per_cycle = grouped['Q charge/mA.h'].max()/active_mass
 # Calculate the bounds for max_charge_per_cycle
 lower_bound_charge = max_charge_per_cycle.min() * 0.8
 upper_bound_charge = max_charge_per_cycle.max() * 1.5
@@ -400,19 +427,41 @@ mask_discharge = max_discharge_per_cycle.between(lower_bound_discharge, upper_bo
 # Use the mask to get a new Series with only the rows where max_discharge_per_cycle is between lower_bound_discharge and upper_bound_discharge
 filtered_max_discharge_per_cycle = max_discharge_per_cycle[mask_discharge]
 
-filtered_max_discharge_per_cycle.iloc[1:-1].plot(label='Discharge')
-filtered_max_charge_per_cycle.iloc[1:-1].plot(label='Charge')
+"""
+filtered_max_discharge_per_cycle.iloc[1:-1].plot(label='Discharge', symbol='o')
+filtered_max_charge_per_cycle.iloc[1:-1].plot(label='Charge', symbol='x')
+
+
+filtered_max_discharge_per_cycle.plot(kind='scatter', x=filtered_max_discharge_per_cycle.index,
+                                      y=filtered_max_discharge_per_cycle.values, label='Discharge', color=color, marker='o')
+filtered_max_charge_per_cycle.plot(kind='scatter', x=filtered_max_charge_per_cycle.index,
+                                      y=filtered_max_charge_per_cycle.values, label='Charge', color=color, marker='x')
+"""
+plt.scatter(filtered_max_discharge_per_cycle.index, filtered_max_discharge_per_cycle.values, label='Discharge', color=color, marker='o')
+plt.scatter(filtered_max_charge_per_cycle.index, filtered_max_charge_per_cycle.values, label='Charge', color='blue', marker='x')
 axD.set_xlabel('Cycle Number (#)')
 axD.set_ylabel('Capacity (mAh/g)')
-#axD.set_title('Capacity vs. Cycle Number')
+axD.set_title('Capacity vs. Cycle Number ' +label)
+axD.set_ylim([0, 1.5*max_charge_per_cycle.max()])
 axD.legend(frameon=True, borderaxespad=0, fontsize=10,)# loc='lower center')
+# Add major grid lines
+axD.grid(which='major', linestyle='-', linewidth='0.5', color='black')
+
+# Add minor grid lines
+axD.grid(which='minor', linestyle=':', linewidth='0.5', color='black')
+
+# Customize the minor grid
+axD.minorticks_on()
 plt.tight_layout()
 plt.show()
 
 import matplotlib.pyplot as plt
-
+marker_types = ['-', '--', '-.', ':', (0, (5,2)), (0, (3,2,1,2)), (0, (3,2,1,2,1,2)),
+                (0, (3,2,1,2,1,2,1,2)), (0, (3,2,1,2,1,2,1,2,1,2))]
+plt.rc('lines', linewidth=1.5)
+color = 'green'
 # List of cycles to plot
-cycles_to_plot = range(1, 13)
+cycles_to_plot = [1, 2, 10, 20, 30, num_cycles-1]
 
 # Filter the dataframe for the specific cycles
 filtered_data = data[data['cycle number'].isin(cycles_to_plot)]
@@ -428,22 +477,37 @@ grouped_discharge = filtered_data_discharge.groupby('cycle number')
 grouped_charge = filtered_data_charge.groupby('cycle number')
 
 # Create figures for charge and discharge
-fig_discharge = plt.figure()
-fig_charge = plt.figure()
+#fig_discharge = plt.figure()
+#fig_charge = plt.figure()
+fig_chargeDischarge = plt.figure()
 
-ax_discharge = fig_discharge.add_subplot(111)
-ax_charge = fig_charge.add_subplot(111)
+#ax_discharge = fig_discharge.add_subplot(111)
+#ax_charge = fig_charge.add_subplot(111)
+ax_combined = fig_chargeDischarge.add_subplot(111)
+
 
 # Plot the charge and discharge curves for each cycle on separate plots
 for cycle, group in grouped_discharge:
-    discharge = group['Q discharge/mA.h']/.0006
+    discharge = group['Q discharge/mA.h']/active_mass
     discharge_V = group['Ewe/V']
-    ax_discharge.plot(discharge, discharge_V, label=f'Discharge Cycle {cycle}')
+    #ax_discharge.plot(discharge, discharge_V, label=f'Discharge Cycle {cycle}')
+    ax_combined.plot(discharge, discharge_V, color=color, linestyle=marker_types[cycles_to_plot.index(cycle)], label=f'Discharge Cycle {cycle}')
 
 for cycle, group in grouped_charge:
-    charge = group['Q charge/mA.h']/.0006
+    charge = group['Q charge/mA.h']/active_mass
     charge_V = group['Ewe/V']
-    ax_charge.plot(charge, charge_V, label=f'Charge Cycle {cycle}')
+    #ax_charge.plot(charge, charge_V, label=f'Charge Cycle {cycle}')
+    ax_combined.plot(charge, charge_V, color=color, linestyle=marker_types[cycles_to_plot.index(cycle)], label=f'Charge Cycle {cycle}')
+
+"""
+for cycle, group in grouped_discharge:
+    discharge = group['Q discharge/mA.h']/active_mass
+    discharge_V = group['Ewe/V']
+    charge = group['Q charge/mA.h'] / active_mass
+    charge_V = group['Ewe/V']
+    ax_combined.plot(discharge, discharge_V, label=f'Discharge Cycle {cycle}')
+    ax_combined.plot(charge, charge_V, label=f'Charge Cycle {cycle}')
+
 
 ax_discharge.set_ylabel('Voltage vs. Zn/Zn2+ (V)')
 ax_discharge.set_xlabel('Capacity (mAh/g)')
@@ -454,7 +518,22 @@ ax_charge.set_ylabel('Voltage vs. Zn/Zn2+ (V)')
 ax_charge.set_xlabel('Capacity (mAh/g)')
 ax_charge.legend()
 ax_charge.set_title('Charge Curves for Multiple Cycles of '+label)
+"""
 
+ax_combined.set_ylabel('Voltage vs. Zn/Zn2+ (V)')
+ax_combined.set_xlabel('Capacity (mAh/g)')
+ax_combined.legend(frameon=True, bbox_to_anchor=(1.05, 1.0) , loc='upper center', borderaxespad=0, fontsize=10)
+ax_combined.set_title('Charge and Discharge Curves for Multiple Cycles of '+label)
+# Add major grid lines
+ax_combined.grid(which='major', linestyle='-', linewidth='0.5', color='black')
+
+# Add minor grid lines
+ax_combined.grid(which='minor', linestyle=':', linewidth='0.5', color='black')
+
+# Customize the minor grid
+ax_combined.minorticks_on()
+
+plt.tight_layout()
 plt.show()
 
 

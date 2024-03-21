@@ -116,8 +116,8 @@ axD.set_prop_cycle(
 
 
 axD.set_xlabel("Time(hr)", fontweight='bold')
-axD.set_ylabel("Voltage (V) vs. Ref", fontweight='bold')
-axD.set_title('Discharge for Trial #3 EMD/Sep/Zn @ 0.5 uA', fontweight='bold')
+axD.set_ylabel("Voltage (V) vs. Zn/Zn2+", fontweight='bold')
+axD.set_title('Discharge for EMD/GPE/Zn Cell @ 0.5 uA', fontweight='bold')
 
  #upper right
 #axD.legend(frameon=True, bbox_to_anchor=(.65, 0.2), loc='best', ncol=1, borderaxespad=0, fontsize=10)
@@ -154,9 +154,10 @@ root.withdraw()
 file_path_1 = filedialog.askopenfilename()
 file = file_path_1
 data = readMPTData_CV(file)
-label = 'EMD/GPE(Tr)/Zn 1212-04 Discharge'
+label = 'EMD/GPE/Zn Discharge'
 plt.plot((data['time/s']-data['time/s'][0])/3600, data['Ewe/V'], '-', markersize=2, label=label)
 
+"""
 root = tk.Tk()
 root.withdraw()
 file_path_1 = filedialog.askopenfilename()
@@ -164,7 +165,7 @@ file = file_path_1
 data = readMPTData_CV(file)
 label = 'EMD/0.5M Zn-TFSI GF/Zn 1212-02 Discharge'
 plt.plot((data['time/s']-data['time/s'][0])/3600, data['Ewe/V'], '-', markersize=2, label=label)
-"""
+
 root = tk.Tk()
 root.withdraw()
 file_path_1 = filedialog.askopenfilename()
