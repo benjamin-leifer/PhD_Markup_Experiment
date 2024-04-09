@@ -85,6 +85,40 @@ This function reads a biologic .mpt data file
     print(data.head(5))
     return data
 
+def readMPTData_CV3(filename):
+    """
+This function reads a biologic .mpt data file
+
+    Parameters
+    ----------
+    filename : Name including .mpt of a biologic file to read
+
+    Returns
+    -------
+    data : dataframe of mpt data
+
+    """
+    # def readMPTData(filename, header_num):
+
+    #     data = pd.read_csv(filename, header= header_num, sep='\t',
+    #                       engine= 'python', encoding='cp1252')
+
+    # Open the file
+    with open(filename, 'r', encoding='cp1252') as readfile:
+        header_rows = readfile.readlines(18)
+        header_rows = str(header_rows).split()
+        df = pd.DataFrame(header_rows)
+        header_num = df.iloc[7]
+        header_num = int(header_num)
+
+        print(header_num)
+        header_num = header_num - 5
+    data = pd.read_csv(filename, header=header_num, sep='\t',
+                       engine='python', encoding='cp1252')
+
+    print(data.head(5))
+    return data
+
 def plotNyquist_calcRohm(data, i, label, offset):
     """
     Nyquist Plot of cycle i
@@ -268,10 +302,10 @@ def cumulative_current_of_step(data,active_mass=0.00015):
 # ===========
 # MAIN PROGRAM
 # ===========
-fig3 = plt.figure()
-axD = fig3.add_subplot(111)
+#fig3 = plt.figure()
+#axD = fig3.add_subplot(111)
 
-active_mass = 0.0006
+active_mass = 0.006
 
 # plt.rcParams['axes.linewidth'] = 2
 # plt.rcParams['lines.linewidth'] = 2
@@ -280,9 +314,11 @@ active_mass = 0.0006
 #
 # mpl.rc_file_defaults()
 
+"""
 axD.set_prop_cycle(
     color=['indianred', 'mediumpurple', 'tab:blue', 'lightsalmon', 'gold', 'limegreen', 'seagreen', 'turquoise',
            'tab:blue', 'mediumpurple', 'orchid', 'pink'])
+"""
 # axD.set_prop_cycle(color = ['mediumpurple','indianred', 'lightsalmon', 'gold',  'limegreen','seagreen', 'turquoise', 'tab:blue',  'mediumpurple',  'orchid', 'pink'])
 # axD.set_prop_cycle(color = [ 'khaki', 'limegreen','seagreen', 'turquoise', 'tab:blue',  'mediumpurple',  'orchid', 'pink'])
 # axD.set_prop_cycle(color = [ 'khaki, 'turquoise', 'tab:blue',  'mediumpurple',  'orchid', 'pink'])
@@ -318,10 +354,11 @@ label = 'Ch/GPE/Zn 022524-03 @ 50C'
 for i in range(1):
     root = tk.Tk()
     root.withdraw()
-    file_path_1 = filedialog.askopenfilename()
+    file_path_1 = filedialog.askopenfilename(filetypes=[("MPT files", "*.mpt")])
+    #file_path_1 = filedialog.askopenfilename()
     file = file_path_1
     if i !=2:
-        data = readMPTData_CV(file)
+        data = readMPTData_CV3(file)
     else:
         data = readMPTData_CV(file)
     #label = 'CV Sweep Step #'+str(i+1)
@@ -399,11 +436,45 @@ plt.rc('xtick.minor', visible=True, size=3)
 plt.rc('ytick.minor', visible=True, size=3)
 # Set grid style
 plt.rc('grid', linestyle='-', linewidth='0.5', color='black')
+# Increase the font size for the axes
+plt.rc('xtick', labelsize=16)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=16)    # fontsize of the tick labels
 
 #plt.plot(data_1stcycl_02['Ewe/V'], data_1stcycl_02['<I>/mA'], '-o',markersize = 4, label = label)
 cycles_to_plot = range(1, int(num_cycles)+1)
+# Create a figure with two subplots side by side
+#fig, (ax_combined, axD) = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 
 
+
+# Create a figure
+fig = plt.figure(figsize=(15, 5))
+
+# Define the gridspec
+gs = gridspec.GridSpec(1, 10)  # 1 row, 3 columns
+
+# Create the subplots
+ax_combined = plt.subplot(gs[0, 0:6])  # First row, all columns except the last one
+axD= plt.subplot(gs[0, 7:])  # First row, last column
+# Set aspect ratio for axD
+#axD.set_aspect('equal')
+
+"""
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+
+# Create a figure for axD
+fig1 = plt.figure(figsize=(7.5, 5))
+axD = fig1.add_subplot(111)
+
+# Create a figure for ax_combined
+fig2 = plt.figure(figsize=(7.5, 5))
+ax_combined = fig2.add_subplot(111)
+"""
+# Continue with your plotting code...
+# Continue with your plotting code...
 grouped = data[data['cycle number'].isin(cycles_to_plot)].groupby('cycle number')
 max_discharge_per_cycle = grouped['Q discharge/mA.h'].max()/active_mass
 max_charge_per_cycle = grouped['Q charge/mA.h'].max()/active_mass
@@ -437,11 +508,11 @@ filtered_max_discharge_per_cycle.plot(kind='scatter', x=filtered_max_discharge_p
 filtered_max_charge_per_cycle.plot(kind='scatter', x=filtered_max_charge_per_cycle.index,
                                       y=filtered_max_charge_per_cycle.values, label='Charge', color=color, marker='x')
 """
-plt.scatter(filtered_max_discharge_per_cycle.index, filtered_max_discharge_per_cycle.values, label='Discharge', color=color, marker='o')
-plt.scatter(filtered_max_charge_per_cycle.index, filtered_max_charge_per_cycle.values, label='Charge', color='blue', marker='x')
+axD.plot(filtered_max_discharge_per_cycle.index, filtered_max_discharge_per_cycle.values,'o',  label='Discharge', color=color)
+axD.plot(filtered_max_charge_per_cycle.index, filtered_max_charge_per_cycle.values,'x', label='Charge', color='blue')
 axD.set_xlabel('Cycle Number (#)')
 axD.set_ylabel('Capacity (mAh/g)')
-axD.set_title('Capacity vs. Cycle Number ' +label)
+#axD.set_title('Capacity vs. Cycle Number ' +label)
 axD.set_ylim([0, 1.5*max_charge_per_cycle.max()])
 axD.legend(frameon=True, borderaxespad=0, fontsize=10,)# loc='lower center')
 # Add major grid lines
@@ -452,8 +523,7 @@ axD.grid(which='minor', linestyle=':', linewidth='0.5', color='black')
 
 # Customize the minor grid
 axD.minorticks_on()
-plt.tight_layout()
-plt.show()
+
 
 import matplotlib.pyplot as plt
 marker_types = ['-', '--', '-.', ':', (0, (5,2)), (0, (3,2,1,2)), (0, (3,2,1,2,1,2)),
@@ -476,28 +546,26 @@ filtered_data_charge = filtered_data_charge[filtered_data_charge['<I>/mA'] != 0]
 grouped_discharge = filtered_data_discharge.groupby('cycle number')
 grouped_charge = filtered_data_charge.groupby('cycle number')
 
-# Create figures for charge and discharge
-#fig_discharge = plt.figure()
-#fig_charge = plt.figure()
-fig_chargeDischarge = plt.figure()
 
-#ax_discharge = fig_discharge.add_subplot(111)
-#ax_charge = fig_charge.add_subplot(111)
-ax_combined = fig_chargeDischarge.add_subplot(111)
+
 
 
 # Plot the charge and discharge curves for each cycle on separate plots
 for cycle, group in grouped_discharge:
-    discharge = group['Q discharge/mA.h']/active_mass
+    #discharge = group['Q discharge/mA.h']/active_mass
+    discharge = (group['time/s']-group['time/s'].iloc[0])/3600
     discharge_V = group['Ewe/V']
     #ax_discharge.plot(discharge, discharge_V, label=f'Discharge Cycle {cycle}')
-    ax_combined.plot(discharge, discharge_V, color=color, linestyle=marker_types[cycles_to_plot.index(cycle)], label=f'Discharge Cycle {cycle}')
+    #ax_combined.plot(discharge, discharge_V, color=color, linestyle=marker_types[cycles_to_plot.index(cycle)], label=f'Discharge Cycle {cycle}')
+    ax_combined.plot(discharge, discharge_V, color=color, linestyle=marker_types[cycles_to_plot.index(cycle)])
 
 for cycle, group in grouped_charge:
     charge = group['Q charge/mA.h']/active_mass
     charge_V = group['Ewe/V']
     #ax_charge.plot(charge, charge_V, label=f'Charge Cycle {cycle}')
-    ax_combined.plot(charge, charge_V, color=color, linestyle=marker_types[cycles_to_plot.index(cycle)], label=f'Charge Cycle {cycle}')
+    #ax_combined.plot(charge, charge_V, color=color, linestyle=marker_types[cycles_to_plot.index(cycle)], label=f'Charge Cycle {cycle}')
+    ax_combined.plot(charge, charge_V, color=color, linestyle=marker_types[cycles_to_plot.index(cycle)],
+                     label=f'Cycle {cycle}')
 
 """
 for cycle, group in grouped_discharge:
@@ -520,10 +588,29 @@ ax_charge.legend()
 ax_charge.set_title('Charge Curves for Multiple Cycles of '+label)
 """
 
-ax_combined.set_ylabel('Voltage vs. Zn/Zn2+ (V)')
-ax_combined.set_xlabel('Capacity (mAh/g)')
-ax_combined.legend(frameon=True, bbox_to_anchor=(1.05, 1.0) , loc='upper center', borderaxespad=0, fontsize=10)
-ax_combined.set_title('Charge and Discharge Curves for Multiple Cycles of '+label)
+
+# Plot on axD
+# ... (your code to plot on axD)
+
+# Plot on ax_combined
+# ... (your code to plot on ax_combined)
+
+# Show the plot
+#upper_limit = 7
+#ax_combined.set_xlim([0, upper_limit])
+#axD.set_ylim([0, upper_limit])
+#axD.set_aspect('equal')
+#ax_combined.set_ylabel('Voltage vs. Zn/Zn2+ (V)', fontsize=10)
+#ax_combined.set_xlabel('Capacity (mAh/g)')
+# Increase the size and make the x and y labels bold
+axD.set_xlabel('Cycle Number (#)', fontsize=14, labelpad=10, weight='bold')
+axD.set_ylabel('Capacity (mAh/g)', fontsize=14, labelpad=10, weight='bold')
+
+ax_combined.set_ylabel('Voltage vs. Zn/Zn2+ (V)', fontsize=14, labelpad=10, weight='bold')
+ax_combined.set_xlabel('Capacity (mAh/g)', fontsize=14, labelpad=10, weight='bold')
+
+ax_combined.legend(frameon=True, bbox_to_anchor=(1.05, 0.5) , loc='upper center', borderaxespad=0, fontsize=10)
+#ax_combined.set_title('Charge and Discharge Curves for Multiple Cycles of '+label)
 # Add major grid lines
 ax_combined.grid(which='major', linestyle='-', linewidth='0.5', color='black')
 
@@ -533,9 +620,23 @@ ax_combined.grid(which='minor', linestyle=':', linewidth='0.5', color='black')
 # Customize the minor grid
 ax_combined.minorticks_on()
 
+# Increase the font size for the legend
+#axD.legend(frameon=True, borderaxespad=0, fontsize=20) # fontsize of the legend in axD
+#ax_combined.legend(frameon=True, bbox_to_anchor=(1.05, 0.5) , loc='upper center', borderaxespad=0, fontsize=20) # fontsize of the legend in ax_combined
+#axD.set_title('Capacity vs. Cycle Number ' +label, fontsize=16, fontweight='bold')
+#ax_combined.set_title('Charge and Discharge Curves for Multiple Cycles of '+label, fontsize=16, fontweight = 'bold')
+fig.suptitle('Cycling Performance of '+label, fontsize=20, fontweight='bold')
 plt.tight_layout()
 plt.show()
 
+"""
+# Create a list of all the lines and labels
+lines = axD.get_lines() + ax_combined.get_lines()
+labels = [line.get_label() for line in lines]
+
+# Create a legend in the middle of the figure
+fig.legend(lines, labels, loc='center')
+"""
 
 if __name__ == '__main__':
     pass
