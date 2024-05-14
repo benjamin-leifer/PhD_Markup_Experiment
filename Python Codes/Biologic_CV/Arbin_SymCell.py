@@ -25,11 +25,14 @@ class arbin_import_Sym_Cell():
         if self.get_filetype() == '.csv':
             data = pd.read_csv(self.path, header=0, engine='python')
         elif self.get_filetype() == '.xlsx':
-            data = pd.read_excel(self.path, header=0)
+            data  = self.read_excel()
         print(data.head())
         print(data.keys())
         return data
 
+    def read_excel(self):
+        data = pd.read_excel(self.path, sheet_name=1, header=0)
+        return data
     def plot_voltage_vs_time(self):
         fig, ax1 = plt.subplots()
 

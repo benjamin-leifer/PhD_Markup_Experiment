@@ -12,7 +12,7 @@ from Functions import getmin
 from Functions import plotLSV
 import tkinter as tk
 from tkinter import filedialog
-
+import Arbin_SymCell
 
 # from Functions import plotNyquist_calcRohm
 # np.set_printoptions(suppress=True)
@@ -358,7 +358,7 @@ for i in range(1):
     #file_path_1 = filedialog.askopenfilename()
     file = file_path_1
     if i !=2:
-        data = readMPTData_CV3(file)
+        data = readMPTData_CV(file)
     else:
         data = readMPTData_CV(file)
     #label = 'CV Sweep Step #'+str(i+1)
@@ -627,6 +627,76 @@ ax_combined.minorticks_on()
 #ax_combined.set_title('Charge and Discharge Curves for Multiple Cycles of '+label, fontsize=16, fontweight = 'bold')
 fig.suptitle('Cycling Performance of '+label, fontsize=20, fontweight='bold')
 plt.tight_layout()
+plt.show()
+
+
+# Filter the data for the first cycle
+first_dis_data = data[(data['cycle number'] == 1) & (data['control/mA'] < 0)]
+first_charge_data = data[(data['cycle number'] == 1) & (data['control/mA'] > 0)]
+active_mass = 0.0006
+# Plot the discharge curve
+plt.figure(figsize=(10, 5))
+CI_file = filedialog.askopenfilename()
+CD_file = filedialog.askopenfilename()
+CI_Charge_2 =filedialog.askopenfilename()
+CD_Charge_2 =filedialog.askopenfilename()
+cell_CD = Arbin_SymCell.arbin_import_Sym_Cell(CD_file, name='EMD', mass=0.00344/1000,
+                                       theoretical_cap=308, shape='o')
+cell_CI = Arbin_SymCell.arbin_import_Sym_Cell(CI_file, name=r'$\alpha$-MnO2', mass=0.001218/1000,
+                                       theoretical_cap=308, shape='o')
+cell_CD_2 = Arbin_SymCell.arbin_import_Sym_Cell(CD_Charge_2, name='EMD', mass=0.00344/1000,
+                                       theoretical_cap=308, shape='o')
+cell_CI_2 = Arbin_SymCell.arbin_import_Sym_Cell(CI_Charge_2, name=r'$\alpha$-MnO2', mass=0.001218/1000,
+                                       theoretical_cap=308, shape='o')
+# Plot the Chevrel curve
+Chevrel_mah = first_dis_data['Q discharge/mA.h']/active_mass
+Chevrel_mah = Chevrel_mah.append(first_dis_data['Q discharge/mA.h'].iloc[-1]/active_mass -
+         first_charge_data['Q charge/mA.h']/active_mass)
+Chevrel_V = first_dis_data['Ewe/V']
+Chevrel_V = Chevrel_V.append(first_charge_data['Ewe/V'])
+
+plt.plot(Chevrel_mah, Chevrel_V, color = 'black', label='Chevrel')
+
+# Plot the first discharge and second charge curves
+CI_mah = cell_CI.data[cell_CI.data['Step Index'] == 3]['Discharge Capacity (Ah)']/cell_CI.mass
+CI_mah = CI_mah.append(cell_CI.data[cell_CI.data['Step Index'] == 3]['Discharge Capacity (Ah)'].iloc[-1]/cell_CI.mass -
+         cell_CI_2.data[cell_CI_2.data['Step Index'] == 2]['Charge Capacity (Ah)']/cell_CI.mass)
+CI_V = cell_CI.data[cell_CI.data['Step Index'] == 3]['Voltage (V)']
+CI_V = CI_V.append(cell_CI_2.data[cell_CI_2.data['Step Index'] == 2]['Voltage (V)'])
+
+CD_mah = cell_CD.data[cell_CD.data['Step Index'] == 3]['Discharge Capacity (Ah)']/cell_CD.mass
+CD_mah = CD_mah.append(cell_CD.data[cell_CD.data['Step Index'] == 3]['Discharge Capacity (Ah)'].iloc[-1]/cell_CD.mass -
+         cell_CD_2.data[cell_CD_2.data['Step Index'] == 2]['Charge Capacity (Ah)']/cell_CD.mass)
+CD_V = cell_CD.data[cell_CD.data['Step Index'] == 3]['Voltage (V)']
+CD_V = CD_V.append(cell_CD_2.data[cell_CD_2.data['Step Index'] == 2]['Voltage (V)'])
+
+plt.plot(CI_mah, CI_V, color='b', label=cell_CI.name)
+plt.plot(CD_mah, CD_V, color='g', label=cell_CD.name)
+"""
+plt.plot(first_dis_data['Q discharge/mA.h']/active_mass, first_dis_data['Ewe/V'], color = 'black', label='Chevrel')
+plt.plot(first_dis_data['Q discharge/mA.h'].iloc[-1]/active_mass -
+         first_charge_data['Q charge/mA.h']/active_mass, first_charge_data['Ewe/V'], color = 'black')
+#plt.plot(first_dis_data['Q charge/mA.h']/active_mass, first_charge_data['Ewe/V'], color = 'black',label='Chevrel')
+#cell_CD.plot_voltage_vs_capacity()
+#cell_CI.plot_voltage_vs_capacity()
+
+plt.plot(cell_CD.data[cell_CD.data['Step Index'] == 3]['Discharge Capacity (Ah)']/cell_CD.mass,
+         cell_CD.data[cell_CD.data['Step Index'] == 3]['Voltage (V)'], color='g', label=cell_CD.name)
+plt.plot(cell_CI.data[cell_CI.data['Step Index'] == 3]['Discharge Capacity (Ah)']/cell_CI.mass,
+         cell_CI.data[cell_CI.data['Step Index'] == 3]['Voltage (V)'], color='b', label=cell_CI.name)
+
+plt.plot(cell_CD.data[cell_CD.data['Step Index'] == 3]['Discharge Capacity (Ah)'].iloc[-1]/cell_CD.mass -
+         cell_CD_2.data[cell_CD_2.data['Step Index'] == 2]['Charge Capacity (Ah)']/cell_CD.mass,
+         cell_CD_2.data[cell_CD_2.data['Step Index'] == 2]['Voltage (V)'], color='g',)
+plt.plot(cell_CI.data[cell_CI.data['Step Index'] == 3]['Discharge Capacity (Ah)'].iloc[-1]/cell_CI.mass -
+         cell_CI_2.data[cell_CI_2.data['Step Index'] == 2]['Charge Capacity (Ah)']/cell_CI.mass,
+         cell_CI_2.data[cell_CI_2.data['Step Index'] == 2]['Voltage (V)'], color='b')
+"""
+plt.xlabel('Capacity (mAh/g)')
+plt.ylabel('Voltage vs. Zn/Zn2+ (V)')
+plt.title('First Discharge and Second Charge Differential Capacity Curves')
+plt.legend()
+#plt.grid(True)
 plt.show()
 
 """
