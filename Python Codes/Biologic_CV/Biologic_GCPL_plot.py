@@ -305,7 +305,7 @@ def cumulative_current_of_step(data,active_mass=0.00015):
 #fig3 = plt.figure()
 #axD = fig3.add_subplot(111)
 
-active_mass = 0.006
+active_mass = 0.0006
 
 # plt.rcParams['axes.linewidth'] = 2
 # plt.rcParams['lines.linewidth'] = 2
@@ -508,8 +508,8 @@ filtered_max_discharge_per_cycle.plot(kind='scatter', x=filtered_max_discharge_p
 filtered_max_charge_per_cycle.plot(kind='scatter', x=filtered_max_charge_per_cycle.index,
                                       y=filtered_max_charge_per_cycle.values, label='Charge', color=color, marker='x')
 """
-axD.plot(filtered_max_discharge_per_cycle.index, filtered_max_discharge_per_cycle.values,'o',  label='Discharge', color=color)
-axD.plot(filtered_max_charge_per_cycle.index, filtered_max_charge_per_cycle.values,'x', label='Charge', color='blue')
+axD.plot(filtered_max_discharge_per_cycle.index, filtered_max_discharge_per_cycle.values, 'o',  label='Discharge', color=color)
+axD.plot(filtered_max_charge_per_cycle.index, filtered_max_charge_per_cycle.values, 'x', label='Charge', color='blue')
 axD.set_xlabel('Cycle Number (#)')
 axD.set_ylabel('Capacity (mAh/g)')
 #axD.set_title('Capacity vs. Cycle Number ' +label)
@@ -552,8 +552,8 @@ grouped_charge = filtered_data_charge.groupby('cycle number')
 
 # Plot the charge and discharge curves for each cycle on separate plots
 for cycle, group in grouped_discharge:
-    #discharge = group['Q discharge/mA.h']/active_mass
-    discharge = (group['time/s']-group['time/s'].iloc[0])/3600
+    discharge = group['Q discharge/mA.h']/active_mass
+    #discharge = (group['time/s']-group['time/s'].iloc[0])/3600
     discharge_V = group['Ewe/V']
     #ax_discharge.plot(discharge, discharge_V, label=f'Discharge Cycle {cycle}')
     #ax_combined.plot(discharge, discharge_V, color=color, linestyle=marker_types[cycles_to_plot.index(cycle)], label=f'Discharge Cycle {cycle}')
@@ -629,7 +629,119 @@ fig.suptitle('Cycling Performance of '+label, fontsize=20, fontweight='bold')
 plt.tight_layout()
 plt.show()
 
+fig1, (ax11) = plt.subplots(1,1,figsize=(4.5, 2.78))
+font_size = 10
 
+#ax12 = ax11.twinx()
+
+ax11.set_xlabel("Specific Capacity mAh/g", fontsize=font_size)
+ax11.set_ylabel("Potential (V)", fontsize=font_size)
+#ax12.set_ylabel("Current (mA)")
+
+
+ax11.tick_params(which='both', axis='both', direction='in', bottom=True, top=True, left=True, right=False, labelsize=font_size)
+#ax12.tick_params(which='both', axis='both', direction='in', bottom=False, top=False, left=False, right=True)
+
+
+
+
+#ax11.set_ylim((-.15,.15))
+#ax12.set_ylim((-0.35,0.35))
+
+fig1.tight_layout()
+
+
+
+
+# Plot the data ================================
+
+for cycle, group in grouped_discharge:
+    discharge = group['Q discharge/mA.h']/active_mass
+    #discharge = (group['time/s']-group['time/s'].iloc[0])/3600
+    discharge_V = group['Ewe/V']
+    #ax_discharge.plot(discharge, discharge_V, label=f'Discharge Cycle {cycle}')
+    #ax_combined.plot(discharge, discharge_V, color=color, linestyle=marker_types[cycles_to_plot.index(cycle)], label=f'Discharge Cycle {cycle}')
+    if cycle == 1:
+        ax11.plot(discharge, discharge_V, color='black', linestyle=marker_types[cycles_to_plot.index(cycle)], lw=2.0)
+    else:
+        ax11.plot(discharge, discharge_V, color='black', linestyle=marker_types[cycles_to_plot.index(cycle)], lw=1.0)
+
+for cycle, group in grouped_charge:
+    charge = group['Q charge/mA.h']/active_mass
+    charge_V = group['Ewe/V']
+    #ax_charge.plot(charge, charge_V, label=f'Charge Cycle {cycle}')
+    #ax_combined.plot(charge, charge_V, color=color, linestyle=marker_types[cycles_to_plot.index(cycle)], label=f'Charge Cycle {cycle}')
+    if cycle == 1:
+        ax11.plot(charge, charge_V, color='black', linestyle=marker_types[cycles_to_plot.index(cycle)], lw=2.0,
+                  label=f'Cycle {int(cycle)}')
+    else:
+        ax11.plot(charge, charge_V, color='black', linestyle=marker_types[cycles_to_plot.index(cycle)],
+                     label=f'Cycle {int(cycle)}', lw=1.0)
+
+color = 'm'
+#ax12.plot(tt,ii,color = color, ls='-', lw=1.0, label='Current')
+
+
+fig1.legend(bbox_to_anchor=(.9, .75), fontsize = 8, frameon=False)
+
+fig1.tight_layout()
+
+
+
+# Save the figure ================================
+
+output_name = 'plo'
+output_path = r'C:\Users\benja\OneDrive - Northeastern University\Gallaway Group\Manuscript\Zn-Ion Fiber Work\Resources\ECS Talk\Chevrel Figs\fig_1.png'
+plt.savefig(output_path, dpi=400)
+plt.show()
+
+fig2, (ax12) = plt.subplots(1,1,figsize=(2.78,2.78))
+
+
+#ax12 = ax11.twinx()
+
+ax12.set_xlabel("Cycle Number (#)", fontsize=font_size)
+ax12.set_ylabel("Capacity (mAh/g)", fontsize=font_size)
+#ax12.set_ylabel("Current (mA)")
+
+
+ax12.tick_params(which='both', axis='both', direction='in', bottom=True, top=True, left=True, right=False, labelsize=font_size)
+#ax12.tick_params(which='both', axis='both', direction='in', bottom=False, top=False, left=False, right=True)
+
+
+
+
+ax12.set_ylim((0, 180))
+ax12.set_xlim((0, 35))
+
+fig2.tight_layout()
+
+
+
+
+# Plot the data ================================
+ax12.plot(filtered_max_discharge_per_cycle.index[0:32], filtered_max_discharge_per_cycle.values[0:32], 'o',  label='Discharge', color='green')
+ax12.plot(filtered_max_charge_per_cycle.index[0:32], filtered_max_charge_per_cycle.values[0:32], 'x', label='Charge', color='blue')
+
+
+color = 'm'
+#ax12.plot(tt,ii,color = color, ls='-', lw=1.0, label='Current')
+
+
+fig2.legend(bbox_to_anchor=(.7, .4), fontsize = 'small', frameon=False)
+
+fig2.tight_layout()
+
+
+
+# Save the figure ================================
+
+output_name = 'plo'
+output_path = r'C:\Users\benja\OneDrive - Northeastern University\Gallaway Group\Manuscript\Zn-Ion Fiber Work\Resources\ECS Talk\Chevrel Figs\fig_2.png'
+plt.savefig(output_path, dpi=400)
+plt.show()
+
+"""
 # Filter the data for the first cycle
 first_dis_data = data[(data['cycle number'] == 1) & (data['control/mA'] < 0)]
 first_charge_data = data[(data['cycle number'] == 1) & (data['control/mA'] > 0)]
@@ -673,6 +785,7 @@ CD_V = CD_V.append(cell_CD_2.data[cell_CD_2.data['Step Index'] == 2]['Voltage (V
 plt.plot(CI_mah, CI_V, color='b', label=cell_CI.name)
 plt.plot(CD_mah, CD_V, color='g', label=cell_CD.name)
 """
+"""
 plt.plot(first_dis_data['Q discharge/mA.h']/active_mass, first_dis_data['Ewe/V'], color = 'black', label='Chevrel')
 plt.plot(first_dis_data['Q discharge/mA.h'].iloc[-1]/active_mass -
          first_charge_data['Q charge/mA.h']/active_mass, first_charge_data['Ewe/V'], color = 'black')
@@ -692,13 +805,14 @@ plt.plot(cell_CI.data[cell_CI.data['Step Index'] == 3]['Discharge Capacity (Ah)'
          cell_CI_2.data[cell_CI_2.data['Step Index'] == 2]['Charge Capacity (Ah)']/cell_CI.mass,
          cell_CI_2.data[cell_CI_2.data['Step Index'] == 2]['Voltage (V)'], color='b')
 """
+"""
 plt.xlabel('Capacity (mAh/g)')
 plt.ylabel('Voltage vs. Zn/Zn2+ (V)')
 plt.title('First Discharge and Second Charge Differential Capacity Curves')
 plt.legend()
 #plt.grid(True)
 plt.show()
-
+"""
 """
 # Create a list of all the lines and labels
 lines = axD.get_lines() + ax_combined.get_lines()
@@ -707,6 +821,5 @@ labels = [line.get_label() for line in lines]
 # Create a legend in the middle of the figure
 fig.legend(lines, labels, loc='center')
 """
-
 if __name__ == '__main__':
     pass

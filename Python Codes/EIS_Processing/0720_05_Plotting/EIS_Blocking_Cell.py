@@ -90,8 +90,12 @@ def plotNyquist_calcRohm(data, i, label, offset):
 
     # df = df0
     # print(df)
-    Real = df['Re(Z)/Ohm']
-    Imag = df['-Im(Z)/Ohm']
+    Real = df['Re(Z)/Ohm'].iloc[2:]
+    Imag = df['-Im(Z)/Ohm'].iloc[2:]
+
+    print('Real and Imag')
+    print(Real)
+    print(Imag)
 
     # freq= df['freq/Hz']
     # print(freq)
@@ -124,7 +128,7 @@ def plotNyquist_calcRohm(data, i, label, offset):
     # ysest = ysest + offset
     # plt.plot(xsest,ysest, 'ko',markersize = 4, label= '')
 
-    plt.plot(xf, yf, 'ko', markersize=3, label='')
+    #plt.plot(xf, yf, 'ko', markersize=3, label='')
     ## xfirst='{:.3f}'.format(xf)
     xfirst = round(xf, 3)
     # # print(xfirst)
@@ -144,12 +148,12 @@ def plotNyquist_calcRohm(data, i, label, offset):
 # **** Get data
 
 #file = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_NoCalendar_EIS_RT_C01.mpt'  # 'MIT cell C3_01_PEIS_C03.mpt'
-file = '0928_01_0.5MTFSI_ZnEMD_InsideGB_0hr_RT_EIS-Remade_from_091923-01_C01.mpt'
+file = '0919_01_0.5MTFSI_ZnSym_InsideGB_0hr_RT_Tranference_01_PEIS_C05.mpt'
 data = readMPTData(file)
-labels = '0928-01'
+labels = 'Pre Chronoamperometry'
 
 #file2 = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_Calendar_30C_EIS_RT_C01.mpt'  # 'MIT cell B6_01_PEIS_C03.mpt' #B6 filename
-file2 = '0928_01_0.5MTFSI_ZnEMD_InsideGB_0hr_RT_EIS-Remade_from_091923-01_C01.mpt'
+file2 = '0919_01_0.5MTFSI_ZnSym_InsideGB_0hr_RT_Tranference_03_PEIS_C05.mpt'
 data2 = readMPTData(file2)
 label2 = 'Post Chronoamperometry'
 
@@ -174,9 +178,9 @@ axD.set_prop_cycle(
 # axD.set_prop_cycle(color = [ 'khaki, 'turquoise', 'tab:blue',  'mediumpurple',  'orchid', 'pink'])
 
 
-# plotNyquist(data, 1, 'cell C1', 0, 157, 300)
-# plotNyquist(data, 1, 'cell C2', 0, 70, 300)
-plotNyquist_calcRohm(data, 1, labels, 0)
+plotNyquist_calcRohm(data, 1, 'cell C1', 0)
+plotNyquist_calcRohm(data2, 1, 'cell C2', 0)
+#plotNyquist_calcRohm(data, 1, labels, 0)
 #plotNyquist_calcRohm(data2, 1, label2, 0)
 
 #plotNyquist_calcRohm(data4, 1, label4, 0)
@@ -189,9 +193,9 @@ plotNyquist_calcRohm(data, 1, labels, 0)
 
 axD.set_xlabel("z' / ohms", fontweight='bold')
 axD.set_ylabel("-z'' / ohms", fontweight='bold')
-axD.set_title('Nyquist Plot for GPE-0928-01 Experiment', fontweight='bold')
+#axD.set_title('Nyquist Plot for GPE-0928-01 Experiment', fontweight='bold')
 
-axD.legend(loc='best')  #upper right
+#axD.legend(loc='best')  #upper right
 #axD.legend(frameon=True, bbox_to_anchor=(.65, 0.2), loc='best', ncol=1, borderaxespad=0, fontsize=10)
 
 #axD.set_ylim(-10, 400)
@@ -216,6 +220,7 @@ plt.show()
 # plt.savefig('MIT C2.png', dpi=500, bbox_inches = 'tight')
 # plt.savefig('MIT C5.png', dpi=500, bbox_inches = 'tight')
 # plt.savefig(str(labels)+'.png', dpi=500, bbox_inches = 'tight')
+"""
 label_list = [labels,]
 Rct_list = []
 for i, datum in enumerate([data, data2]):
@@ -224,7 +229,7 @@ for i, datum in enumerate([data, data2]):
 
 for i,rct in enumerate(Rct_list):
     print('Rct for ' + label_list[i] + ' = ' + str(rct))
-
+"""
 
 if __name__ == '__main__':
     pass
