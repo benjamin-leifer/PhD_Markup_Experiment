@@ -4,6 +4,69 @@ import pandas as pd
 import os
 import tkinter as tk
 from tkinter import filedialog
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import matplotlib.lines as mlines
+from fractions import Fraction
+
+# Create a custom legend handler
+class AnyObjectHandler(object):
+    def legend_artist(self, legend, orig_handle, fontsize, handlebox):
+        x0, y0 = handlebox.xdescent, handlebox.ydescent
+        width, height = handlebox.width, handlebox.height
+        patch = mpatches.Rectangle([x0, y0], width, height, facecolor='red',
+                                   edgecolor='black', hatch='xx', lw=3,
+                                   transform=handlebox.get_transform())
+        handlebox.add_artist(patch)
+        return patch
+
+class Cell_Cycle():
+
+    def __init__(self, data, mass = 0.00133, theoretical_cap = 175, color = 'r', shape = 'o'):
+        self.data = data
+        self.mass = mass
+        self.color = color
+        self.shape = shape
+        self.theoretical_cap = theoretical_cap
+        self.C_Rate = None
+        self.C_Rate_str = None
+        self.ingest_data()
+
+    def lowest_c_rate_str(num, den):
+        fraction = Fraction(num, den)
+        str_frac = str(fraction)
+        c_rate = str_frac.split('/')
+        print(c_rate)
+        C_Rate = 'C/' + c_rate[1]
+        print(C_Rate)
+        return C_Rate
+
+    def ingest_data(self):
+        self.get_c_rate()
+        self.get_charge_capacity()
+        self.get_discharge_capacity()
+
+    def get_c_rate(self):
+        C_Rate = round(np.average(self.data['Current (A)'] / (self.mass*self.theoretical_cap)), 3)
+        print('C Rate: ', C_Rate)
+        print(C_Rate)
+        print(type(C_Rate))
+        self.C_Rate = C_Rate
+        #self.C_Rate_str = self.lowest_c_rate_str(num = C_Rate, den= 1)
+        return C_Rate
+
+    def get_charge_capacity(self):
+        charge_capacity = self.data['Charge Capacity (Ah)'].max()
+        print('Charge Capacity: ', charge_capacity)
+        return charge_capacity
+
+    def get_discharge_capacity(self):
+        discharge_capacity = self.data['Discharge Capacity (Ah)'].max()
+        print('Discharge Capacity: ', discharge_capacity)
+        return discharge_capacity
+
+
+
 
 class arbin_import_Sym_Cell():
 
@@ -16,20 +79,32 @@ class arbin_import_Sym_Cell():
         self.shape = shape
         self.cycle_Num_list = ['1:C/10', '2:C/10', '3:C/10', '4:C/5', '5:C/5', '6:C/5', '7:C/2', '8:C/2', '9:C/2',]
         self.theoretical_cap = theoretical_cap
+        self.cycles = self.data['Cycle Index'].max()
         if not num_cycles:
             self.num_cyles = self.data['Cycle Index'].max()
+        self.cycles_objs = []
+        self.instantiate_cycle_list()
+        print('List of all cycles is:')
+        print(self.cycles_objs)
 
 
 
     def read_data(self):
+
         if self.get_filetype() == '.csv':
             data = pd.read_csv(self.path, header=0, engine='python')
+        elif self.get_filetype() == '.CSV':
+            data = pd.read_csv(self.path, header=0, engine='python')
+            print(data.head())
         elif self.get_filetype() == '.xlsx':
             data = pd.read_excel(self.path, header=0)
         print(data.head())
         print(data.keys())
         return data
 
+    def instantiate_cycle_list(self):
+        grouped_data = self.data.groupby('Cycle Index')
+        self.cycles_objs = [Cell_Cycle(group, mass=self.mass, theoretical_cap=self.theoretical_cap, color=self.color, shape=self.shape) for name, group in grouped_data]
     def plot_voltage_vs_time(self):
         fig, ax1 = plt.subplots()
 
@@ -42,7 +117,8 @@ class arbin_import_Sym_Cell():
 
 
         ax1.tick_params(which='both', axis='both', direction='in', bottom=True, top=True, left=True, right=False)
-
+        ax1.set_xlabel('Time (hr)')
+        ax1.set_ylabel('Voltage (V)')
         plt.title('Voltage vs. Time for %s' % self.name)
         fig.tight_layout()  # otherwise the right y-label is slightly clipped
 
@@ -72,13 +148,81 @@ class arbin_import_Sym_Cell():
 
         #plt.show()
 
-    def plot_voltage_vs_capacity(self):
+    def plot_voltage_vs_capacity(self, cycles='All', clean_filter=False):
         fig, ax1 = plt.subplots()
+
+        # Group the data by cycle
+        grouped_data = self.data.groupby('Cycle Index')
+
+        if clean_filter:
+            # Group the data by cycle
+            cleaned_data = pd.DataFrame()
+            for name, group in grouped_data:
+                if (group['Charge Capacity (Ah)'].max()/self.mass < 50 or
+                        group['Discharge Capacity (Ah)'].max()/self.mass < 50):
+                    pass
+                else:
+                    cleaned_data = pd.concat([cleaned_data, group])
+            try:
+                grouped_data = cleaned_data.groupby('Cycle Index')
+            except:
+                print('No cycles with capacity greater than 50 mAh/g')
+                return
+
+
+        if cycles == 'All':
+            for name, group in grouped_data:
+                # Filter the data where the amperage is positive (for charging)
+                filtered_group_charge = group[group['Current (A)'] > 0]
+                filtered_group_dis = group[group['Current (A)'] < 0]
+
+                charge_cap = filtered_group_charge['Charge Capacity (Ah)']
+                charge_volt = filtered_group_charge['Voltage (V)']
+                dis_cap = filtered_group_dis['Discharge Capacity (Ah)']
+                dis_volt = filtered_group_dis['Voltage (V)']
+
+                color = self.color
+                ax1.set_xlabel('Capacity (mAh/g)')
+                ax1.set_ylabel('Voltage (V)', color=color)
+                ax1.plot(charge_cap/self.mass, charge_volt, color=color, linestyle='dashed', label=self.name + ' Charge Cycle ' + str(name))
+                ax1.plot(dis_cap/self.mass, dis_volt, color=color, linestyle='dotted', label=self.name + ' Discharge Cycle ' + str(name))
+        else:
+            for cycle in cycles:
+                group = grouped_data.get_group(cycle)
+                filtered_group_charge = group[group['Current (A)'] > 0]
+                filtered_group_dis = group[group['Current (A)'] < 0]
+
+                charge_cap = filtered_group_charge['Charge Capacity (Ah)']
+                charge_volt = filtered_group_charge['Voltage (V)']
+                dis_cap = filtered_group_dis['Discharge Capacity (Ah)']
+                dis_volt = filtered_group_dis['Voltage (V)']
+
+                color = self.color
+                ax1.set_xlabel('Capacity (mAh/g)')
+                ax1.set_ylabel('Voltage (V)', color=color)
+                ax1.plot(charge_cap/self.mass, charge_volt, color=color, linestyle='dashed', label=self.name + ' Charge Cycle ' + str(cycle))
+                ax1.plot(dis_cap/self.mass, dis_volt, color=color, linestyle='dotted', label=self.name + ' Discharge Cycle ' + str(cycle))
+
+        ax1.tick_params(axis='y', labelcolor=color)
+        plt.title('Voltage vs. Capacity for %s' % self.name)
+        fig.tight_layout()  # otherwise the right y-label is slightly clipped
+        plt.legend()  # Add this line to show the legend
+
+        """
+        fig, ax1 = plt.subplots()
+
+
+        discharge_cap = self.data['Discharge Capacity (Ah)']
+        dis_volt = self.data['Voltage (V)']
+
+        charge_cap = self.data['Charge Capacity (Ah)']
+        charge_volt = self.data['Voltage (V)']
 
         color = self.color
         ax1.set_xlabel('Capacity (mAh/g)')
         ax1.set_ylabel('Voltage (V)', color=color)
-        ax1.plot(self.data['Discharge Capacity (Ah)'], self.data['Voltage (V)'], color=color, label=self.name)
+        ax1.plot(self.data['Discharge Capacity (Ah)']/self.mass, self.data['Voltage (V)'], color=color, label=self.name)
+        ax1.plot(self.data['Charge Capacity (Ah)']/self.mass, self.data['Voltage (V)'], color=color, label=self.name)
         ax1.tick_params(axis='y', labelcolor=color)
 
         #ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
@@ -93,6 +237,7 @@ class arbin_import_Sym_Cell():
 
         plt.title('Voltage vs. Capacity for %s' % self.name)
         fig.tight_layout()  # otherwise the right y-label is slightly clipped
+        """
 
     def get_overpotentials(self):
         self.overpotentials = []
@@ -111,6 +256,69 @@ class arbin_import_Sym_Cell():
 
 
         pass
+
+    def plot_voltage_vs_capacity_absolute(self, cycles='All', clean_filter=False):
+        fig, ax1 = plt.subplots()
+
+        # Group the data by cycle
+        grouped_data = self.data.groupby('Cycle Index')
+
+        if clean_filter:
+            # Group the data by cycle
+            cleaned_data = pd.DataFrame()
+            for name, group in grouped_data:
+                if (group['Charge Capacity (Ah)'].max() / self.mass < 50 or
+                        group['Discharge Capacity (Ah)'].max() / self.mass < 50):
+                    pass
+                else:
+                    cleaned_data = pd.concat([cleaned_data, group])
+            try:
+                grouped_data = cleaned_data.groupby('Cycle Index')
+            except:
+                print('No cycles with capacity greater than 50 mAh/g')
+                return
+
+        if cycles == 'All':
+            for name, group in grouped_data:
+                # Filter the data where the amperage is positive (for charging)
+                filtered_group_charge = group[group['Current (A)'] > 0]
+                filtered_group_dis = group[group['Current (A)'] < 0]
+
+                charge_cap = filtered_group_charge['Charge Capacity (Ah)']
+                charge_volt = filtered_group_charge['Voltage (V)']
+                dis_cap = filtered_group_dis['Discharge Capacity (Ah)']
+                dis_volt = filtered_group_dis['Voltage (V)']
+
+                color = self.color
+                ax1.set_xlabel('Capacity (mAh)')
+                ax1.set_ylabel('Voltage (V)', color=color)
+                ax1.plot(charge_cap*1000, charge_volt, color=color, linestyle='dashed',
+                         label=self.name + ' Charge Cycle ' + str(name))
+                ax1.plot(dis_cap*1000, dis_volt, color=color, linestyle='dotted',
+                         label=self.name + ' Discharge Cycle ' + str(name))
+        else:
+            for cycle in cycles:
+                group = grouped_data.get_group(cycle)
+                filtered_group_charge = group[group['Current (A)'] > 0]
+                filtered_group_dis = group[group['Current (A)'] < 0]
+
+                charge_cap = filtered_group_charge['Charge Capacity (Ah)']
+                charge_volt = filtered_group_charge['Voltage (V)']
+                dis_cap = filtered_group_dis['Discharge Capacity (Ah)']
+                dis_volt = filtered_group_dis['Voltage (V)']
+
+                color = self.color
+                ax1.set_xlabel('Capacity (mAh)')
+                ax1.set_ylabel('Voltage (V)', color=color)
+                ax1.plot(charge_cap*1000, charge_volt, color=color, linestyle='dashed',
+                         label=self.name + ' Charge Cycle ' + str(cycle))
+                ax1.plot(dis_cap*1000, dis_volt, color=color, linestyle='dotted',
+                         label=self.name + ' Discharge Cycle ' + str(cycle))
+
+        ax1.tick_params(axis='y', labelcolor=color)
+        plt.title('Voltage vs. Capacity for %s' % self.name)
+        fig.tight_layout()  # otherwise the right y-label is slightly clipped
+        plt.legend()  # Add this line to show the legend
 
 
     def get_max_capacity_per_cycle(self):
@@ -162,12 +370,60 @@ class arbin_import_Sym_Cell():
         self.ce = []
         i = 0
         for mAh in self.max_dis_cap:
-            self.ce.append(self.max_capacity[i]/self.max_dis_capacity[i])
+            try:
+                self.ce.append(self.max_capacity[i]/self.max_dis_capacity[i])
+            except ZeroDivisionError:
+                print('divied by zero error')
+                self.ce.append(0)
             i = i + 1
             #if i == self.break_point: break
         print(self.ce)
         plt.scatter(self.cycle_Num_list[0:len(self.ce)], self.ce, c=self.color, marker=self.shape, label=self.name+' Coulombic Efficiency')
         #plt.show()
+
+    def plot_capacity_and_ce_vs_cycle(self):
+
+        # Create a new figure and an axis for the left y-axis
+        fig, ax1 = plt.subplots()
+
+        cycles = self.data.groupby(['Cycle Index'])
+        charge_cap = []
+        dis_cap = []
+        cycle_num = []
+        for i, (cycle_index, cycle_data) in enumerate(cycles):
+            cycle_num.append(i+1)
+            charge_cap.append(cycle_data['Charge Capacity (Ah)'].max()/self.mass)
+            dis_cap.append(cycle_data['Discharge Capacity (Ah)'].max()/self.mass)
+
+        line1, = ax1.plot(cycle_num, charge_cap, 'o', label='Charge Capacity')
+        line2, = ax1.plot(cycle_num, charge_cap, '.', label='Discharge Capacity')
+        # Create a second axis for the right y-axis that shares the same x-axis
+        ax2 = ax1.twinx()
+
+        coulombic_efficiency = []
+        for (i, j) in zip(charge_cap, dis_cap):
+            try:
+                coulombic_efficiency.append(i/j*100)
+            except ZeroDivisionError:
+                coulombic_efficiency.append(0)
+
+        #coulombic_efficiency = [i / j for i, j in zip(charge_cap, dis_cap)]
+
+        # Plot the Coulombic efficiency on the right y-axis
+        line3, = ax2.plot(cycle_num, coulombic_efficiency, '*', color='g', label='Coulombic Efficiency')
+
+        # Set the labels for the x-axis and both y-axes
+        ax1.set_xlabel('Cycle Number')
+        ax1.set_ylabel('Capacity (mAh/g)', color='black')
+        ax2.set_ylabel('Coulombic Efficiency', color='g')
+        ax2.set_ylim(0, 120)
+        first_legend = plt.legend(handles=[line1, line2, line3], )
+        ax = plt.gca().add_artist(first_legend)
+        #plt.legend(handles=[ax2], loc='upper right')
+        #ax2.legend(loc='lower left')
+        plt.title('Capacity and Coulombic Efficiency vs. Cycle Number for %s' % self.name)
+
+        plt.tight_layout()
 
     def get_data(self):
         return self.data
@@ -200,6 +456,8 @@ class arbin_import_Sym_Cell():
         cycles = self.data.groupby(['Cycle Index'])
         print(cycles.head())
 
+
+
 if __name__ == '__main__':
     """
     root = tk.Tk()
@@ -213,6 +471,7 @@ if __name__ == '__main__':
     import tkinter as tk
     from tkinter import filedialog
     import os
+    import shutil
 
     root = tk.Tk()
     root.withdraw()  # to hide the main window
@@ -222,20 +481,108 @@ if __name__ == '__main__':
 
     # Get a list of all files in the directory
     files = os.listdir()
-
+    print(files)
     cells = []
     colors = ['r', 'b', 'g', 'y', 'c', 'm', 'k', 'w', 'r', 'b', 'g', 'y', 'c', 'm', 'k', 'w']
     # Iterate over each file
+    """
     for i, file in enumerate(files):
         # Create a label tag from the first 8 characters of the filename
-        label_tag = file[:8]
+        label_tag = file[:10]
 
+
+        # Create a new Tkinter window
+        root = tk.Tk()
+
+        # Hide the main window
+        root.withdraw()
+
+        # Prompt the user to enter text
+        user_input = tk.simpledialog.askstring(title="Input", prompt="Please enter your text:")
+
+        # Add the user input to the label_tag string
+        label_tag += user_input
+
+        # Now label_tag contains the original label_tag string plus the user's input
+        print(label_tag)
+        print(label_tag)
         # Create an arbin_import_Sym_Cell object for each file
-        cells.append(arbin_import_Sym_Cell(file, name=label_tag, mass=0.01430645161/1000,
-                                       theoretical_cap=155, color=colors[i], shape='o'))
+        #cells.append(arbin_import_Sym_Cell(file, name=label_tag, mass=0.01430645161/1000,
+        #                               theoretical_cap=155, color=colors[i], shape='o'))
+
+        cells.append(arbin_import_Sym_Cell(file, name=label_tag, mass=0.01293303225/1000,
+                                   theoretical_cap=155, color=colors[i], shape='o'))
+    """
+    # Get a list of all files in the directory and its subdirectories
+    csv_files = []
+    for root, dirs, files in os.walk('.'):
+        for file in files:
+            if 'Wb' in file and file.endswith('.CSV'):
+                csv_files.append(os.path.join(root, file))
+                # Create a label tag from the first 8 characters of the filename
+                label_tag = file[:10]
+
+                # Create a new Tkinter window
+                #root = tk.Tk()
+
+                # Hide the main window
+                #root.withdraw()
+
+                # Prompt the user to enter text
+                #user_input = tk.simpledialog.askstring(title="Input", prompt="Please enter your text:")
+
+                # Add the user input to the label_tag string
+                #label_tag += user_input
+
+                # Now label_tag contains the original label_tag string plus the user's input
+                #print(label_tag)
+                #print(label_tag)
+                # Create an arbin_import_Sym_Cell object for each file
+                # cells.append(arbin_import_Sym_Cell(file, name=label_tag, mass=0.01430645161/1000,
+                #                               theoretical_cap=155, color=colors[i], shape='o'))
+
+                #cells.append(arbin_import_Sym_Cell(file, name=label_tag, mass=0.01293303225 / 1000,
+                #                                 theoretical_cap=155, color='black', shape='o'))
+
+    print('csv files are: ')
+    print(csv_files)
+    for cell in csv_files:
+        label_tag = cell[2:12]
+        try:
+            cells.append(arbin_import_Sym_Cell(cell, name=label_tag, mass=0.01293303225 / 1000,
+                                           theoretical_cap=155, color='black', shape='o'))
+        except FileNotFoundError as e:
+            print('File not found')
+    print(cells)
+    # Create a new directory
+    from datetime import datetime
+
+    # Get the current date and time
+    now = datetime.now()
+
+    # Convert the current date and time to a string
+    current_date_time = now.strftime("%Y-%m-%d %H_%M_%S")
+
+    #print(current_date_time)
+    new_dir_name = 'new_directory '+current_date_time
+    os.mkdir(new_dir_name)
+
+    # Change the current working directory to the new directory
+    os.chdir(new_dir_name)
 
     for cell in cells:
-        cell.plot_voltage_vs_time()
+        if cell.cycles < 10:
+
+            cell.plot_voltage_vs_time()
+            plt.savefig(cell.get_filename() + '_voltage_vs_time.png', dpi=500, bbox_inches='tight')
+            cell.plot_voltage_vs_capacity(clean_filter=True)
+            plt.savefig(cell.get_filename() + '_voltage_vs_capacity.png', dpi=500, bbox_inches='tight')
+            plt.clf()
+            #cell.get_max_capacity_per_cycle()
+            #cell.get_min_capacity_per_cycle()
+            #cell.get_coulombic_efficiency()
+            cell.plot_capacity_and_ce_vs_cycle()
+            plt.savefig(cell.get_filename() + '_coulombic_efficiency.png', dpi=500, bbox_inches='tight')
         #plt.savefig(cell.get_filename() + '_voltage_vs_time.png', dpi=500, bbox_inches='tight')
         #plt.show()
         #cell.get_max_capacity_per_cycle()
@@ -253,7 +600,7 @@ if __name__ == '__main__':
         except:
             pass
         """
-        plt.show()
+        #plt.show()
 
 
     """
