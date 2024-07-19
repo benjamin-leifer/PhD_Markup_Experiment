@@ -517,10 +517,12 @@ if __name__ == '__main__':
     csv_files = []
     for root, dirs, files in os.walk('.'):
         for file in files:
-            if 'Wb' in file and file.endswith('.CSV'):
+            #if 'Wb' in file and file.endswith('.CSV') or 'Wb' in file and file.endswith('.xslx'):
+            if file.endswith('.CSV'):
                 csv_files.append(os.path.join(root, file))
+                print(csv_files)
                 # Create a label tag from the first 8 characters of the filename
-                label_tag = file[:10]
+                label_tag = file
 
                 # Create a new Tkinter window
                 #root = tk.Tk()
@@ -547,7 +549,7 @@ if __name__ == '__main__':
     print('csv files are: ')
     print(csv_files)
     for cell in csv_files:
-        label_tag = cell[2:12]
+        label_tag = cell
         try:
             cells.append(arbin_import_Sym_Cell(cell, name=label_tag, mass=0.01293303225 / 1000,
                                            theoretical_cap=155, color='black', shape='o'))
@@ -575,7 +577,7 @@ if __name__ == '__main__':
 
             cell.plot_voltage_vs_time()
             plt.savefig(cell.get_filename() + '_voltage_vs_time.png', dpi=500, bbox_inches='tight')
-            cell.plot_voltage_vs_capacity(clean_filter=True)
+            cell.plot_voltage_vs_capacity(clean_filter=False)
             plt.savefig(cell.get_filename() + '_voltage_vs_capacity.png', dpi=500, bbox_inches='tight')
             plt.clf()
             #cell.get_max_capacity_per_cycle()
