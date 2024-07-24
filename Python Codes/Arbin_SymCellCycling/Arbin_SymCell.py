@@ -84,6 +84,12 @@ class arbin_import_Sym_Cell():
             self.num_cyles = self.data['Cycle Index'].max()
         self.cycles_objs = []
         self.instantiate_cycle_list()
+        matplotlib_colors = [
+        'b', 'g', 'r', 'c', 'm', 'y', 'k', 'w',  # basic colors
+        'tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan',  # tab colors
+        'xkcd:sky blue', 'xkcd:seafoam green', 'xkcd:hot pink', 'xkcd:lime green', 'xkcd:lavender', 'xkcd:bright orange', 'xkcd:light brown', 'xkcd:pale green', 'xkcd:dark purple', 'xkcd:mauve',  # xkcd colors
+        ]
+        self.color_list = matplotlib_colors
         print('List of all cycles is:')
         print(self.cycles_objs)
 
@@ -97,7 +103,7 @@ class arbin_import_Sym_Cell():
             data = pd.read_csv(self.path, header=0, engine='python')
             print(data.head())
         elif self.get_filetype() == '.xlsx':
-            data = pd.read_excel(self.path, header=0)
+            data = pd.read_excel(self.path, header=0, sheet_name=1)
         print(data.head())
         print(data.keys())
         return data
@@ -111,7 +117,7 @@ class arbin_import_Sym_Cell():
         color = self.color
         ax1.set_xlabel('Test Time (s)')
         ax1.set_ylabel('Voltage (V)', color=color)
-        ax1.plot(self.data['Test Time (s)']/3600, self.data['Voltage (V)'], color=color, label=self.name)
+        ax1.plot(self.data['Test Time (s)']/3600, self.data['Voltage (V)'], label=self.name)
         ax1.tick_params(axis='y', labelcolor=color)
 
 
@@ -130,7 +136,7 @@ class arbin_import_Sym_Cell():
         color = self.color
         ax1.set_xlabel('Test Time (s)')
         ax1.set_ylabel('Voltage (V)', color=color)
-        ax1.plot(self.data['Test Time (s)'], self.data['Voltage (V)'], color=color, label=self.name)
+        ax1.plot(self.data['Test Time (s)'], self.data['Voltage (V)'], label=self.name)
         ax1.tick_params(axis='y', labelcolor=color)
 
         ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
@@ -171,6 +177,7 @@ class arbin_import_Sym_Cell():
 
 
         if cycles == 'All':
+            i=0
             for name, group in grouped_data:
                 # Filter the data where the amperage is positive (for charging)
                 filtered_group_charge = group[group['Current (A)'] > 0]
@@ -184,9 +191,11 @@ class arbin_import_Sym_Cell():
                 color = self.color
                 ax1.set_xlabel('Capacity (mAh/g)')
                 ax1.set_ylabel('Voltage (V)', color=color)
-                ax1.plot(charge_cap/self.mass, charge_volt, color=color, linestyle='dashed', label=self.name + ' Charge Cycle ' + str(name))
-                ax1.plot(dis_cap/self.mass, dis_volt, color=color, linestyle='dotted', label=self.name + ' Discharge Cycle ' + str(name))
+                ax1.plot(charge_cap/self.mass, charge_volt, color=self.color_list[i], linestyle='dashed', label=self.name + ' Charge Cycle ' + str(name))
+                ax1.plot(dis_cap/self.mass, dis_volt, color=self.color_list[i], linestyle='dotted', label=self.name + ' Discharge Cycle ' + str(name))
+                i=i+1
         else:
+            i=0
             for cycle in cycles:
                 group = grouped_data.get_group(cycle)
                 filtered_group_charge = group[group['Current (A)'] > 0]
@@ -200,13 +209,14 @@ class arbin_import_Sym_Cell():
                 color = self.color
                 ax1.set_xlabel('Capacity (mAh/g)')
                 ax1.set_ylabel('Voltage (V)', color=color)
-                ax1.plot(charge_cap/self.mass, charge_volt, color=color, linestyle='dashed', label=self.name + ' Charge Cycle ' + str(cycle))
-                ax1.plot(dis_cap/self.mass, dis_volt, color=color, linestyle='dotted', label=self.name + ' Discharge Cycle ' + str(cycle))
+                ax1.plot(charge_cap/self.mass, charge_volt, color=self.color_list[i], linestyle='dashed', label=self.name + ' Charge Cycle ' + str(cycle))
+                ax1.plot(dis_cap/self.mass, dis_volt, color=self.color_list[i], linestyle='dotted', label=self.name + ' Discharge Cycle ' + str(cycle))
+                i=i+1
 
         ax1.tick_params(axis='y', labelcolor=color)
         plt.title('Voltage vs. Capacity for %s' % self.name)
         fig.tight_layout()  # otherwise the right y-label is slightly clipped
-        plt.legend()  # Add this line to show the legend
+        plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05), shadow=True, ncol=2) # Add this line to show the legend
 
         """
         fig, ax1 = plt.subplots()
@@ -292,9 +302,9 @@ class arbin_import_Sym_Cell():
                 color = self.color
                 ax1.set_xlabel('Capacity (mAh)')
                 ax1.set_ylabel('Voltage (V)', color=color)
-                ax1.plot(charge_cap*1000, charge_volt, color=color, linestyle='dashed',
+                ax1.plot(charge_cap*1000, charge_volt, linestyle='dashed',
                          label=self.name + ' Charge Cycle ' + str(name))
-                ax1.plot(dis_cap*1000, dis_volt, color=color, linestyle='dotted',
+                ax1.plot(dis_cap*1000, dis_volt, linestyle='dotted',
                          label=self.name + ' Discharge Cycle ' + str(name))
         else:
             for cycle in cycles:
@@ -310,7 +320,7 @@ class arbin_import_Sym_Cell():
                 color = self.color
                 ax1.set_xlabel('Capacity (mAh)')
                 ax1.set_ylabel('Voltage (V)', color=color)
-                ax1.plot(charge_cap*1000, charge_volt, color=color, linestyle='dashed',
+                ax1.plot(charge_cap*1000, charge_volt, linestyle='dashed',
                          label=self.name + ' Charge Cycle ' + str(cycle))
                 ax1.plot(dis_cap*1000, dis_volt, color=color, linestyle='dotted',
                          label=self.name + ' Discharge Cycle ' + str(cycle))
@@ -417,7 +427,8 @@ class arbin_import_Sym_Cell():
         ax1.set_ylabel('Capacity (mAh/g)', color='black')
         ax2.set_ylabel('Coulombic Efficiency', color='g')
         ax2.set_ylim(0, 120)
-        first_legend = plt.legend(handles=[line1, line2, line3], )
+        first_legend = plt.legend(handles=[line1, line2, line3],
+                                  loc='upper center', bbox_to_anchor=(0.5, -0.05), shadow=True, ncol=2)
         ax = plt.gca().add_artist(first_legend)
         #plt.legend(handles=[ax2], loc='upper right')
         #ax2.legend(loc='lower left')
@@ -518,7 +529,7 @@ if __name__ == '__main__':
     for root, dirs, files in os.walk('.'):
         for file in files:
             #if 'Wb' in file and file.endswith('.CSV') or 'Wb' in file and file.endswith('.xslx'):
-            if file.endswith('.CSV'):
+            if file.endswith('.xlsx') or file.endswith('.CSV'):
                 csv_files.append(os.path.join(root, file))
                 print(csv_files)
                 # Create a label tag from the first 8 characters of the filename
