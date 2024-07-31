@@ -54,7 +54,7 @@ if __name__ == '__main__':
     root.withdraw()  # to hide the main window
 
     file_path = filedialog.askopenfilename()  # open the dialog to choose directory
-
+    #readMPTData_CV(file_path)
     #readMPTData_CV(file_path)
 
     import pandas as pd
@@ -103,7 +103,7 @@ if __name__ == '__main__':
     # Display the results
     print("Capacities by Cycle Step:\n", capacities_by_step)
     #calculate mAh/g
-    active_mass = 0.0006
+    active_mass = 0.0007
     capacities_by_step['Charge Capacity (mAh/g)'] = capacities_by_step['Charge Capacity (mA.h)'] / active_mass
     capacities_by_step['Discharge Capacity (mAh/g)'] = capacities_by_step['Discharge Capacity (mA.h)'] / active_mass
 
