@@ -106,6 +106,7 @@ if __name__ == '__main__':
     active_mass = 0.0007
     capacities_by_step['Charge Capacity (mAh/g)'] = capacities_by_step['Charge Capacity (mA.h)'] / active_mass
     capacities_by_step['Discharge Capacity (mAh/g)'] = capacities_by_step['Discharge Capacity (mA.h)'] / active_mass
+    capacities_by_step['Mass Calc'] = capacities_by_step['Discharge Capacity (mA.h)']/140
 
     # Set the option to display all rows and columns
     pd.set_option('display.max_rows', None)
