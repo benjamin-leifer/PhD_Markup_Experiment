@@ -41,9 +41,9 @@ This function reads a biologic .mpt data file
         header_num = int(header_num)
 
         # print(header_num)
-        header_num = header_num - 4
+        header_num = header_num - 5
     data = pd.read_csv(filename, header=header_num, sep='\t',
-                       engine='python', encoding='cp1252')
+                       engine='python', encoding='utf-8')
 
     print(data.head(5))
     data.to_csv(filename+'_CV_data.csv')
