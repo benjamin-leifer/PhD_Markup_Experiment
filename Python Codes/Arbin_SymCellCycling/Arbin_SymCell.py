@@ -466,8 +466,22 @@ class arbin_import_Sym_Cell():
     def get_full_charges(self):
         cycles = self.data.groupby(['Cycle Index'])
         print(cycles.head())
+import re
 
+def find_bl_ll_xx00(input_string):
+    # Define the regex pattern for BL-LL-XX00
+    pattern = r'\w{2}\d{2}'
 
+    # Search for the pattern in the input string
+    match = re.search(pattern, input_string)
+
+    # Return the matched pattern if found, else return None
+    return match.group(0) if match else None
+
+# Example usage
+example_string = "This is a test string with BL-LL-AX02 in it."
+result = find_bl_ll_xx00(example_string)
+print(result)  # Output: BL-LL-AX02
 
 if __name__ == '__main__':
     """
@@ -533,7 +547,9 @@ if __name__ == '__main__':
                 csv_files.append(os.path.join(root, file))
                 print(csv_files)
                 # Create a label tag from the first 8 characters of the filename
-                label_tag = file
+                label_tag = find_bl_ll_xx00(file)
+                print('Label Tag is: ')
+                print(label_tag)
 
                 # Create a new Tkinter window
                 #root = tk.Tk()
@@ -560,7 +576,7 @@ if __name__ == '__main__':
     print('csv files are: ')
     print(csv_files)
     for cell in csv_files:
-        label_tag = cell
+        label_tag = find_bl_ll_xx00(cell)
         try:
             cells.append(arbin_import_Sym_Cell(cell, name=label_tag, mass=0.01293303225 / 1000,
                                            theoretical_cap=155, color='black', shape='o'))
@@ -587,15 +603,15 @@ if __name__ == '__main__':
         if cell.cycles < 10:
 
             cell.plot_voltage_vs_time()
-            plt.savefig(cell.get_filename() + '_voltage_vs_time.png', dpi=500, bbox_inches='tight')
+            plt.savefig(cell.name + '_voltage_vs_time.png', dpi=500, bbox_inches='tight')
             cell.plot_voltage_vs_capacity(clean_filter=False)
-            plt.savefig(cell.get_filename() + '_voltage_vs_capacity.png', dpi=500, bbox_inches='tight')
+            plt.savefig(cell.name + '_voltage_vs_capacity.png', dpi=500, bbox_inches='tight')
             plt.clf()
             #cell.get_max_capacity_per_cycle()
             #cell.get_min_capacity_per_cycle()
             #cell.get_coulombic_efficiency()
             cell.plot_capacity_and_ce_vs_cycle()
-            plt.savefig(cell.get_filename() + '_coulombic_efficiency.png', dpi=500, bbox_inches='tight')
+            plt.savefig(cell.name + '_coulombic_efficiency.png', dpi=500, bbox_inches='tight')
         #plt.savefig(cell.get_filename() + '_voltage_vs_time.png', dpi=500, bbox_inches='tight')
         #plt.show()
         #cell.get_max_capacity_per_cycle()
