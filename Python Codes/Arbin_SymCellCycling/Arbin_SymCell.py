@@ -30,6 +30,9 @@ class Cell_Cycle():
         self.theoretical_cap = theoretical_cap
         self.C_Rate = None
         self.C_Rate_str = None
+        self.charge_capacity = None
+        self.discharge_capacity = None
+        self.cycle_index = self.data['Cycle Index'].max()
         self.ingest_data()
 
     def lowest_c_rate_str(num, den):
@@ -45,6 +48,7 @@ class Cell_Cycle():
         self.get_c_rate()
         self.get_charge_capacity()
         self.get_discharge_capacity()
+        self.get_ce()
 
     def get_c_rate(self):
         C_Rate = round(np.average(self.data['Current (A)'] / (self.mass*self.theoretical_cap)), 3)
@@ -58,12 +62,23 @@ class Cell_Cycle():
     def get_charge_capacity(self):
         charge_capacity = self.data['Charge Capacity (Ah)'].max()
         print('Charge Capacity: ', charge_capacity)
+        self.charge_capacity = charge_capacity
         return charge_capacity
 
     def get_discharge_capacity(self):
         discharge_capacity = self.data['Discharge Capacity (Ah)'].max()
         print('Discharge Capacity: ', discharge_capacity)
+        self.discharge_capacity = discharge_capacity
         return discharge_capacity
+
+    def get_ce(self):
+        try:
+            ce = self.discharge_capacity/self.charge_capacity
+        except ZeroDivisionError:
+            ce = 0
+        print('Coulombic Efficiency: ', ce)
+        print('Cycle Index: ', self.cycle_index)
+        return ce
 
 
 
@@ -191,8 +206,10 @@ class arbin_import_Sym_Cell():
                 color = self.color
                 ax1.set_xlabel('Capacity (mAh/g)')
                 ax1.set_ylabel('Voltage (V)', color=color)
-                ax1.plot(charge_cap/self.mass, charge_volt, color=self.color_list[i], linestyle='dashed', label=self.name + ' Charge Cycle ' + str(name))
-                ax1.plot(dis_cap/self.mass, dis_volt, color=self.color_list[i], linestyle='dotted', label=self.name + ' Discharge Cycle ' + str(name))
+                #ax1.plot(charge_cap/self.mass, charge_volt, color=self.color_list[i], linestyle='dashed', label=self.name + ' Charge Cycle ' + str(name))
+                ax1.plot(charge_cap/self.mass, charge_volt, linestyle='dashed', label=self.name + ' Charge Cycle ' + str(name))
+                #ax1.plot(dis_cap/self.mass, dis_volt, color=self.color_list[i], linestyle='dotted', label=self.name + ' Discharge Cycle ' + str(name))
+                ax1.plot(dis_cap/self.mass, dis_volt, linestyle='dotted', label=self.name + ' Discharge Cycle ' + str(name))
                 i=i+1
         else:
             i=0
@@ -413,7 +430,7 @@ class arbin_import_Sym_Cell():
         coulombic_efficiency = []
         for (i, j) in zip(charge_cap, dis_cap):
             try:
-                coulombic_efficiency.append(i/j*100)
+                coulombic_efficiency.append(j/i*100)
             except ZeroDivisionError:
                 coulombic_efficiency.append(0)
 
@@ -578,7 +595,7 @@ if __name__ == '__main__':
     for cell in csv_files:
         label_tag = find_bl_ll_xx00(cell)
         try:
-            cells.append(arbin_import_Sym_Cell(cell, name=label_tag, mass=0.01293303225 / 1000,
+            cells.append(arbin_import_Sym_Cell(cell, name=label_tag, mass=40/155/1000,
                                            theoretical_cap=155, color='black', shape='o'))
         except FileNotFoundError as e:
             print('File not found')
@@ -600,7 +617,7 @@ if __name__ == '__main__':
     os.chdir(new_dir_name)
 
     for cell in cells:
-        if cell.cycles < 10:
+        if cell.cycles < 1000:
 
             cell.plot_voltage_vs_time()
             plt.savefig(cell.name + '_voltage_vs_time.png', dpi=500, bbox_inches='tight')
