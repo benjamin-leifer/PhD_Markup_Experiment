@@ -14,9 +14,12 @@ import tkinter as tk
 from tkinter import filedialog
 import Arbin_SymCell
 
+
+import pandas as pd
+
 def readMPTData_CV(filename):
     """
-This function reads a biologic .mpt data file
+    This function reads a biologic .mpt data file
 
     Parameters
     ----------
@@ -25,29 +28,27 @@ This function reads a biologic .mpt data file
     Returns
     -------
     data : dataframe of mpt data
-
     """
-    # def readMPTData(filename, header_num):
-
-    #     data = pd.read_csv(filename, header= header_num, sep='\t',
-    #                       engine= 'python', encoding='cp1252')
-
-    # Open the file
+    # Open the file to determine the header row
     with open(filename, 'r', encoding='cp1252') as readfile:
         header_rows = readfile.readlines(18)
         header_rows = str(header_rows).split()
         df = pd.DataFrame(header_rows)
         header_num = df.iloc[7]
         header_num = int(header_num)
+        header_num = header_num - 6
 
-        # print(header_num)
-        header_num = header_num - 5
-    data = pd.read_csv(filename, header=header_num, sep='\t',
-                       engine='python', encoding='utf-8')
+    # Try reading the file with utf-8 encoding
+    try:
+        data = pd.read_csv(filename, header=header_num, sep='\t', engine='python', encoding='utf-8')
+    except UnicodeDecodeError:
+        # If utf-8 fails, try cp1252 encoding
+        data = pd.read_csv(filename, header=header_num, sep='\t', engine='python', encoding='cp1252')
 
     print(data.head(5))
-    data.to_csv(filename+'_CV_data.csv')
+    data.to_csv(filename + '_CV_data.csv')
     return data
+
 
 if __name__ == '__main__':
     root = tk.Tk()
@@ -63,7 +64,7 @@ if __name__ == '__main__':
     # Load the CSV file
     #file_path = 'path_to_csv_file.csv'
 
-    cv_data = pd.read_csv(file_path)
+    cv_data = pd.read_csv(file_path, skiprows=1)
 
 
     # Function to calculate capacities by cycle step
@@ -103,7 +104,7 @@ if __name__ == '__main__':
     # Display the results
     print("Capacities by Cycle Step:\n", capacities_by_step)
     #calculate mAh/g
-    active_mass = 0.0007
+    active_mass = 0.0005  # Active mass in grams
     capacities_by_step['Charge Capacity (mAh/g)'] = capacities_by_step['Charge Capacity (mA.h)'] / active_mass
     capacities_by_step['Discharge Capacity (mAh/g)'] = capacities_by_step['Discharge Capacity (mA.h)'] / active_mass
     capacities_by_step['Mass Calc'] = capacities_by_step['Discharge Capacity (mA.h)']/140
