@@ -84,29 +84,32 @@ class Cell_Cycle():
 
 
 class arbin_import_Sym_Cell():
-
-    def __init__(self, path, name='cell', mass=.00133, theoretical_cap = 175, num_cycles = None, color = 'r', shape = 'o'):
+    def __init__(self, path, name='cell', mass=.00133, theoretical_cap=175, num_cycles=None, color='r', shape='o'):
         self.path = path
         self.data = self.read_data()
         self.name = name
         self.mass = mass
         self.color = color
         self.shape = shape
-        self.cycle_Num_list = ['1:C/10', '2:C/10', '3:C/10', '4:C/5', '5:C/5', '6:C/5', '7:C/2', '8:C/2', '9:C/2',]
+        self.cycle_Num_list = ['1:C/10', '2:C/10', '3:C/10', '4:C/5', '5:C/5', '6:C/5', '7:C/2', '8:C/2', '9:C/2']
         self.theoretical_cap = theoretical_cap
         self.cycles = self.data['Cycle Index'].max()
         if not num_cycles:
-            self.num_cyles = self.data['Cycle Index'].max()
+            self.num_cycles = min(self.data['Cycle Index'].max(), 22)  # Limit to 22 cycles
         self.cycles_objs = []
         self.instantiate_cycle_list()
         matplotlib_colors = [
-        'b', 'g', 'r', 'c', 'm', 'y', 'k', 'w',  # basic colors
-        'tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan',  # tab colors
-        'xkcd:sky blue', 'xkcd:seafoam green', 'xkcd:hot pink', 'xkcd:lime green', 'xkcd:lavender', 'xkcd:bright orange', 'xkcd:light brown', 'xkcd:pale green', 'xkcd:dark purple', 'xkcd:mauve',  # xkcd colors
+            'b', 'g', 'r', 'c', 'm', 'y', 'k', 'w',  # basic colors
+            'tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan',  # tab colors
+            'xkcd:sky blue', 'xkcd:seafoam green', 'xkcd:hot pink', 'xkcd:lime green', 'xkcd:lavender', 'xkcd:bright orange', 'xkcd:light brown', 'xkcd:pale green', 'xkcd:dark purple', 'xkcd:mauve',  # xkcd colors
         ]
         self.color_list = matplotlib_colors
         print('List of all cycles is:')
         print(self.cycles_objs)
+
+    def instantiate_cycle_list(self):
+        grouped_data = self.data.groupby('Cycle Index')
+        self.cycles_objs = [Cell_Cycle(group, mass=self.mass, theoretical_cap=self.theoretical_cap, color=self.color, shape=self.shape) for name, group in list(grouped_data)[:22]]
 
 
 
@@ -123,9 +126,6 @@ class arbin_import_Sym_Cell():
         print(data.keys())
         return data
 
-    def instantiate_cycle_list(self):
-        grouped_data = self.data.groupby('Cycle Index')
-        self.cycles_objs = [Cell_Cycle(group, mass=self.mass, theoretical_cap=self.theoretical_cap, color=self.color, shape=self.shape) for name, group in grouped_data]
     def plot_voltage_vs_time(self):
         fig, ax1 = plt.subplots()
 
@@ -619,16 +619,16 @@ if __name__ == '__main__':
     for cell in cells:
         if cell.cycles < 1000:
 
-            cell.plot_voltage_vs_time()
-            plt.savefig(cell.name + '_voltage_vs_time.png', dpi=500, bbox_inches='tight')
-            cell.plot_voltage_vs_capacity(clean_filter=False)
-            plt.savefig(cell.name + '_voltage_vs_capacity.png', dpi=500, bbox_inches='tight')
+            #cell.plot_voltage_vs_time()
+            #plt.savefig(cell.name + '_voltage_vs_time.png', dpi=500, bbox_inches='tight')
+            #cell.plot_voltage_vs_capacity(clean_filter=False)
+            #plt.savefig(cell.name + '_voltage_vs_capacity.png', dpi=500, bbox_inches='tight')
             plt.clf()
             #cell.get_max_capacity_per_cycle()
             #cell.get_min_capacity_per_cycle()
             #cell.get_coulombic_efficiency()
-            cell.plot_capacity_and_ce_vs_cycle()
-            plt.savefig(cell.name + '_coulombic_efficiency.png', dpi=500, bbox_inches='tight')
+            #cell.plot_capacity_and_ce_vs_cycle()
+            #plt.savefig(cell.name + '_coulombic_efficiency.png', dpi=500, bbox_inches='tight')
         #plt.savefig(cell.get_filename() + '_voltage_vs_time.png', dpi=500, bbox_inches='tight')
         #plt.show()
         #cell.get_max_capacity_per_cycle()
@@ -648,7 +648,62 @@ if __name__ == '__main__':
         """
         #plt.show()
 
+    def plot_combined_capacity_and_ce(cells):
+        fig, ax1 = plt.subplots()
 
+        for cell in cells:
+            cycles = cell.data.groupby(['Cycle Index'])
+            charge_cap = []
+            dis_cap = []
+            cycle_num = []
+            for i, (cycle_index, cycle_data) in enumerate(cycles):
+                if i >= 40:
+                    break
+                cycle_num.append(i + 1)
+                charge_cap.append(cycle_data['Charge Capacity (Ah)'].max() / cell.mass)
+                dis_cap.append(cycle_data['Discharge Capacity (Ah)'].max() / cell.mass)
+
+            coulombic_efficiency = []
+            for (i, j) in zip(charge_cap, dis_cap):
+                try:
+                    coulombic_efficiency.append(j / i * 100)
+                except ZeroDivisionError:
+                    coulombic_efficiency.append(0)
+
+            #ax1.plot(cycle_num, charge_cap, 'o', label=f'{cell.name} Charge Capacity')
+            ax1.plot(cycle_num, dis_cap, '.', label=f'{cell.name} Discharge Capacity')
+            # Define cycle rates and their ranges
+        cycle_rates = [
+                (4, 'C/10'),
+                (3, 'C/8'),
+                (3, 'C/4'),
+                (3, 'C/2'),
+                (3, '1C'),
+                (3, '2C'),
+                (20, 'C/10')  # Remaining cycles
+            ]
+
+        # Add vertical lines for each cycle rate change
+        cycle_start = 0
+        for cycles, rate in cycle_rates:
+            cycle_start += cycles
+            ax1.axvline(x=cycle_start, color='k', linestyle='--')
+            ax1.text(cycle_start-2.5, ax1.get_ylim()[1]/1.05 , rate, rotation=0, verticalalignment='bottom')
+
+        #ax2 = ax1.twinx()
+            #ax2.plot(cycle_num, coulombic_efficiency, '*', label=f'{cell.name} Coulombic Efficiency', color='g')
+
+        ax1.set_xlabel('Cycle Number')
+        ax1.set_ylabel('Capacity (mAh/g)', color='black')
+        #ax2.set_ylabel('Coulombic Efficiency (%)', color='g')
+        #ax2.set_ylim(0, 120)
+        plt.title('Discharge Capacity vs. Cycle Number')
+        ax1.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05), shadow=True, ncol=2)
+        plt.tight_layout()
+        plt.show()
+
+    # Assuming `cells` is a list of `Cell_Cycle` objects
+    plot_combined_capacity_and_ce(cells)
     """
     root = tk.Tk()
     root.withdraw()

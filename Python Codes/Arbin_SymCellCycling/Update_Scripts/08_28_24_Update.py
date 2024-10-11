@@ -41,7 +41,7 @@ legends_minus_21C = {
 
 # Define function to process and plot all cycles data
 def plot_all_cycles(dataframes, active_mass_g):
-    fig, ax1 = plt.subplots(1,1,figsize=(4.6, 3.5))
+    fig, ax1 = plt.subplots(1,1,figsize=(4.6*1.5, 3.5*1.5))
 
     colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'tab:orange']
 
@@ -68,10 +68,12 @@ def plot_all_cycles(dataframes, active_mass_g):
     plt.xlabel('Capacity (mAh/g)')
     plt.ylabel('Voltage (V)')
     plt.title('Voltage vs. Capacity (mAh/g)')
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05), shadow=True, ncol=2)
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1), shadow=True, ncol=2)
     ax1.tick_params(axis='both', direction='in', bottom=True, top=True, left=True, right=True)
     ax1.tick_params(which='minor', direction='in', left=True, right=True, length=3)
+    plt.tight_layout()
     plt.show()
+
 
 
 # Load the second sheet data from all files into a dictionary
