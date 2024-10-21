@@ -229,3 +229,110 @@ plt.title('Normalized Discharge Capacity vs Voltage For Pouch Cell BM01')
 plt.legend()
 plt.tight_layout()
 plt.show()
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import os
+import re
+
+# Paths to the uploaded Excel files
+file_paths = [
+    "BL-LL-BM01_-51C_C50_Channel_41_Wb_1.xlsx",
+    "BL-LL-BM01_-51C_C50_cyc2_Channel_41_Wb_1.xlsx",
+    "BL-LL-BM01_-51C_C50_Dis_1_Channel_41_Wb_1.xlsx",
+    "BL-LL-BM01_Charge_1_Channel_56_Wb_1.xlsx",
+    "BL-LL-BM01_RT_Charge_Channel_62_Wb_1.xlsx",
+    "BL-LL-BM01_RT_Form_Channel_56_Wb_1.xlsx",
+    "BL-LL-BM01_-21C_C-50_Channel_41_Wb_1.xlsx",
+    "BL-LL-BM01_-21C_cycles2-3_Channel_41_Wb_1.xlsx",
+    "BL-LL-BM01_-32C_C50_Channel_41_Wb_1.xlsx"
+]
+
+# Define the path for the combined RT_Form file
+combined_form_file_path = "BL-LL-BM01_RT_Form_Channel_56_Wb_1_Combined.xlsx"
+
+# Read the second sheet from the combined form file
+combined_form_df = pd.read_excel(combined_form_file_path, sheet_name=1)
+
+# Filter to keep only non-zero current rows
+combined_form_df = combined_form_df[combined_form_df['Current (A)'] != 0]
+
+# Calculate the total charge capacity (maximum value) across all cycles for the Combined RT_Form
+combined_form_total_capacity = combined_form_df[combined_form_df['Current (A)'] > 0]['Charge Capacity (Ah)'].max()
+
+# Updated function to extract and relabel temperature and C-rate from file names
+def extract_and_relabel_temp_and_c_rate(file_name):
+    # Use regex to find temperature (e.g., -51C, -21C) and C-rate (e.g., C50)
+    temp_match = re.search(r'-\d{1,2}C', file_name)
+    c_rate_match = re.search(r'C-?\d+', file_name)
+
+    temp = temp_match.group() if temp_match else "Unknown Temp"
+
+    # Handle relabeling of C-rates
+    if c_rate_match:
+        c_rate = c_rate_match.group()
+        if "C50" in c_rate or "C-50" in c_rate:
+            c_rate = "C/50"
+        else:
+            c_rate = c_rate.replace("C", "C/")
+    else:
+        c_rate = "C/10"  # Assume unknown C-rate is C/10
+
+    return f"{temp}, {c_rate}"
+
+# Initialize a new plot for normalized discharge curves with updated labels
+fig, ax1 = plt.subplots(1,1,figsize=(4.6*1.5, 3.5*1.5))
+
+# Variable to track the count of -51C samples plotted
+count_51C = 0
+
+# Loop through each file path except the combined file
+for file_path in file_paths:
+    # Read the second sheet of each file
+    df = pd.read_excel(file_path, sheet_name=1)
+
+    # Convert Date_Time to datetime format
+    df['Date_Time'] = pd.to_datetime(df['Date_Time'])
+
+    # Filter rows where Current is not zero
+    df = df[df['Current (A)'] != 0]
+
+    # Calculate discharge capacity as a percentage of the total combined charge capacity
+    combined_form_total_capacity = 0.044
+    df['Normalized Discharge Capacity (%)'] = (df['Discharge Capacity (Ah)'] / combined_form_total_capacity) * 100
+
+    # Extract the file name and create a label based on temperature and relabeled C-rate
+    file_name = os.path.basename(file_path).replace('.xlsx', '')
+    label = extract_and_relabel_temp_and_c_rate(file_name)
+
+    # Skip unknown temperature samples
+    if "Unknown Temp" in label:
+        continue
+
+    # Filter to only discharge data (where current is negative)
+    discharge_data = df[df['Current (A)'] < 0]
+
+    # Identify the -51C samples and exclude the first two
+    if "-51C" in label:
+        count_51C += 1
+        # Skip the first two -51C samples
+        if count_51C <= 2:
+            continue
+
+    # Plot normalized discharge capacity vs voltage for the current file with temperature and relabeled C-rate
+    plt.plot(discharge_data['Normalized Discharge Capacity (%)'], discharge_data['Voltage (V)'], label=label)
+
+# Add the formation cycle discharge curve
+formation_cycle_file_path = "BL-LL-BM01_RT_Form_Channel_56_Wb_1.xlsx"
+formation_cycle_df = pd.read_excel(formation_cycle_file_path, sheet_name=1)
+formation_cycle_df = formation_cycle_df[formation_cycle_df['Current (A)'] != 0]
+formation_cycle_df['Normalized Discharge Capacity (%)'] = (formation_cycle_df['Discharge Capacity (Ah)'] / combined_form_total_capacity) * 100
+formation_discharge_data = formation_cycle_df[formation_cycle_df['Current (A)'] < 0]
+plt.plot(formation_discharge_data['Normalized Discharge Capacity (%)'], formation_discharge_data['Voltage (V)'], label='Formation Cycle Discharge', linestyle='--', color='black')
+
+plt.xlabel('Normalized Discharge Capacity (%)')
+plt.ylabel('Voltage (V)')
+plt.title('Normalized Discharge Capacity vs Voltage For Pouch Cell BM01')
+plt.legend()
+plt.tight_layout()
+plt.show()

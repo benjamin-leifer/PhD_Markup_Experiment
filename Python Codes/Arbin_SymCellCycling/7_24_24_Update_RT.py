@@ -12,7 +12,7 @@ os.chdir(new_dir_path)
 print("Current Working Directory: ", os.getcwd())
 
 file_paths = [
-    'BL-LL-AR01_Channel_1_Wb_1.xlsx',
+    #'BL-LL-AR01_Channel_1_Wb_1.xlsx',
     'BL-LL-AS01_Channel_4_Wb_1.xlsx',
     'BL-LL-AT03_Channel_9_Wb_1.xlsx',
     'BL-LL-AU02_Channel_11_Wb_1.xlsx'
@@ -55,7 +55,7 @@ def plot_by_cycle_number(dataframes, active_mass_g):
 
 # File paths for the provided data
 file_paths = [
-    'BL-LL-AR01_Channel_1_Wb_1.xlsx',
+    #'BL-LL-AR01_Channel_1_Wb_1.xlsx',
     'BL-LL-AS01_Channel_4_Wb_1.xlsx',
     'BL-LL-AT03_Channel_9_Wb_1.xlsx',
     'BL-LL-AU02_Channel_11_Wb_1.xlsx'
@@ -69,7 +69,7 @@ def plot_cycle_2(dataframes, active_mass_g):
     fig, ax1 = plt.subplots(1,1,figsize=(4.6, 3.5))
 
     legends = {
-        'BL-LL-AR01_Channel_1_Wb_1.xlsx': 'Gr||NMC - DTF14',
+        #'BL-LL-AR01_Channel_1_Wb_1.xlsx': 'Gr||NMC - DTF14',
         'BL-LL-AS01_Channel_4_Wb_1.xlsx': 'Gr||NMC - DT14',
         'BL-LL-AT03_Channel_9_Wb_1.xlsx': 'Li||NMC - DTF14',
         'BL-LL-AU02_Channel_11_Wb_1.xlsx': 'Li||NMC - DT14'
@@ -119,13 +119,13 @@ def plot_cycle_2_with_colors(dataframes, active_mass_g):
     fig, ax1 = plt.subplots(1,1,figsize=(4.6, 3.5))
 
     legends = {
-        'BL-LL-AR01_Channel_1_Wb_1.xlsx': 'Gr||NMC - DTF14',
+        #'BL-LL-AR01_Channel_1_Wb_1.xlsx': 'Gr||NMC - DTF14',
         'BL-LL-AS01_Channel_4_Wb_1.xlsx': 'Gr||NMC - DT14',
         'BL-LL-AT03_Channel_9_Wb_1.xlsx': 'Li||NMC - DTF14',
         'BL-LL-AU02_Channel_11_Wb_1.xlsx': 'Li||NMC - DT14'
     }
 
-    colors = ['b', 'g', 'r', 'c']
+    colors = [ 'g', 'r', 'c']
 
     for idx, (file_path, df) in enumerate(dataframes.items()):
         # Calculate capacity in mAh/g

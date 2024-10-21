@@ -11,12 +11,12 @@ os.chdir(new_dir_path)
 # Verify the current working directory
 print("Current Working Directory: ", os.getcwd())
 # Load the CSV files
-file_path_discharge_minus_21 = 'YA_DY_Li_Discharge_at_-21.CSV'
+file_path_discharge_minus_21 = 'BL-LL-BB04_-21C_t1_Channel_39_Wb_1.xlsx'
 file_path_discharge_minus_32 = 'YA_DY_Li_Discharge_at_-32.CSV'
 file_path_discharge_minus_50 = 'YA_DY_Li_Discharge_at_-50.CSV'
 file_path_formation_new = 'YA_DY_Li_formation.CSV'
 
-df_discharge_minus_21 = pd.read_csv(file_path_discharge_minus_21)
+df_discharge_minus_21 = pd.read_excel(file_path_discharge_minus_21, sheet_name=1)
 df_discharge_minus_32 = pd.read_csv(file_path_discharge_minus_32)
 df_discharge_minus_50 = pd.read_csv(file_path_discharge_minus_50)
 df_formation_new = pd.read_csv(file_path_formation_new)
@@ -55,24 +55,24 @@ fig, ax1 = plt.subplots(1,1,figsize=(4.6, 3.5))
 # Discharge at -21°C
 for cycle in unique_cycles_discharge_minus_21:
     cycle_discharge = discharge_split_discharge_minus_21[discharge_split_discharge_minus_21['Cycle Index'] == cycle]
-    plt.plot(cycle_discharge['Specific Discharge Capacity (mAh/g)'], cycle_discharge['Voltage (V)'], label=f'-21°C Cycle',)
+    plt.plot(cycle_discharge['Specific Discharge Capacity (mAh/g)']/1.68, cycle_discharge['Voltage (V)'], label='-21C, C/10',)
 
 # Discharge at -32°C
 for cycle in unique_cycles_discharge_minus_32:
     cycle_discharge = discharge_split_discharge_minus_32[discharge_split_discharge_minus_32['Cycle Index'] == cycle]
-    plt.plot(cycle_discharge['Specific Discharge Capacity (mAh/g)'], cycle_discharge['Voltage (V)'], label=f'-32°C Cycle',)
+    plt.plot(cycle_discharge['Specific Discharge Capacity (mAh/g)']/1.68, cycle_discharge['Voltage (V)'], label='-32C, C/10',)
 
 # Discharge at -50°C
 for cycle in unique_cycles_discharge_minus_50:
     cycle_discharge = discharge_split_discharge_minus_50[discharge_split_discharge_minus_50['Cycle Index'] == cycle]
-    plt.plot(cycle_discharge['Specific Discharge Capacity (mAh/g)'], cycle_discharge['Voltage (V)'], label=f'-50°C Cycle')
+    plt.plot(cycle_discharge['Specific Discharge Capacity (mAh/g)']/1.68, cycle_discharge['Voltage (V)'], label='-50C, C/10')
 
 # Discharge from the second cycle of formation
-plt.plot(formation_second_cycle_discharge['Specific Discharge Capacity (mAh/g)'], formation_second_cycle_discharge['Voltage (V)'], label='Room Temperature',)
+#plt.plot(formation_second_cycle_discharge['Specific Discharge Capacity (mAh/g)']/1.68, formation_second_cycle_discharge['Voltage (V)'], label=f'Gr||NMC - RT',)
 
-plt.xlabel('Specific Discharge Capacity (mAh/g)')
+plt.xlabel('Normalized Discharge Capacity (%)')
 plt.ylabel('Voltage (V)')
-plt.title('Voltage vs. Specific Discharge Capacity')
+plt.title('Voltage vs. Normalized Discharge Capacity')
 #plt.title('Voltage vs. Capacity for all Pouch Cells')
 ax1.tick_params(axis='both', direction='in', bottom=True, top=True, left=True, right=True)
 ax1.tick_params(which='minor', direction='in', left=True, right=True, length=3)
