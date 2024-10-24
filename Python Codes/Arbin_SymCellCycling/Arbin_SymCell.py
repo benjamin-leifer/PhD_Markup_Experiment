@@ -619,16 +619,16 @@ if __name__ == '__main__':
     for cell in cells:
         if cell.cycles < 1000:
 
-            #cell.plot_voltage_vs_time()
-            #plt.savefig(cell.name + '_voltage_vs_time.png', dpi=500, bbox_inches='tight')
-            #cell.plot_voltage_vs_capacity(clean_filter=False)
-            #plt.savefig(cell.name + '_voltage_vs_capacity.png', dpi=500, bbox_inches='tight')
+            cell.plot_voltage_vs_time()
+            plt.savefig(cell.name + '_voltage_vs_time.png', dpi=500, bbox_inches='tight')
+            cell.plot_voltage_vs_capacity(clean_filter=False)
+            plt.savefig(cell.name + '_voltage_vs_capacity.png', dpi=500, bbox_inches='tight')
             plt.clf()
             #cell.get_max_capacity_per_cycle()
             #cell.get_min_capacity_per_cycle()
             #cell.get_coulombic_efficiency()
-            #cell.plot_capacity_and_ce_vs_cycle()
-            #plt.savefig(cell.name + '_coulombic_efficiency.png', dpi=500, bbox_inches='tight')
+            cell.plot_capacity_and_ce_vs_cycle()
+            plt.savefig(cell.name + '_coulombic_efficiency.png', dpi=500, bbox_inches='tight')
         #plt.savefig(cell.get_filename() + '_voltage_vs_time.png', dpi=500, bbox_inches='tight')
         #plt.show()
         #cell.get_max_capacity_per_cycle()
@@ -703,7 +703,7 @@ if __name__ == '__main__':
         plt.show()
 
     # Assuming `cells` is a list of `Cell_Cycle` objects
-    plot_combined_capacity_and_ce(cells)
+    #plot_combined_capacity_and_ce(cells)
     """
     root = tk.Tk()
     root.withdraw()
