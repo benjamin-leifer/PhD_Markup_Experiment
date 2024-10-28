@@ -8,29 +8,22 @@ import matplotlib.pyplot as plt
 # Active mass in grams
 active_mass_g = 0.01293303225
 
-root = tk.Tk()
-root.withdraw()  # to hide the main window
 
-folder_selected = filedialog.askdirectory()  # open the dialog to choose directory
-os.chdir(folder_selected)
-cwd = os.getcwd()
-
-# Get the tab20 colormap
-cmap = plt.get_cmap('tab20')
-
-# Generate a list of 20 colors
-colors = [cmap(i) for i in range(20)]
-colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k', 'tab:orange', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
 
 # Print the list of colors
-print(colors)
+#print(colors)
 # Define the root directory to search for Excel files
 def move_to_dir():
     # Define the current working directory
+    root = tk.Tk()
+    root.withdraw()  # to hide the main window
+
+    folder_selected = filedialog.askdirectory()  # open the dialog to choose directory
+    os.chdir(folder_selected)
     cwd = os.getcwd()
 
     # Define the destination directory
-    dest_dir = 'All cycling files'
+    dest_dir = 'All cycling files_'
 
     # Create the destination directory if it doesn't exist
     os.makedirs(dest_dir, exist_ok=True)
@@ -46,6 +39,8 @@ def move_to_dir():
                 shutil.copy(file_path, dest_dir)
 
     print("All Excel files have been moved to the 'All cycling files' folder.")
+
+move_to_dir()
 """
 # Define the destination directory
 dest_dir = 'All cycling files'
@@ -65,7 +60,19 @@ for subdir, _, files in os.walk(cwd):
 
 print("All Excel files have been moved to the 'All cycling files' folder.")
 """
+root = tk.Tk()
+root.withdraw()  # to hide the main window
 
+folder_selected = filedialog.askdirectory()  # open the dialog to choose directory
+os.chdir(folder_selected)
+cwd = os.getcwd()
+
+# Get the tab20 colormap
+cmap = plt.get_cmap('tab20')
+
+# Generate a list of 20 colors
+colors = [cmap(i) for i in range(20)]
+colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k', 'tab:orange', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
 legends = {
     #'BL-LL-BS01_RT_RateTest_Channel_1_Wb_1.xlsx': 'Gr||NMC - DTF14',
     'BL-LL-BS02_RT_RateTest_Channel_2_Wb_1.xlsx': 'Gr_NMC _ DTF14',
