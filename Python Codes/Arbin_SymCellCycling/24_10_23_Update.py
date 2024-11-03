@@ -40,7 +40,7 @@ def move_to_dir():
 
     print("All Excel files have been moved to the 'All cycling files' folder.")
 
-move_to_dir()
+#move_to_dir()
 """
 # Define the destination directory
 dest_dir = 'All cycling files'
@@ -72,33 +72,39 @@ cmap = plt.get_cmap('tab20')
 
 # Generate a list of 20 colors
 colors = [cmap(i) for i in range(20)]
-colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k', 'tab:orange', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
+#colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k', 'tab:orange', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
 legends = {
-    #'BL-LL-BS01_RT_RateTest_Channel_1_Wb_1.xlsx': 'Gr||NMC - DTF14',
-    'BL-LL-BS02_RT_RateTest_Channel_2_Wb_1.xlsx': 'Gr_NMC _ DTF14',
+    'BL-LL-BS01_RT_RateTest_Channel_1_Wb_1.xlsx': 'Gr||NMC - DTF14 - 1',
+    'BL-LL-BS02_RT_RateTest_Channel_2_Wb_1.xlsx': 'Gr_NMC _ DTF14 - 2',
     #'BL-LL-BS03_RT_RateTest_Channel_3_Wb_1.xlsx': 'Gr||NMC - DTF14',
-    #'BL-LL-BT01_RT_RateTest_Channel_4_Wb_1.xlsx': 'Gr||NMC - MF91',
-    'BL-LL-BT02_RT_RateTest_Channel_5_Wb_1.xlsx': 'Gr_NMC _ MF91',
-    #'BL-LL-BT03_RT_RateTest_Channel_6_Wb_1.xlsx': 'Gr||NMC - MF91',
-    #'BL-LL-BU01_RT_RateTest_Channel_7_Wb_1.xlsx': 'Gr||NMC - LP',
-    #'BL-LL-BU02_RT_RateTest_Channel_8_Wb_1.xlsx': 'Gr||NMC - LP',
-    'BL-LL-BU03_RT_RateTest_Channel_9_Wb_1.xlsx': 'Gr_NMC _ LP',
-    'BL-LL-BV01_RT_RateTest_Channel_10_Wb_1.xlsx': 'HC_NMC _ DTF14',
-    #'BL-LL-BV02_RT_RateTest_Channel_11_Wb_1.xlsx': 'HC||NMC - DTF14',
-    #'BL-LL-BV03_RT_RateTest_Channel_12_Wb_1.xlsx': 'HC||NMC - DTF14',
-    #'BL-LL-BW01_RT_RateTest_Channel_13_Wb_1.xlsx': 'HC||NMC - MF91',
-    'BL-LL-BW02_RT_RateTest_Channel_14_Wb_1.xlsx': 'HC_NMC _ MF91',
-    #'BL-LL-BW03_RT_RateTest_Channel_15_Wb_1.xlsx': 'HC||NMC - MF91',
-    #'BL-LL-BX01_RT_RateTest_Channel_16_Wb_1.xlsx': 'HC||NMC - LP',
-    #'BL-LL-BX02_RT_RateTest_Channel_17_Wb_1.xlsx': 'HC||NMC - LP',
-    'BL-LL-BX03_RT_RateTest_Channel_18_Wb_1.xlsx': 'HC_NMC _ LP',
+    'BL-LL-BT01_RT_RateTest_Channel_4_Wb_1.xlsx': 'Gr||NMC - MF91 - 1',
+    #'BL-LL-BT02_RT_RateTest_Channel_5_Wb_1.xlsx': 'Gr_NMC _ MF91 - 2',
+    #'BL-LL-BT03_RT_RateTest_Channel_6_Wb_1.xlsx': 'Gr||NMC - MF91 - 3',
+    #'BL-LL-BU01_RT_RateTest_Channel_7_Wb_1.xlsx': 'Gr||NMC - LP - 1',
+    'BL-LL-BU02_RT_RateTest_Channel_8_Wb_1.xlsx': 'Gr||NMC - LP - 2',
+    'BL-LL-BU03_RT_RateTest_Channel_9_Wb_1.xlsx': 'Gr_NMC _ LP - 3',
+    'BL-LL-BV01_RT_RateTest_Channel_10_Wb_1.xlsx': 'HC_NMC _ DTF14 - 1',
+    #'BL-LL-BV02_RT_RateTest_Channel_11_Wb_1.xlsx': 'HC||NMC - DTF14 - 2',
+    #'BL-LL-BV03_RT_RateTest_Channel_12_Wb_1.xlsx': 'HC||NMC - DTF14 - 3',
+    'BL-LL-BW01_RT_RateTest_Channel_13_Wb_1.xlsx': 'HC||NMC - MF91 - 1',
+    'BL-LL-BW02_RT_RateTest_Channel_14_Wb_1.xlsx': 'HC_NMC _ MF91 - 2',
+    'BL-LL-BW03_RT_RateTest_Channel_15_Wb_1.xlsx': 'HC||NMC - MF91 - 3',
+    'BL-LL-BX01_RT_RateTest_Channel_16_Wb_1.xlsx': 'HC||NMC - LP - 1',
+    'BL-LL-BX02_RT_RateTest_Channel_17_Wb_1.xlsx': 'HC||NMC - LP - 2',
+    'BL-LL-BX03_RT_RateTest_Channel_18_Wb_1.xlsx': 'HC_NMC _ LP - 3',
 }
+import re
+
+# Function to sanitize file names
+def sanitize_filename(filename):
+    # Replace invalid characters with an underscore
+    return re.sub(r'[<>:"/\\|?*]', '_', filename)
 
 #: 'Li||NMC - DTF14 - 51C'
 
 # Define function to process and plot all cycles data
 def plot_all_cycles(dataframes, active_mass_g):
-    fig, ax1 = plt.subplots(1,1,figsize=(4.6, 3.5))
+    fig, ax1 = plt.subplots(1,1,figsize=(10, 6))
 
     #colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'tab:orange', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
 
@@ -142,7 +148,7 @@ for file_path in legends_keys:
     dataframes_minus_21C[file_path] = sheet_data
 
 # Plot data for all cycles at -21°C
-plot_all_cycles(dataframes_minus_21C, active_mass_g)
+#plot_all_cycles(dataframes_minus_21C, active_mass_g)
 for file_path in legends_keys:
     print(file_path)
     print(legends[file_path])
@@ -159,17 +165,21 @@ for cell in legends_keys:
     i += 1
 print(cells)
 
+# Example usage in your code
 for cell in cells:
     cell.plot_voltage_vs_time()
-    plt.savefig(cell.name + '_voltage_vs_time.png', dpi=500, bbox_inches='tight')
+    sanitized_name = sanitize_filename(cell.name + '_voltage_vs_time.png')
+    plt.savefig(sanitized_name, dpi=500, bbox_inches='tight')
+
     cell.plot_voltage_vs_capacity(clean_filter=False)
-    plt.savefig(cell.name + '_voltage_vs_capacity.png', dpi=500, bbox_inches='tight')
+    sanitized_name = sanitize_filename(cell.name + '_voltage_vs_capacity.png')
+    plt.savefig(sanitized_name, dpi=500, bbox_inches='tight')
     plt.clf()
-            #cell.get_max_capacity_per_cycle()
-            #cell.get_min_capacity_per_cycle()
-            #cell.get_coulombic_efficiency()
+
     cell.plot_capacity_and_ce_vs_cycle()
-    plt.savefig(cell.name + '_coulombic_efficiency.png', dpi=500, bbox_inches='tight')
+    sanitized_name = sanitize_filename(cell.name + '_coulombic_efficiency.png')
+    plt.savefig(sanitized_name, dpi=500, bbox_inches='tight')
+
 #move_to_dir()
 
 
