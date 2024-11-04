@@ -1,31 +1,32 @@
 # electrolyte.py
 from database_object import DatabaseObject
-from tkinter import Tk, Label, Button, Entry
+from formulation import Formulation
+from database_object import DatabaseObject
 
 class Electrolyte(DatabaseObject):
-    def __init__(self, composition, conductivity, diffusion_coefficient, transference_number):
+    db_name = "inventory"
+    collection_name = "formulations"
+
+    def __init__(self, formulation, **kwargs):
         super().__init__(db_name="electrochemical_cells", collection_name="electrolytes")
-        self.composition = composition
-        self.conductivity = conductivity
-        self.diffusion_coefficient = diffusion_coefficient
-        self.transference_number = transference_number
+        self.formulation = formulation  # Instance of Formulation
+        # You can add other properties here as needed, like conductivity, if not in Formulation
 
     def to_dict(self):
+        # Save the formulation ID instead of the full formulation details to avoid redundancy
         return {
-            "composition": self.composition,
-            "conductivity": self.conductivity,
-            "diffusion_coefficient": self.diffusion_coefficient,
-            "transference_number": self.transference_number
+            "formulation_id": self.formulation.formulation_id,
+            # Add other Electrolyte-specific fields if needed
         }
 
     def from_dict(self, document):
-        self.composition = document['composition']
-        self.conductivity = document['conductivity']
-        self.diffusion_coefficient = document['diffusion_coefficient']
-        self.transference_number = document['transference_number']
+        # Load the formulation using the formulation ID from MongoDB
+        self.formulation = Formulation.load_from_db({"formulation_id": document["formulation_id"]})
+        # Populate other fields if they exist in Electrolyte
 
     def add_gui_components(self, root):
-        Label(root, text=f"Composition: {self.composition}").pack()
-        Label(root, text=f"Conductivity: {self.conductivity} S/cm").pack()
-        Label(root, text=f"Diffusion Coefficient: {self.diffusion_coefficient} cm²/s").pack()
-        Label(root, text=f"Transference Number: {self.transference_number}").pack()
+        from tkinter import Label
+        Label(root, text=f"Electrolyte Formulation: {self.formulation.name}").pack()
+        Label(root, text=f"Date: {self.formulation.date}").pack()
+        for material, qty in self.formulation.materials.items():
+            Label(root, text=f"{material.name} - {qty} {material.unit}").pack()

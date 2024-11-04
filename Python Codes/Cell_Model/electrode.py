@@ -3,6 +3,9 @@ from database_object import DatabaseObject
 from tkinter import Tk, Label, Button, Entry
 
 class Electrode(DatabaseObject):
+    db_name = "inventory"
+    collection_name = "formulations"
+
     def __init__(self, material, capacity, areal_capacity, surface_area, thickness):
         super().__init__(db_name="electrochemical_cells", collection_name="electrodes")
         self.material = material

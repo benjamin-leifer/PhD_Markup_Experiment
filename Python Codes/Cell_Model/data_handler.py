@@ -1,28 +1,37 @@
 # data_handler.py
 import pandas as pd
-from tkinter import Tk, Label, Button, Entry
+from material import Material
+from formulation import Formulation
+from database_object import DatabaseObject
 
 class DataHandler:
-    def __init__(self, filepath):
-        self.filepath = filepath
+    def load_materials_from_csv(self, filepath):
+        data = pd.read_csv(filepath)
+        materials = []
+        for _, row in data.iterrows():
+            material = Material(
+                name=row['name'],
+                lot_number=row['lot_number'],
+                quantity=row['quantity'],
+                unit=row['unit'],
+                manufacture_date=row['manufacture_date']
+            )
+            material.save_to_db()
+            materials.append(material)
+        return materials
 
-    def load_csv(self):
-        """Load experimental data from a CSV file."""
-        try:
-            data = pd.read_csv(self.filepath)
-            print(f"Data loaded successfully from {self.filepath}")
-            return data
-        except Exception as e:
-            print(f"Error loading data from {self.filepath}: {e}")
-            return None
+    def export_materials_to_csv(self, materials, filepath):
+        data = [material.to_dict() for material in materials]
+        df = pd.DataFrame(data)
+        df.to_csv(filepath, index=False)
+        print(f"Materials exported to {filepath}")
 
-    def clean_data(self, data):
-        """Perform data cleaning operations (e.g., handling NaNs, duplicates)."""
-        data.dropna(inplace=True)
-        data.drop_duplicates(inplace=True)
-        return data
-
-    def save_to_csv(self, data, output_filepath):
-        """Save cleaned or processed data to a new CSV file."""
-        data.to_csv(output_filepath, index=False)
-        print(f"Data saved to {output_filepath}")
+    def load_formulations_from_csv(self, filepath):
+        data = pd.read_csv(filepath)
+        formulations = []
+        for _, row in data.iterrows():
+            materials_dict = eval(row['materials'])  # Assuming materials are stored as a dictionary string
+            formulation = Formulation(name=row['name'], date=row['date'], materials=materials_dict)
+            formulation.save_to_db()
+            formulations.append(formulation)
+        return formulations

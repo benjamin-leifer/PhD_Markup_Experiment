@@ -1,29 +1,25 @@
 # main.py
-from electrolyte import Electrolyte
-from electrode import Electrode
-from cell import Cell
-from cycling_protocol import CyclingProtocol
-from tkinter import Tk, Label, Button, Entry
+from material_handler import MaterialHandler
+from formulation import Formulation
 
 def main():
-    # Create Electrolyte
-    electrolyte = Electrolyte(composition="DME", conductivity=10, diffusion_coefficient=1e-7, transference_number=0.4)
+    # Initialize material handler
+    handler = MaterialHandler()
 
-    # Create Cathode and Anode
-    cathode = Electrode(material="NMC532", capacity=170, areal_capacity=1.774, surface_area=10, thickness=0.05)
-    anode = Electrode(material="Graphite", capacity=350, areal_capacity=1.903, surface_area=10, thickness=0.04)
+    # Add materials to inventory
+    handler.add_material(name="LiTFSI", lot_number="A123", quantity=1000, unit="g")
+    handler.add_material(name="DME", lot_number="B456", quantity=500, unit="mL")
 
-    # Create Cycling Protocol
-    cycling_protocol = CyclingProtocol(current_density=1, voltage_limits=(2.5, 4.2), step_time=3600)
+    # Create a formulation for an electrolyte using materials from inventory
+    electrolyte_formulation = Formulation(name="Electrolyte Mix")
+    electrolyte_formulation.add_material(handler.get_material("A123"), 5)  # 5g LiTFSI
+    electrolyte_formulation.add_material(handler.get_material("B456"), 10)  # 10mL DME
+    electrolyte_formulation.save_to_db()
 
-    # Create a Cell using the Electrolyte, Cathode, Anode, and Cycling Protocol
-    cell = Cell(electrolyte=electrolyte, cathode=cathode, anode=anode, separator="Celgard 2320", cycling_protocol=cycling_protocol)
-
-    # Save to MongoDB
-    cell.save_to_db()
-
-    # Create GUI for the Cell
-    cell.create_gui()
+    # Load the formulation from the database using the formulation ID
+    loaded_formulation = Formulation.load_from_db({"formulation_id": electrolyte_formulation.formulation_id})
+    if loaded_formulation:
+        print(f"Loaded formulation: {loaded_formulation.name}")
 
 if __name__ == "__main__":
     main()

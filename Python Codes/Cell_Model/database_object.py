@@ -1,7 +1,4 @@
-import pymongo
 from pymongo import MongoClient
-from tkinter import Tk, Label, Button, Entry
-
 
 class DatabaseObject:
     def __init__(self, db_name, collection_name, host='localhost', port=27017):
@@ -9,9 +6,7 @@ class DatabaseObject:
         self.client = MongoClient(host, port)
         self.db = self.client[db_name]
         self.collection = self.db[collection_name]
-        self.document_id = None  # Optional: Track the document's ID
-
-    # ---------------- MongoDB Methods ----------------
+        self.document_id = None  # Track the document's ID
 
     def insert_document(self, document):
         """Insert a new document into the collection."""
@@ -26,31 +21,44 @@ class DatabaseObject:
         self.log_action(f"Updated document where {query}")
         return result
 
+    def find_duplicate(self, document):
+        """Check if an identical document already exists in the collection."""
+        duplicate = self.collection.find_one(document)
+        return duplicate
+
     def save_to_db(self):
-        """Insert or update the object in the database."""
-        document = self.to_dict()
+        """Insert a new document only if it is different from existing entries."""
+        document = self.to_dict()  # Convert the object to a dictionary for MongoDB
 
-        # If document_id exists, update the document; otherwise, insert a new one
-        if self.document_id:
-            query = {"_id": self.document_id}
-            self.update_in_db(query, document)
+        # Check for duplicates
+        duplicate = self.find_duplicate(document)
+        if duplicate:
+            self.document_id = duplicate["_id"]
+            self.log_action(f"Duplicate document found with ID: {self.document_id}. Skipping insert.")
+            return self.document_id
         else:
-            self.insert_document(document)
+            # If no duplicate is found, insert the document
+            self.document_id = self.insert_document(document)
+            self.log_action(f"Inserted new document with ID: {self.document_id}")
+            return self.document_id
 
-    def load_from_db(self, query):
-        """Load a document from the collection based on a query and populate the object's attributes."""
-        document = self.collection.find_one(query)
+    @classmethod
+    def load_from_db(cls, query):
+        """Load a document from the collection based on a query and return an instance of the class."""
+        client = MongoClient()  # Using default settings; update if necessary
+        db = client[cls.db_name]  # Access class-level db_name
+        collection = db[cls.collection_name]  # Access class-level collection_name
+
+        document = collection.find_one(query)
         if document:
-            self.from_dict(document)
-            self.log_action(f"Loaded document where {query}")
-            return document
+            instance = cls.__new__(cls)  # Create a new instance without calling __init__
+            instance.from_dict(document)  # Populate instance with data
+            instance.document_id = document.get("_id")
+            instance.client = client  # Attach MongoDB client to instance
+            instance.db = db  # Attach db reference to instance
+            instance.collection = collection  # Attach collection reference to instance
+            return instance
         return None
-
-    def delete_from_db(self, query):
-        """Delete a document from the collection based on a query."""
-        result = self.collection.delete_one(query)
-        self.log_action(f"Deleted document where {query}")
-        return result
 
     def to_dict(self):
         """Convert the object to a dictionary. Subclasses must implement this."""
@@ -60,49 +68,10 @@ class DatabaseObject:
         """Populate the object from a dictionary. Subclasses must implement this."""
         raise NotImplementedError("Subclasses must implement the 'from_dict' method")
 
-    # ---------------- Tkinter Methods ----------------
-
-    def create_gui(self):
-        """Create a simple Tkinter GUI to display the object's properties."""
-        root = Tk()
-        root.title(f"{self.__class__.__name__} Properties")
-
-        # Add custom components from subclasses
-        self.add_gui_components(root)
-
-        button_save = Button(root, text="Save", command=lambda: self.save_from_gui(root))
-        button_save.pack()
-
-        button_close = Button(root, text="Close", command=root.quit)
-        button_close.pack()
-
-        root.mainloop()
-
-    def add_gui_components(self, root):
-        """Add custom Tkinter components for the subclass. Subclasses must implement this."""
-        raise NotImplementedError("Subclasses must implement 'add_gui_components' method")
-
-    def save_from_gui(self, root):
-        """Save data from the GUI to MongoDB."""
-        # Example: Capture user input from the GUI (this can be customized per subclass)
-        self.save_to_db()
-
-    # ---------------- Helper Methods ----------------
-
-    def log_action(self, action):
-        """Log the actions for debugging purposes."""
+    def log_action(self, action, document=None):
+        """Log the actions for debugging purposes. If a document is provided, print a summary."""
         print(f"[LOG] {action}")
-
-    def validate_fields(self):
-        """Validate object fields before saving to MongoDB."""
-        # Subclasses can implement specific validation checks
-        pass
-
-    def convert_units(self, from_unit, to_unit, value):
-        """Convert units if necessary."""
-        conversion_factors = {
-            ('mAh', 'Ah'): 0.001,
-            ('cm²', 'm²'): 0.0001
-        }
-        return value * conversion_factors.get((from_unit, to_unit), 1)
-
+        if document:
+            print("[LOG] Document Summary:")
+            for key, value in document.items():
+                print(f"  {key}: {value}")
