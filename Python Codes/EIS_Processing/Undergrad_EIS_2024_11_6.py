@@ -111,7 +111,6 @@ def plotNyquist_calcRohm_with_fit(frequencies, Z, circuit_model, label, offset=0
     plt.grid(True)
     plt.legend()
 
-
 def plotBode(frequencies, Z, label):
     """
     Plots Bode magnitude and phase plots for the given impedance data.
@@ -150,7 +149,7 @@ def plotBode(frequencies, Z, label):
 circuit = 'R1-p(R2,CPE0)-p(R3,CPE1)-W0'
 
 # Corrected initial guesses (9 parameters)
-initial_guess = [5, 50, 1e-5, 0.9, 50, 1e-5, 0.9, 1]
+initial_guess = [15, 50, 1e-4, 0.7, 50, 1e-4, 0.7, 0.1]
 
 
 # Create the CustomCircuit model
@@ -170,7 +169,13 @@ files_with_labels = [
     ('BL-LL-CE04_EIS-t1_C05.mpt', 'CE04 - Li_NMC DTF14'),
     ('BL-LL-CF03_EIS-t1_C05.mpt', 'CF03 - Li_NMC DT14'),
     ('BL-LL-CC02_EIS_t1_C03.mpt', 'CC02 (First) - Li_NMC LP'),
-    ('BL-LL-CC02_EIS_t1_C04.mpt', 'CC02 (Second) - Li_NMC LP')
+    ('BL-LL-CC02_EIS_t1_C04.mpt', 'CC02 (Second) - Li_NMC LP'),
+    ('CJ01-2024-1109-LINMCDTF14-1Cyc_01_PEIS_C05.mpt', 'CJ01 - Li_NMC DTF14'),
+    ('CF01-2024-1108-LINMCDT14-10C_C05.mpt', 'CF01 - Li_NMC DT14 10 cycles'),
+    ('CE01-2024-1108-LINMCDTF14-10C_C04.mpt', 'CE01 - Li_NMC DTF14 10 cycles'),
+    ('CD04-2024-1108-GRNMCDTF14-10C_C02.mpt', 'CD04 - Gr_NMC DTF14 10 cycles'),
+    ('CC03-2024-1108-LINMLP-10C_C05.mpt', 'CC03 - Li_NMC LP 10 Cycles'),
+
 ]
 
 import numpy as np  # Make sure you import numpy
