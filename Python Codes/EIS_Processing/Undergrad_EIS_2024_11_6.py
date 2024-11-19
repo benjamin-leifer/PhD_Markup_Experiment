@@ -286,4 +286,4 @@ interact(update_plot,
          R2=FloatSlider(value=initial_guess[3], min=0, max=100, step=0.1),
          Wo1=FloatSlider(value=initial_guess[4], min=0, max=100, step=0.1),
          C2=FloatSlider(value=initial_guess[5], min=0, max=100, step=0.1),
-         misc1=FloatSlider(value=initial_guess[5], min=0, max=100, step=0.1))
+         misc1=FloatSlider(value=initial_guess[6], min=0, max=100, step=0.1))
