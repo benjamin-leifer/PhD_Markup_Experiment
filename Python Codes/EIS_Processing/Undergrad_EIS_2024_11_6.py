@@ -62,7 +62,7 @@ def readMPTData(filename):
             print(f"Required impedance columns not found in {filename}")
             return None, None
 
-        return frequencies, Z
+        return frequencies, -Z
     except Exception as e:
         print(f"Error reading {filename}: {e}")
         return None, None
@@ -84,8 +84,8 @@ def plotNyquist_calcRohm_with_fit(frequencies, Z, circuit_model, label, offset=0
     offset : float, optional
         y offset in Nyquist plot.
     """
-    real = Z.real
-    imag = Z.imag  # Ensure we use the negative imaginary part for Nyquist plots
+    real = -Z.real
+    imag = -Z.imag  # Ensure we use the negative imaginary part for Nyquist plots
 
     # Find minimum imaginary impedance for reference (if needed)
     min_idx = imag.argmin()
@@ -101,7 +101,7 @@ def plotNyquist_calcRohm_with_fit(frequencies, Z, circuit_model, label, offset=0
         Z_fit = circuit_model.predict(frequencies)
 
         # Plot the fitted data
-        plt.plot(Z_fit.real, -Z_fit.imag + offset, '-', label=f'{label} (Fit)', linewidth=2)
+        plt.plot(-Z_fit.real, -Z_fit.imag + offset, '-', label=f'{label} (Fit)', linewidth=2)
     except Exception as e:
         print(f"Error plotting fit for {label}: {e}")
 
@@ -145,13 +145,14 @@ def plotBode(frequencies, Z, label):
     plt.title(f'Bode Plot for {label}')
     plt.show()
 
-# Define the circuit correctly
+# Old circuit and initial guess
 circuit = 'R1-p(R2,CPE0)-p(R3,CPE1)-W0'
-
-# Corrected initial guesses (9 parameters)
-initial_guess = [15, 50, 1e-4, 0.7, 50, 1e-4, 0.7, 0.1]
-
-
+initial_guess = [15, 50, 1e-4, 0.7, 200, 1e-4, 0.7, 0.1]
+bounds = ([0, 0, 0, 0, 0, 0, 0, 0], [np.inf, np.inf, np.inf, 1, np.inf, np.inf, 1, np.inf])
+# new circuit and initial guess
+circuit = 'R0-p(R1,C1)-p(R2-Wo1,C2)'
+initial_guess = [.1, .1, 10, .1, .5, 10, 1]
+bounds = ([1e-8, 1e-8, 1e-8, 1e-8, 1e-8, 1e-8, 1e-8], [np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
 # Create the CustomCircuit model
 #circuit_model = CustomCircuit(circuit, initial_guess=initial_guess)
 
@@ -179,18 +180,19 @@ files_with_labels = [
 ]
 
 import numpy as np  # Make sure you import numpy
-
+"""
 for file_path, label in files_with_labels:
     plt.figure(figsize=(8, 6))
     try:
         frequencies, Z = readMPTData(file_path)
+        frequencies, Z = preprocessing.ignoreBelowX(frequencies, Z)
         if frequencies is None or Z is None:
             print(f"Skipping {label} due to read error.")
             continue
 
         # Fit the circuit model
         circuit_model = CustomCircuit(circuit, initial_guess=initial_guess)
-        circuit_model.fit(frequencies, Z, method = 'trf')
+        circuit_model.fit(frequencies, Z, bounds=bounds, global_opt=True)
 
         # Print fitted parameters
         print(f"Fitted Parameters for {label}: {circuit_model.parameters_}")
@@ -205,3 +207,83 @@ for file_path, label in files_with_labels:
         plt.show()
     except Exception as e:
         print(f"Failed to process {file_path}: {e}")
+"""
+#%%
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+from impedance.models.circuits import CustomCircuit
+from ipywidgets import interact, FloatSlider
+import ipywidgets as widgets
+from impedance import preprocessing
+
+# Ensure plots are displayed inline
+#%matplotlib inline
+
+def readMPTData(filename):
+    try:
+        with open(filename, 'r', encoding='cp1252') as readfile:
+            lines = readfile.readlines()
+            header_line = None
+            for i, line in enumerate(lines):
+                if "Re(Z)/Ohm" in line or "Z'" in line or "freq" in line.lower():
+                    header_line = i
+                    break
+            if header_line is None:
+                print(f"Failed to determine header row for {filename}")
+                return None, None
+        data = pd.read_csv(filename, header=header_line-3, sep='\t', engine='python', encoding='cp1252')
+        data.columns = data.columns.str.strip()
+        data.columns = data.columns.str.lower()
+        freq_col = [col for col in data.columns if 'freq' in col]
+        if freq_col:
+            frequencies = data[freq_col[0]].values
+        else:
+            print(f"Frequency column not found in {filename}")
+            return None, None
+        re_z_col = [col for col in data.columns if 're(z)' in col]
+        im_z_col = [col for col in data.columns if 'im(z)' in col]
+        if re_z_col and im_z_col:
+            Z = data[re_z_col[0]].values + 1j * data[im_z_col[0]].values
+        else:
+            print(f"Required impedance columns not found in {filename}")
+            return None, None
+        return frequencies, -Z
+    except Exception as e:
+        print(f"Error reading {filename}: {e}")
+        return None, None
+
+# Define the circuit and initial guesses
+circuit = 'R0-p(R1,C1)-p(R2-Wo1,C2)'
+initial_guess = [0.1, 0.1, 10, 0.1, 0.5, 10, 1]
+bounds = ([1e-8, 1e-8, 1e-8, 1e-8, 1e-8, 1e-8, 1e-8], [np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+
+# Load your data (replace with your actual data loading code)
+frequencies, Z = readMPTData('C:\\Users\\leifer.be\\OneDrive - Northeastern University\\Gallaway Group\\Gallaway Extreme SSD Drive\\Equipment Data\\Lab Biologic\\Leifer\\Low Temp Li Ion\\2024\\10\\BL-LL-CC01_EIS_t1_C04.mpt')
+frequencies, Z = preprocessing.ignoreBelowX(frequencies, Z)
+
+# Function to update the plot
+def update_plot(R0, R1, C1, R2, Wo1, C2, misc1):
+    params = [R0, R1, C1, R2, Wo1, C2, misc1]
+    circuit_model = CustomCircuit(circuit, initial_guess=params)
+    Z_fit = circuit_model.predict(frequencies)
+
+    plt.figure(figsize=(8, 6))
+    plt.plot(-Z.real, -Z.imag, 'o', markersize=4, label='Data')
+    plt.plot(-Z_fit.real, -Z_fit.imag, '-', label='Fit', linewidth=2)
+    plt.xlabel('Re(Z) (Ohm)')
+    plt.ylabel('-Im(Z) (Ohm)')
+    plt.title('Nyquist Plot with Interactive Fit')
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+# Create interactive widgets
+interact(update_plot,
+         R0=FloatSlider(value=initial_guess[0], min=0, max=1, step=0.01),
+         R1=FloatSlider(value=initial_guess[1], min=0, max=100, step=0.1),
+         C1=FloatSlider(value=initial_guess[2], min=0, max=100, step=0.1),
+         R2=FloatSlider(value=initial_guess[3], min=0, max=100, step=0.1),
+         Wo1=FloatSlider(value=initial_guess[4], min=0, max=100, step=0.1),
+         C2=FloatSlider(value=initial_guess[5], min=0, max=100, step=0.1),
+         misc1=FloatSlider(value=initial_guess[5], min=0, max=100, step=0.1))
