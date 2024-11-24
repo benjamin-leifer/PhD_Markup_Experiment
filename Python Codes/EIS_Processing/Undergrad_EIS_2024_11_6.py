@@ -4,6 +4,8 @@ import os
 from impedance import preprocessing
 import numpy as np
 from impedance.models.circuits import CustomCircuit
+import matplotlib as mpl
+mpl.use('Qt5Agg')
 
 
 def readMPTData(filename):
@@ -180,7 +182,7 @@ files_with_labels = [
 ]
 
 import numpy as np  # Make sure you import numpy
-"""
+
 for file_path, label in files_with_labels:
     plt.figure(figsize=(8, 6))
     try:
@@ -287,3 +289,4 @@ interact(update_plot,
          Wo1=FloatSlider(value=initial_guess[4], min=0, max=100, step=0.1),
          C2=FloatSlider(value=initial_guess[5], min=0, max=100, step=0.1),
          misc1=FloatSlider(value=initial_guess[6], min=0, max=100, step=0.1))
+"""

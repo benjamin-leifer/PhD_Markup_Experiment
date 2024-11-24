@@ -28,48 +28,68 @@ os.chdir(r'C:\Users\leifer.be\OneDrive - Northeastern University\Gallaway Group\
 src_directory = os.getcwd()
 
 def load_and_group_data(src_dir):
-    # Define the destination directory
     dest_dir = os.path.join(src_dir, 'CM and CK')
-
-    # Initialize a dictionary to store dataframes
     dataframes = {}
 
-    # Walk through the destination directory
     for root, dirs, files in os.walk(dest_dir):
         for file in files:
             if file.endswith('.xlsx') and ('CM' in file or 'CK' in file):
-                # Extract the cell ID from the file name
                 cell_id = file.split('_')[0]
-                # Construct full file path
                 file_path = os.path.join(root, file)
-                # Load the Excel file into a DataFrame
                 df = pd.read_excel(file_path, sheet_name=1)
-                # Append the DataFrame to the dictionary
+                print(f"Columns in {file}: {df.columns.tolist()}")
                 if cell_id not in dataframes:
                     dataframes[cell_id] = []
                 dataframes[cell_id].append((file, df))
 
-    # Define the custom order
     custom_order = ['Form', 'cyc2', 'dist-1st']
 
-    # Concatenate all DataFrames for each cell ID into a single DataFrame in the specified order
     for cell_id in dataframes:
-        # Sort the list of DataFrames by the custom order
         dataframes[cell_id].sort(
             key=lambda x: next((custom_order.index(order) for order in custom_order if order in x[0]),
                                len(custom_order)))
 
-        # Initialize a variable to keep track of the cumulative max test time
         cumulative_max_test_time = 0
-
-        # Update the Test Time (s) column and concatenate the DataFrames
         updated_dfs = []
         for _, df in dataframes[cell_id]:
             df['Test Time (s)'] += cumulative_max_test_time
             cumulative_max_test_time = df['Test Time (s)'].max()
             updated_dfs.append(df)
 
-        dataframes[cell_id] = pd.concat(updated_dfs, ignore_index=True)
+        concatenated_df = pd.concat(updated_dfs, ignore_index=True)
+        concatenated_df['Capacity (Ah)'] = concatenated_df['Current (A)'].cumsum() * (
+                    concatenated_df['Test Time (s)'].diff().fillna(0) / 3600)
+
+        # Define a function to increment the cycle index at the end of discharge steps
+        def update_cycle_index(row, state={'cycle_num': 1, 'charge_state': None, 'cumulative_charge_capacity': 0,
+                                           'cumulative_discharge_capacity': 0}):
+            if row['Current (A)'] > 0:
+                state['charge_state'] = 'charge'
+                state['cumulative_charge_capacity'] += row['Charge Capacity (Ah)']
+                state['cumulative_discharge_capacity'] = 0
+            elif row['Current (A)'] < 0:
+                state['charge_state'] = 'discharge'
+                state['cumulative_discharge_capacity'] += row['Discharge Capacity (Ah)']
+                state['cumulative_charge_capacity'] = 0
+            elif row['Current (A)'] == 0:
+                if state['charge_state'] == 'discharge':
+                    state['cycle_num'] += 1
+                    state['cumulative_charge_capacity'] = 0
+                    state['cumulative_discharge_capacity'] = 0
+                state['charge_state'] = 'rest'
+            return state['cycle_num']
+
+        concatenated_df = pd.concat(updated_dfs, ignore_index=True)
+        concatenated_df['Capacity (Ah)'] = concatenated_df['Current (A)'].cumsum() * (
+                    concatenated_df['Test Time (s)'].diff().fillna(0) / 3600)
+
+        # Reset charge and discharge capacities at the beginning of each cycle
+        concatenated_df['Charge Capacity (Ah)'] = concatenated_df.groupby('Cycle Index')['Charge Capacity (Ah)'].transform(
+            lambda x: x - x.min())
+        concatenated_df['Discharge Capacity (Ah)'] = concatenated_df.groupby('Cycle Index')['Discharge Capacity (Ah)'].transform(
+            lambda x: x - x.min())
+
+        dataframes[cell_id] = concatenated_df
 
     return dataframes
 
@@ -85,16 +105,88 @@ for cell_id, df in cell_dataframes.items():
 
 import matplotlib.pyplot as plt
 
+# Active mass (adjust as needed)
+active_mass = 0.01293303225
 # Iterate over each cell ID and its corresponding DataFrame
+plt.figure(figsize=(10, 6))
 for cell_id, df in cell_dataframes.items():
-    plt.figure(figsize=(10, 6))
-    plt.plot(df['Test Time (s)']/3600, df['Voltage (V)'], label=f'Cell ID: {cell_id}')
+    if 'CK03' or 'CK04' or 'CK05' in cell_id:
+        plt.plot(df['Test Time (s)']/3600, df['Voltage (V)'], label=f'Cell ID: {cell_id}: DT14')
+    if 'CM06' or 'CM07' in cell_id:
+        plt.plot(df['Test Time (s)']/3600, df['Voltage (V)'], label=f'Cell ID: {cell_id}: DTF14')
+
+
+
+plt.xlabel('Time (hr)')
+plt.ylabel('Voltage (V)')
+plt.title(f'Time vs Voltage - good cells')
+plt.legend()
+plt.grid(True)
+plt.show()
+"""
+for cell_id, df in cell_dataframes.items():
+    if 'CK' in cell_id:
+        plt.plot(df['Test Time (s)'] / 3600, df['Voltage (V)'], label=f'Cell ID: {cell_id}: DT14')
+
+plt.xlabel('Time (hr)')
+plt.ylabel('Voltage (V)')
+plt.title(f'Time vs Voltage DT14')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+for cell_id, df in cell_dataframes.items():
+    if 'CM' in cell_id:
+        plt.plot(df['Test Time (s)'] / 3600, df['Voltage (V)'], label=f'Cell ID: {cell_id}: DTF14')
+
+plt.xlabel('Time (hr)')
+plt.ylabel('Voltage (V)')
+plt.title(f'Time vs Voltage DTF14')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+for cell_id, df in cell_dataframes.items():
+    if 'CK' in cell_id:
+        plt.plot(df['Test Time (s)']/3600, df['Voltage (V)'], label=f'Cell ID: {cell_id}: DT14')
+    if 'CM' in cell_id:
+        plt.plot(df['Test Time (s)']/3600, df['Voltage (V)'], label=f'Cell ID: {cell_id}: DTF14')
     plt.xlabel('Time (hr)')
     plt.ylabel('Voltage (V)')
-    plt.title(f'Time vs Voltage for {cell_id}')
+    plt.title(f'Time vs Voltage {cell_id}')
     plt.legend()
     plt.grid(True)
     plt.show()
+"""
+
+
+
+
+# Plot the charge and discharge curves for each cycle
+"""
+for cell_id, df in cell_dataframes.items():
+    cycles = df['Cycle Index'].unique()
+    for cycle in cycles:
+        cycle_df = df[df['Cycle Index'] == cycle]
+        charge_df = cycle_df[cycle_df['Current (A)'] > 0]
+        discharge_df = cycle_df[cycle_df['Current (A)'] < 0]
+
+        # Exclude the first and last data points
+        charge_df = charge_df.iloc[1:-1]
+        discharge_df = discharge_df.iloc[1:-1]
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(charge_df['Charge Capacity (Ah)'], charge_df['Voltage (V)'], label=f'Charge Cycle {cycle}')
+        plt.plot(discharge_df['Discharge Capacity (Ah)'], discharge_df['Voltage (V)'], label=f'Discharge Cycle {cycle}')
+        plt.xlabel('Capacity (Ah)')
+        plt.ylabel('Voltage (V)')
+        plt.title(f'Charge and Discharge Curves for {cell_id} - Cycle {cycle}')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+"""
+
+
 """
 # File paths for CK datasets
 # Creating the lists of CK and CM file names based on previously uploaded files
@@ -160,6 +252,7 @@ plt.ylabel('Voltage (V)')
 plt.legend()
 #plt.grid(True)
 plt.show()
+
 
 # Plot comparison for each channel
 channels = ['Channel37', 'Channel38', 'Channel39', 'Channel40', 'Channel41']
