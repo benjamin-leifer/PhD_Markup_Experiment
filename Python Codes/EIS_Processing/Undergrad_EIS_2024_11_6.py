@@ -151,10 +151,45 @@ def plotBode(frequencies, Z, label):
 circuit = 'R1-p(R2,CPE0)-p(R3,CPE1)-W0'
 initial_guess = [15, 50, 1e-4, 0.7, 200, 1e-4, 0.7, 0.1]
 bounds = ([0, 0, 0, 0, 0, 0, 0, 0], [np.inf, np.inf, np.inf, 1, np.inf, np.inf, 1, np.inf])
-# new circuit and initial guess
-circuit = 'R0-p(R1,C1)-p(R2-Wo1,C2)'
-initial_guess = [.1, .1, 10, .1, .5, 10, 1]
-bounds = ([1e-8, 1e-8, 1e-8, 1e-8, 1e-8, 1e-8, 1e-8], [np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
+# Define the circuit and initial guesses
+circuit = 'R0-p(R1,CPE1)-p(R2-Wo1,CPE2)'
+initial_guess = [12,  # R0
+                 70,  # R1
+                 1e-4, # Q1 (CPE1 pseudo-capacitance)
+                 0.9,  # n1 (CPE1 exponent)
+                 75,   # R2
+                 560,  # Wo1 resistance
+                 200,  # Wo1 time constant
+                 0.01, # Q2 (CPE2 pseudo-capacitance)
+                 0.9]  # n2 (CPE2 exponent)
+
+
+# Lower bounds
+lower_bounds = [
+    5,   # R0: Min resistance
+    5,   # R1: Min resistance
+    1e-5,   # Q1: Min pseudo-capacitance
+    0.05,      # n1: Min exponent
+    5,   # R2: Min resistance
+    5,   # Wo1_R: Min Warburg resistance
+    1e-5,   # Wo1_T: Min Warburg time constant
+    1e-5,   # Q2: Min pseudo-capacitance
+    0.05       # n2: Min exponent
+]
+
+# Upper bounds
+upper_bounds = [
+    1000,  # R0: No upper limit for resistance
+    1000,  # R1: No upper limit for resistance
+    1e-1,  # Q1: No upper limit for pseudo-capacitance
+    1,       # n1: Max exponent
+    1000,  # R2: No upper limit for resistance
+    1e-2,  # Wo1_R: No upper limit for Warburg resistance
+    10000,  # Wo1_T: No upper limit for Warburg time constant
+    1e-1,  # Q2: No upper limit for pseudo-capacitance
+    1        # n2: Max exponent
+]
+bounds = (lower_bounds, upper_bounds)
 # Create the CustomCircuit model
 #circuit_model = CustomCircuit(circuit, initial_guess=initial_guess)
 
@@ -188,6 +223,8 @@ for file_path, label in files_with_labels:
     try:
         frequencies, Z = readMPTData(file_path)
         frequencies, Z = preprocessing.ignoreBelowX(frequencies, Z)
+
+        Z_normalized = Z / max(abs(Z))
         if frequencies is None or Z is None:
             print(f"Skipping {label} due to read error.")
             continue
@@ -205,7 +242,7 @@ for file_path, label in files_with_labels:
         # Plot the Bode plot
         #plotBode(frequencies, Z, label)
 
-        plt.savefig(f'{label}_fitted.png', dpi=300, bbox_inches='tight')
+        #plt.savefig(f'{label}_fitted.png', dpi=300, bbox_inches='tight')
         plt.show()
     except Exception as e:
         print(f"Failed to process {file_path}: {e}")

@@ -560,7 +560,8 @@ if __name__ == '__main__':
     for root, dirs, files in os.walk('.'):
         for file in files:
             #if 'Wb' in file and file.endswith('.CSV') or 'Wb' in file and file.endswith('.xslx'):
-            if file.endswith('.xlsx') or file.endswith('.CSV'):
+            #if file.endswith('.xlsx') or file.endswith('.CSV'):
+            if '-21C' in file:
                 csv_files.append(os.path.join(root, file))
                 print(csv_files)
                 # Create a label tag from the first 8 characters of the filename
@@ -595,7 +596,7 @@ if __name__ == '__main__':
     for cell in csv_files:
         label_tag = find_bl_ll_xx00(cell)
         try:
-            cells.append(arbin_import_Sym_Cell(cell, name=label_tag, mass=40/155/1000,
+            cells.append(arbin_import_Sym_Cell(cell, name=label_tag, mass=2/155/1000,
                                            theoretical_cap=155, color='black', shape='o'))
         except FileNotFoundError as e:
             print('File not found')
@@ -628,6 +629,7 @@ if __name__ == '__main__':
             #cell.get_min_capacity_per_cycle()
             #cell.get_coulombic_efficiency()
             cell.plot_capacity_and_ce_vs_cycle()
+            #plt.show()
             plt.savefig(cell.name + '_coulombic_efficiency.png', dpi=500, bbox_inches='tight')
         #plt.savefig(cell.get_filename() + '_voltage_vs_time.png', dpi=500, bbox_inches='tight')
         #plt.show()

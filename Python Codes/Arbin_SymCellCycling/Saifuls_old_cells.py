@@ -123,6 +123,10 @@ plt.title(f'Time vs Voltage - good cells')
 plt.legend()
 plt.grid(True)
 plt.show()
+
+
+
+
 """
 for cell_id, df in cell_dataframes.items():
     if 'CK' in cell_id:
