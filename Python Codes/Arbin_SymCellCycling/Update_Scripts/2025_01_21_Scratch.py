@@ -217,4 +217,4 @@ file_paths_keys = [
 
 # Process and plot each file with its corresponding key
 for file_name, dataset_key in file_paths_keys:
-    process_and_plot(file_name, dataset_key, )
+    process_and_plot(file_name, dataset_key, normalized=True)

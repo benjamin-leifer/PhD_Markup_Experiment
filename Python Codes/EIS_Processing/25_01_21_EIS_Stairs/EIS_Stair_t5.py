@@ -48,10 +48,21 @@ def read_eis_data(file_path):
         print(f"Error reading EIS file {file_path}: {e}")
         return None
 
+def validate_data(frequencies, Z_real, Z_imag):
+    """
+    Validate data arrays, ensuring no NaN/Inf values and sufficient range.
+    """
+    valid_indices = ~(
+            (np.isnan(frequencies) | np.isnan(Z_real) | np.isnan(Z_imag)) |
+            (np.isinf(frequencies) | np.isinf(Z_real) | np.isinf(Z_imag)) |
+            (frequencies <= 0)
+    )
+
+    return frequencies[valid_indices], Z_real[valid_indices], Z_imag[valid_indices]
+
 def get_initial_guess(file_name, cycle_number, output_file):
     """
-    Gets the initial guess for a fit from the existing output file if available.
-    If no prior fit exists, it returns the default initial guess.
+    Retrieves the initial guess for a fit from existing output or returns default.
     """
     if os.path.exists(output_file):
         try:
@@ -62,7 +73,7 @@ def get_initial_guess(file_name, cycle_number, output_file):
             matching_row = previous_results[
                 (previous_results["Filename"] == file_name) &
                 (previous_results["Cycle Number"] == cycle_number)
-            ]
+                ]
 
             # If a matching row exists, return its parameters
             if not matching_row.empty:
@@ -82,37 +93,48 @@ def fit_cycle(cycle_data, file_name, cycle_number):
         Z_imag = -cycle_data["-Im(Z) (Ohm)"].values[3:]
         Z_exp = Z_real + 1j * Z_imag
 
+        # Validate and clean data
+        frequencies, Z_real, Z_imag = validate_data(frequencies, Z_real, Z_imag)
+        if len(frequencies) == 0:
+            print(f"Cycle {cycle_number} in file {file_name} has insufficient valid data. Skipping.")
+            return
+
         # Attempt fitting with initial guess
         initial_guess = get_initial_guess(file_name, cycle_number, OUTPUT_FILE)
         print(f"Initial guess for {file_name}, Cycle {cycle_number}: {initial_guess}")
 
         circuit_model = CustomCircuit(CIRCUIT, initial_guess=initial_guess)
+        best_fit_parameters = None
+
         try:
             circuit_model.fit(frequencies, Z_exp, method='trf', maxfev=1000)
+            print(f"Fit results for {file_name}, Cycle {cycle_number}: {circuit_model.parameters_}")
             best_fit_parameters = circuit_model.parameters_
         except Exception as e:
             print(f"Fitting failed for {file_name}, Cycle {cycle_number}: {e}")
             backup_circuit_model = CustomCircuit(BACKUP_CIRCUIT, initial_guess=BACKUP_DEFAULT_INITIAL_GUESS)
             try:
-                print('Trying Backup Model: ')
                 backup_circuit_model.fit(frequencies, Z_exp, method='trf', maxfev=1000)
                 best_fit_parameters = backup_circuit_model.parameters_
             except Exception as e:
                 print(f"Backup fitting failed for {file_name}, Cycle {cycle_number}: {e}")
-                print("Saving initial guess as fallback.")
-                best_fit_parameters = initial_guess  # Use fallback
 
-        Z_fit = circuit_model.predict(frequencies)
-        residuals = np.mean((np.abs(Z_exp) - np.abs(Z_fit)) / np.abs(Z_exp) * 100)
-
-        # Save results incrementally
-        results = {
-            "Filename": file_name,
-            "Cycle Number": cycle_number,
-            **{param: val for param, val in zip(circuit_model.get_param_names(), best_fit_parameters)},
-            "Mean Residual (%)": residuals,
-        }
-        save_to_csv(results, OUTPUT_FILE)
+        if best_fit_parameters is not None:
+            Z_fit = circuit_model.predict(frequencies)
+            residuals = np.mean((np.abs(Z_exp) - np.abs(Z_fit)) / np.abs(Z_exp) * 100)
+            print(f"Mean Residual for {file_name}, Cycle {cycle_number}: {residuals:.2f}%")
+            print(f"Best fit parameters: {best_fit_parameters}")
+            print(f"Parameter names{circuit_model.get_param_names()[0]}")
+            # Save results incrementally
+            results = {
+                "Filename": file_name,
+                "Cycle Number": cycle_number,
+                **{param: val for param, val in zip(circuit_model.get_param_names()[0], tuple(best_fit_parameters))},
+                "Mean Residual (%)": residuals,
+            }
+            save_to_csv(results, OUTPUT_FILE)
+        else:
+            print(f"No fit results for {file_name}, Cycle {cycle_number}. Skipping.")
 
     except Exception as e:
         print(f"Error fitting cycle {cycle_number} in file {file_name}: {e}")
@@ -124,8 +146,8 @@ def save_to_csv(results, output_file):
         if os.path.exists(output_file):
             existing_df = pd.read_csv(output_file)
             mask = (
-                (existing_df["Filename"] == results["Filename"]) &
-                (existing_df["Cycle Number"] == results["Cycle Number"])
+                    (existing_df["Filename"] == results["Filename"]) &
+                    (existing_df["Cycle Number"] == results["Cycle Number"])
             )
             if mask.any():
                 existing_df.loc[mask, :] = results_df.iloc[0]

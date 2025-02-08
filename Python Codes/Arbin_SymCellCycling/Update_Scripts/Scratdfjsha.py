@@ -70,29 +70,49 @@ def plot_comparison(file_paths_keys, comparison_pairs, normalized=False):
     color_map = {
         'LFP': 'blue',
         'NMC': 'green',
-        'Gr': 'red'
+        'Gr': 'red',
+        'LTO': 'purple'
     }
 
-    for (file1, key1), (file2, key2) in comparison_pairs:
+    capacities = {
+        'LFP': 2.0075 / 1000 / 100,  # mAh
+        'NMC': 3.212 / 1000 / 100,  # mAh
+        'Gr': 3.8544 / 1000 / 100, # mAh
+        'LFP': 2.0075 / 1000 / 100 # mAh
+    }
+    weights_g = {
+        'LFP': 7.09 / 1000 * 1.606 / 1000,  # g
+        'NMC': 12.45 / 1000 * 1.606 / 1000,  # g
+        'Gr': 6.61 / 1000 * 2.01 / 1000  # g
+    }
+
+    for (file1, key1), (file2, key2), (file3, key3) in comparison_pairs:
         charge1, discharge1 = process_and_plot(file1, key1, normalized)
         charge2, discharge2 = process_and_plot(file2, key2, normalized)
+        charge3, discharge3 = process_and_plot(file3, key3, normalized)
 
         plt.figure(figsize=(10, 6))
+        weight1 = weights_g['LFP'] if 'LFP' in key1 else (weights_g['NMC'] if 'NMC' in key1 else weights_g['Gr'])
         color1 = color_map['Gr'] if 'Gr' in key1 else (color_map['LFP'] if 'LFP' in key1 else color_map['NMC'])
         color2 = color_map['Gr'] if 'Gr' in key2 else (color_map['LFP'] if 'LFP' in key2 else color_map['NMC'])
+        color3 = color_map['LTO'] if 'LTO' in key3 else (color_map['LFP'] if 'LFP' in key3 else color_map['NMC'])
 
         if not charge1.empty:
-            plt.plot(charge1['Charge Capacity (Ah)'], charge1['Voltage (V)'], label=f'{key1} (Charge)', linestyle='-', color=color1)
+            plt.plot(charge1['Charge Capacity (Ah)']/weight1, charge1['Voltage (V)'], label=f'{key1} (Charge)', linestyle='-', color=color1)
         if not discharge1.empty:
-            plt.plot(discharge1['Discharge Capacity (Ah)'], discharge1['Voltage (V)'], label=f'{key1} (Discharge)', linestyle='--', color=color1)
+            plt.plot(discharge1['Discharge Capacity (Ah)']/weight1, discharge1['Voltage (V)'], label=f'{key1} (Discharge)', linestyle='--', color=color1)
         if not charge2.empty:
-            plt.plot(charge2['Charge Capacity (Ah)'], charge2['Voltage (V)'], label=f'{key2} (Charge)', linestyle='-', color=color2)
+            plt.plot(charge2['Charge Capacity (Ah)']/weight1, charge2['Voltage (V)'], label=f'{key2} (Charge)', linestyle='-', color=color2)
         if not discharge2.empty:
-            plt.plot(discharge2['Discharge Capacity (Ah)'], discharge2['Voltage (V)'], label=f'{key2} (Discharge)', linestyle='--', color=color2)
+            plt.plot(discharge2['Discharge Capacity (Ah)']/weight1, discharge2['Voltage (V)'], label=f'{key2} (Discharge)', linestyle='--', color=color2)
+        if not charge3.empty:
+            plt.plot(charge3['Charge Capacity (Ah)']/weight1, charge3['Voltage (V)'], label=f'{key3} (Charge)', linestyle='-', color=color3)
+        if not discharge3.empty:
+            plt.plot(discharge3['Discharge Capacity (Ah)']/weight1, discharge3['Voltage (V)'], label=f'{key3} (Discharge)', linestyle='--', color=color3)
 
         plt.xlabel('Capacity (Ah)')
         plt.ylabel('Voltage (V)')
-        plt.title(f'Voltage vs Capacity for {key1} and {key2}')
+        plt.title(f'Voltage vs Capacity for {key1} and {key2} and {key3}')
         plt.legend()
         plt.grid()
         plt.tight_layout()
@@ -119,8 +139,8 @@ file_paths_keys = [
 
 # Define comparison pairs
 comparison_pairs = [
-    (('BL-LL-DB02_RT_RateTest_Channel_47_Wb_1.xlsx', 'Li|LFP - LPV Elyte (DB02)'), ('BL-LL-DE02_RT_RateTest_Channel_61_Wb_1.xlsx', 'Gr|LFP - LPV Elyte (DE02)')),
-    (('BL-LL-DA02_RT_RateTest_Channel_44_Wb_1.xlsx', 'Li|NMC - LPV Elyte (DA02)'), ('BL-LL-DD03_RT_RateTest_Channel_59_Wb_1.xlsx', 'Gr|NMC - LPV Elyte (DD03)'))
+    (('BL-LL-DB02_RT_RateTest_Channel_47_Wb_1.xlsx', 'Li|LFP - LPV Elyte (DB02)'), ('BL-LL-DE02_RT_RateTest_Channel_61_Wb_1.xlsx', 'Gr|LFP - LPV Elyte (DE02)'),
+     ('BL_LL_DM_03_RT_10C_1_Cycle_Channel_51_Wb_1.xlsx', 'LTO|LFP - LPV Elyte (DM03)')),
 ]
 
 # Plot comparisons
