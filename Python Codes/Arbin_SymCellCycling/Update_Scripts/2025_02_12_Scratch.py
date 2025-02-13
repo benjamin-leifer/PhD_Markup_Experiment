@@ -94,6 +94,9 @@ def plot_multiple_files(file_paths_keys, normalized=False):
     #ax1.legend()
     #ax1.grid()
 
+    # Add vertical dashed black lines at specific cycle numbers
+    for cycle in [1.5, 4.5, 7.5, 10.5, 13.5, 16.5, 19.5]:
+        ax1.axvline(x=cycle, color='black', linestyle='--')
 
     ax2 = ax1.twinx()
     for i, (file_path, dataset_key) in enumerate(file_paths_keys):
@@ -105,7 +108,7 @@ def plot_multiple_files(file_paths_keys, normalized=False):
 
     lines_1, labels_1 = ax1.get_legend_handles_labels()
     lines_2, labels_2 = ax2.get_legend_handles_labels()
-    fig.legend(lines_1 + lines_2, labels_1 + labels_2, loc='lower left', bbox_to_anchor=(0.05, 0.075), ncol=1, frameon=False)
+    fig.legend(lines_1 + lines_2, labels_1 + labels_2, loc='lower left', bbox_to_anchor=(0.5, 0.075), ncol=1, frameon=False)
 
     fig.tight_layout()
 

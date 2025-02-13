@@ -82,30 +82,37 @@ def read_eis_data(file_path):
 
 def interactive_nyquist_adjustment(eis_data, circuit, initial_guess, bounds, exc_start=4, cycle=None, param_names=None):
     """
-    Launch an interactive Nyquist plot with controls to update parameter bounds.
+    Launch an interactive Nyquist plot with controls to update the bounds for resistance parameters.
 
-    For each parameter, a single RangeSlider (with two handles) sets its lower and upper bounds.
-    A TextBox next to each RangeSlider shows the "initial guess" (defaulting to the mean of the bounds)
-    and does not auto-update when the bounds change.
+    Only resistance parameters (assumed at indices 0, 1, 4, and 9) are controlled.
+    For each resistance, a single RangeSlider (with two handles) sets its lower and upper bounds,
+    and a TextBox next to it displays the "initial guess" (defaulting to the mean of the slider bounds)
+    and auto-updates to the average when the slider is moved.
 
-    An "Auto Fit" button performs a full fit (using the current textbox values as the initial guess and
-    the current slider values as the bounds) and updates the text boxes. A "Save" button saves the current
+    A horizontal line for each resistance is drawn at y = -2.
+    Its x-position is given by cumulative_offset + current slider lower/upper bounds,
+    where cumulative_offset is updated by adding the current TextBox value of the previous resistance.
+
+    The RangeSlider label is color-coded.
+    An "Auto Fit" button performs a full fit (using the current TextBox values as the initial guess and
+    the current slider values as bounds) and updates the TextBoxes. A "Save" button saves the current
     fitting parameters and bounds to a CSV file.
 
-    If param_names is not provided, parameter names are pulled from the circuit model’s get_param_names()
-    method and restructured to match the structure of initial_guess.
+    When "Auto Fit" is run, the circuit is fitted with the new resistance bounds from the GUI.
 
-    For resistance parameters (assumed at indices 0, 1, 4, and 9):
-      - The RangeSlider labels are color coded.
-      - The markers (dots) in the plot are placed additively along the x-axis, meaning that each
-        resistance’s markers are offset by the cumulative sum of the previous resistance values.
-    Note: In this usage, the Warburg parameter is a scalar (e.g., 10) with bounds (e.g., (0,50)).
+    If param_names is not provided, parameter names are pulled from the circuit model’s get_param_names()
+    method and restructured to match initial_guess.
+
+    Note: In this usage the Warburg parameter is a scalar (e.g., 10) with bounds (e.g., (0,50)).
     """
     from matplotlib.widgets import RangeSlider, Button, TextBox
     from impedance.models.circuits import CustomCircuit
     from collections.abc import Iterable
 
-    print("Launching interactive Nyquist plot with bound controls...")
+    print("Launching interactive Nyquist plot with resistance bound controls...")
+
+    # Only control resistance parameters.
+    res_indices = [0, 1, 4, 9]
 
     # Optionally filter by cycle.
     if cycle is not None:
@@ -123,12 +130,12 @@ def interactive_nyquist_adjustment(eis_data, circuit, initial_guess, bounds, exc
     Z_imag = -eis_data["-Im(Z) (Ohm)"].values[exc_start:-1]
     Z_exp = Z_real + 1j * Z_imag
 
-    # Perform an initial fit (to get parameter names and baseline prediction).
+    # Perform an initial fit (to obtain parameter names).
     circuit_model = CustomCircuit(circuit, initial_guess=initial_guess)
     circuit_model.fit(frequencies, Z_exp)
     Z_fit = circuit_model.predict(frequencies)
 
-    # If param_names not provided, pull them from the model.
+    # If param_names not provided, pull from the model.
     if param_names is None:
         flat_names = circuit_model.get_param_names()[0]
         structured_names = []
@@ -143,125 +150,122 @@ def interactive_nyquist_adjustment(eis_data, circuit, initial_guess, bounds, exc
                 idx += 1
         param_names = structured_names
 
-    # Create a figure with a fixed size (not full screen).
+    # Create a figure with a fixed size.
     fig, ax = plt.subplots(figsize=(10, 8))
-    # (No full-screen toggle.)
-
-    # Compute control entries: one per parameter (or sub-parameter).
-    # Each entry: (i, sub, lb, ub, mean, label)
+    # Adjust bottom margin for controls.
     control_entries = []
-    for i, (param, bnd) in enumerate(zip(initial_guess, bounds)):
-        if isinstance(param, Iterable) and not isinstance(param, (str, bytes)):
-            for j, _ in enumerate(param):
-                lb = bnd[j][0]
-                ub = bnd[j][1]
-                mean_val = (lb + ub) / 2.0
-                if isinstance(param_names[i], Iterable):
-                    label = param_names[i][j]
-                else:
-                    label = f"{param_names[i]} ({j + 1})"
-                control_entries.append((i, j, lb, ub, mean_val, label))
-        else:
-            lb = bnd[0]
-            ub = bnd[1]
-            mean_val = (lb + ub) / 2.0
-            label = param_names[i]
-            control_entries.append((i, None, lb, ub, mean_val, label))
+    for i in res_indices:
+        lb = bounds[i][0]
+        ub = bounds[i][1]
+        mean_val = (lb + ub) / 2.0
+        label = param_names[i]
+        control_entries.append((i, None, lb, ub, mean_val, label))
     num_controls = len(control_entries)
     control_height = 0.06
     bottom_margin = 0.05 + num_controls * control_height
     plt.subplots_adjust(left=0.1, bottom=bottom_margin)
 
-    # Plot the initial Nyquist curve (remove plot labels).
+    # Plot the initial Nyquist curve (no legend).
     l_exp = ax.scatter(Z_exp.real, -Z_exp.imag, color='black')
     l_fit, = ax.plot(Z_fit.real, -Z_fit.imag, color='red')
     ax.set_xlabel("Re(Z) (Ohm)")
     ax.set_ylabel("-Im(Z) (Ohm)")
-    ax.set_title("Nyquist Plot with Bound Controls")
-    # Do not call ax.legend() to remove plot labels.
+    ax.set_title("Nyquist Plot with Resistance Bound Controls")
 
-    # Create controls: one RangeSlider and one TextBox per control entry.
-    controls = {}  # key: (i, sub) -> {"range_slider": ..., "textbox": ...}
-    # Adjust horizontal positions to avoid overlap:
+    # Create controls for resistance parameters.
+    controls = {}  # key: parameter index -> {"range_slider": ..., "textbox": ...}
+    res_colors = {0: 'red', 1: 'green', 4: 'blue', 9: 'orange'}
     for k, (i, sub, lb, ub, mean_val, label) in enumerate(control_entries):
         y = 0.05 + (num_controls - 1 - k) * control_height
-        ax_range = plt.axes([0.05, y, 0.35, control_height * 0.8])  # Wider slider
-        # Create a RangeSlider with two handles.
+        ax_range = plt.axes([0.05, y, 0.35, control_height * 0.8])
         range_slider = RangeSlider(ax_range, label, valmin=lb, valmax=ub, valinit=(lb, ub))
-        ax_text = plt.axes([0.42, y, 0.2, control_height * 0.8])  # Shifted TextBox
+        range_slider.label.set_color(res_colors.get(i, 'black'))
+        ax_text = plt.axes([0.42, y, 0.2, control_height * 0.8])
         textbox = TextBox(ax_text, "Init", initial=str(mean_val))
-        controls[(i, sub)] = {"range_slider": range_slider, "textbox": textbox}
-        # For resistance parameters (i in [0,1,4,9] and scalar), color-code the slider label.
-        res_colors = {0: 'red', 1: 'green', 4: 'blue', 9: 'orange'}
-        if sub is None and i in res_colors:
-            range_slider.label.set_color(res_colors[i])
+        controls[i] = {"range_slider": range_slider, "textbox": textbox}
 
-        # When the RangeSlider changes, update the prediction and bound markers.
         def make_range_callback(key):
             def range_update(val):
-                update_bounds_markers()
+                ctrl = controls[key]
+                rng = ctrl["range_slider"].val
+                new_val = (rng[0] + rng[1]) / 2.0
+                ctrl["textbox"].set_val(str(new_val))
+                update_bounds_line()
                 update_prediction()
 
             return range_update
 
-        controls[(i, sub)]["range_slider"].on_changed(make_range_callback((i, sub)))
+        controls[i]["range_slider"].on_changed(make_range_callback(i))
 
-        # When the TextBox is submitted, update the prediction.
         def make_text_callback(key):
             def text_update(text):
                 update_prediction()
 
             return text_update
 
-        controls[(i, sub)]["textbox"].on_submit(make_text_callback((i, sub)))
+        controls[i]["textbox"].on_submit(make_text_callback(i))
 
-    # Function to read the current initial guess from the textboxes.
+    # Global list for the drawn resistance lines.
+    bound_lines = []
+
+    # Function to update the resistance bound line.
+    def update_bounds_line():
+        nonlocal bound_lines
+        # Remove previous lines.
+        for line in bound_lines:
+            line.remove()
+        bound_lines[:] = []
+        # Set y-coordinate to -2.
+        y_coord = -2
+        cumulative = 0.0
+        # Process resistances in order.
+        for i in sorted(res_indices):
+            if i not in controls:
+                continue
+            ctrl = controls[i]
+            rng = ctrl["range_slider"].val  # (lb, ub)
+            try:
+                current_val = float(ctrl["textbox"].text)
+            except:
+                current_val = (rng[0] + rng[1]) / 2.0
+            lower_x = cumulative + rng[0]
+            upper_x = cumulative + rng[1]
+            c = res_colors.get(i, 'black')
+            # Draw a horizontal line spanning from lower_x to upper_x.
+            line, = ax.plot([lower_x, upper_x], [y_coord, y_coord],
+                            lw=6, solid_capstyle='butt', color=c)
+            bound_lines.append(line)
+            cumulative += current_val
+        fig.canvas.draw_idle()
+
+    # Function to get the current initial guess from the textboxes.
     def get_current_initial_guess():
         new_guess = {}
-        for (i, sub), ctrl in controls.items():
+        for i, ctrl in controls.items():
             try:
                 val = float(ctrl["textbox"].text)
             except:
                 rng = ctrl["range_slider"].val
                 val = (rng[0] + rng[1]) / 2.0
-            if i in new_guess:
-                new_guess[i].append((sub, val))
-            else:
-                if sub is None:
-                    new_guess[i] = val
-                else:
-                    new_guess[i] = [(sub, val)]
+            new_guess[i] = val
         final_guess = []
         for i in range(len(initial_guess)):
             if i in new_guess:
-                if isinstance(new_guess[i], list):
-                    sorted_vals = [x[1] for x in sorted(new_guess[i], key=lambda x: x[0])]
-                    final_guess.append(tuple(sorted_vals))
-                else:
-                    final_guess.append(new_guess[i])
+                final_guess.append(new_guess[i])
             else:
                 final_guess.append(initial_guess[i])
         return final_guess
 
-    # Function to read the current bounds from the RangeSliders.
+    # Function to get the current bounds from the RangeSliders.
     def get_current_bounds():
         new_bounds = {}
-        for (i, sub), ctrl in controls.items():
+        for i, ctrl in controls.items():
             rng = ctrl["range_slider"].val
-            if i in new_bounds:
-                new_bounds[i].append((rng[0], rng[1]))
-            else:
-                if sub is None:
-                    new_bounds[i] = (rng[0], rng[1])
-                else:
-                    new_bounds[i] = [(rng[0], rng[1])]
+            new_bounds[i] = (rng[0], rng[1])
         final_bounds = []
         for i in range(len(bounds)):
             if i in new_bounds:
-                if isinstance(new_bounds[i], list):
-                    final_bounds.append(tuple(new_bounds[i]))
-                else:
-                    final_bounds.append(new_bounds[i])
+                final_bounds.append(new_bounds[i])
             else:
                 final_bounds.append(bounds[i])
         return final_bounds
@@ -275,54 +279,29 @@ def interactive_nyquist_adjustment(eis_data, circuit, initial_guess, bounds, exc
         l_fit.set_ydata(-Z_fit_new.imag)
         fig.canvas.draw_idle()
 
-    # Update bound markers for resistance parameters with additive placement.
-    bound_markers = []
-
-    def update_bounds_markers():
-        nonlocal bound_markers
-        # Remove previous markers.
-        for marker in bound_markers:
-            marker.remove()
-        bound_markers.clear()
-        y_min, y_max = ax.get_ylim()
-        y_coord = y_min + 0.05 * (y_max - y_min)
-        # Resistance parameters: assume indices 0, 1, 4, 9.
-        res_indices = [0, 1, 4, 9]
-        res_controls = []
-        for (i, sub), ctrl in controls.items():
-            if sub is None and i in res_indices:
-                res_controls.append((i, ctrl))
-        # Sort in order of parameter index.
-        res_controls.sort(key=lambda x: x[0])
-        # Define colors for each resistance.
-        res_colors = {0: 'red', 1: 'green', 4: 'blue', 9: 'orange'}
-        cumulative = 0.0
-        for (i, ctrl) in res_controls:
-            rng = ctrl["range_slider"].val  # (lb, ub)
-            try:
-                current_val = float(ctrl["textbox"].text)
-            except:
-                current_val = (rng[0] + rng[1]) / 2.0
-            lower_marker = cumulative + rng[0]
-            upper_marker = cumulative + rng[1]
-            c = res_colors.get(i, 'black')
-            m1, = ax.plot(lower_marker, y_coord, marker='o', color=c, markersize=10)
-            m2, = ax.plot(upper_marker, y_coord, marker='o', color=c, markersize=10)
-            bound_markers.extend([m1, m2])
-            cumulative += current_val
-        fig.canvas.draw_idle()
-
     update_prediction()
-    update_bounds_markers()
+    update_bounds_line()
 
-    # "Auto Fit" button.
+    # "Auto Fit" button: Update the circuit fit using the new resistance bounds.
     ax_auto = plt.axes([0.8, 0.01, 0.15, 0.04])
     auto_button = Button(ax_auto, "Auto Fit")
 
     def auto_fit(event):
         current_guess = get_current_initial_guess()
         current_bounds = get_current_bounds()
-        auto_model = CustomCircuit(circuit, initial_guess=current_guess, bounds=current_bounds)
+        auto_model = CustomCircuit(circuit, initial_guess=current_guess)
+        # Update the parameter bounds for controlled resistances using the lmfit Parameters.
+        params = auto_model.parameters_  # lmfit.Parameters object
+        for i in controls.keys():
+            pname = param_names[i]
+            if pname in params.keys():
+                try:
+                    params[pname].min = current_bounds[i][0]
+                    params[pname].max = current_bounds[i][1]
+                except Exception as e:
+                    print(f"Could not set bounds for parameter {pname}: {e}")
+            else:
+                print(f"Parameter {pname} not found in auto_model.parameters")
         try:
             auto_model.fit(frequencies, Z_exp)
         except Exception as e:
@@ -330,17 +309,14 @@ def interactive_nyquist_adjustment(eis_data, circuit, initial_guess, bounds, exc
             return
         fitted_params = auto_model.parameters_
         print("Automated fit parameters:", fitted_params)
-        for (i, sub), ctrl in controls.items():
-            if sub is None:
-                ctrl["textbox"].set_val(str(fitted_params[i]))
-            else:
-                ctrl["textbox"].set_val(str(fitted_params[i][sub]))
+        for i, ctrl in controls.items():
+            ctrl["textbox"].set_val(str(fitted_params[i]))
         update_prediction()
-        update_bounds_markers()
+        update_bounds_line()
 
     auto_button.on_clicked(auto_fit)
 
-    # "Save" button.
+    # "Save" button: Save current parameters and bounds to CSV.
     ax_save = plt.axes([0.6, 0.01, 0.15, 0.04])
     save_button = Button(ax_save, "Save")
 
@@ -348,20 +324,11 @@ def interactive_nyquist_adjustment(eis_data, circuit, initial_guess, bounds, exc
         current_guess = get_current_initial_guess()
         current_bounds = get_current_bounds()
         data_rows = []
-        for i in range(len(initial_guess)):
-            if isinstance(initial_guess[i], Iterable) and not isinstance(initial_guess[i], (str, bytes)):
-                for j, val in enumerate(current_guess[i]):
-                    name = param_names[i][j] if (isinstance(param_names[i], Iterable) and not isinstance(param_names[i],
-                                                                                                         (str,
-                                                                                                          bytes))) else f"{param_names[i]} ({j + 1})"
-                    lb_val, ub_val = current_bounds[i][j]
-                    data_rows.append(
-                        {"Parameter": name, "Initial Guess": val, "Lower Bound": lb_val, "Upper Bound": ub_val})
-            else:
-                name = param_names[i]
-                lb_val, ub_val = current_bounds[i]
-                data_rows.append({"Parameter": name, "Initial Guess": current_guess[i], "Lower Bound": lb_val,
-                                  "Upper Bound": ub_val})
+        for i in res_indices:
+            name = param_names[i]
+            lb_val, ub_val = current_bounds[i]
+            data_rows.append({"Parameter": name, "Initial Guess": current_guess[i],
+                              "Lower Bound": lb_val, "Upper Bound": ub_val})
         df_save = pd.DataFrame(data_rows)
         root = Tk()
         root.withdraw()
@@ -406,6 +373,7 @@ def interactive_nyquist_adjustment(eis_data, circuit, initial_guess, bounds, exc
 # interactive_nyquist_adjustment(eis_data, circuit_str, initial_guess, bounds, cycle=1)
 # --------------------------
 
+
 if __name__ == "__main__":
     import pandas as pd
 
@@ -417,8 +385,8 @@ if __name__ == "__main__":
 
     # bounds: for the Warburg element, supply a tuple of bounds for its two parameters.
     bounds = [
-        (0, 30),     # R1
-        (0, 30),     # R2
+        (0, 50),     # R1
+        (0, 50),     # R2
         (1e-7, 1e-3), # CPE2
         (0, 1),       # n2
         (0, 50),     # R3
@@ -432,5 +400,5 @@ if __name__ == "__main__":
 
     # No need to supply param_names explicitly; they are pulled from the circuit model.
 
-    interactive_nyquist_adjustment(eis_data, circuit_str, initial_guess, bounds, cycle=1)
+    interactive_nyquist_adjustment(eis_data, circuit_str, initial_guess, bounds, cycle=2)
     #--------------------------
