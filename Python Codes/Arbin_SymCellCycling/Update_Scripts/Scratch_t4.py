@@ -3,6 +3,7 @@ import re
 import pandas as pd
 import matplotlib.pyplot as plt
 from tkinter import filedialog
+import matplotlib
 
 # Provide the path to your lookup table Excel file.
 lookup_table_path = r'C:\Users\benja\OneDrive - Northeastern University\Spring 2025 Cell List.xlsx'
@@ -27,113 +28,22 @@ def sanitize_filename(name):
     return name
 
 
-# ==========================
-# 3. Function to process a cycling Excel file (for voltage vs capacity)
-# ==========================
-def process_and_plot(file_path, dataset_key, normalized=False):
+def generate_gitt_file_paths_keys(directory, lookup_table_path):
     """
-    Loads cycling data from an Excel file, selects the first cycle (after filtering)
-    and separates charge and discharge data.
-    """
-    capacities = {
-        'LFP': 2.0075 / 1000 / 100,  # mAh
-        'NMC': 3.212 / 1000 / 100,  # mAh
-        'Gr': 3.8544 / 1000 / 100  # mAh
-    }
-    weights_g = {
-        'LFP': 7.09 / 1000 * 1.606 / 1000,  # g
-        'NMC': 12.45 / 1000 * 1.606 / 1000,  # g
-        'Gr': 6.61 / 1000 * 2.01 / 1000  # g
-    }
-
-    # Select normalization factor (capacity or weight) based on chemistry
-    if normalized:
-        if 'LFP' in dataset_key:
-            norm_factor = capacities['LFP']
-        elif 'NMC' in dataset_key:
-            norm_factor = capacities['NMC']
-        elif 'Gr' in dataset_key:
-            norm_factor = capacities['Gr']
-        else:
-            raise ValueError("Dataset key does not match known capacities")
-    else:
-        if 'LFP' in dataset_key:
-            norm_factor = weights_g['LFP']
-        elif 'NMC' in dataset_key:
-            norm_factor = weights_g['NMC']
-        elif 'Gr' in dataset_key:
-            norm_factor = weights_g['Gr']
-        else:
-            raise ValueError("Dataset key does not match known capacities")
-
-    # Load the Excel file and select the sheet that starts with "Channel"
-    data = pd.ExcelFile(file_path)
-    data_sheets = [sheet for sheet in data.sheet_names if sheet.startswith('Channel')]
-    if not data_sheets:
-        raise ValueError(f"No sheet starting with 'Channel' found in {file_path}")
-    data_sheet = data_sheets[0]
-    sheet_data = data.parse(data_sheet)
-
-    # Filter out rows where Current equals zero
-    filtered_data = sheet_data[sheet_data['Current (A)'] != 0]
-
-    # Group data by Cycle Index and select the first cycle
-    grouped = list(filtered_data.groupby('Cycle Index'))
-    first_cycle = grouped[0][1]
-
-    # Remove potential transients by slicing off the first two and last two rows
-    charge_group = first_cycle[first_cycle['Current (A)'] > 0].iloc[2:-2]
-    discharge_group = first_cycle[first_cycle['Current (A)'] < 0].iloc[2:-2]
-
-    return charge_group, discharge_group, norm_factor
-
-
-# ==========================
-# 4. Helper: Determine color based on dataset key
-# ==========================
-color_map = {
-    'LFP': 'blue',
-    'NMC': 'green',
-    'Gr': 'red',
-    'LTO': 'purple'
-}
-
-
-def get_color(key):
-    """Return a color based on which chemistry substring is found in the key."""
-    for chem, col in color_map.items():
-        if chem in key:
-            return col
-    return 'black'
-
-
-# ==========================
-# 5. Function to generate file paths and keys from directory and lookup table
-# ==========================
-def extract_cell_identifier(filename):
-    """
-    Extract a substring that matches two letters followed by two digits (e.g., 'DB01')
-    from the filename.
-    """
-    match = re.search(r'([A-Z]{2}\d{2})', filename)
-    if match:
-        return match.group(1)
-    else:
-        return None
-
-
-def generate_file_paths_keys(directory, lookup_table_path):
-    """
-    Walk through the directory (and subdirectories) to find Excel files.
+    Walk through the directory (and subdirectories) to find Excel files related to GITT experiments.
+    A file is considered a GITT file if its filename contains "GITT" (case insensitive).
     For each file, extract the cell identifier and lookup additional details in the provided lookup table.
-    Returns a list of tuples: (full_path, key, cell_code)
+
+    Returns:
+      A list of tuples: (full_path, key, cell_code)
     """
     file_paths_keys = []
     lookup_df = pd.read_excel(lookup_table_path)
 
     for root, dirs, files in os.walk(directory):
         for file in files:
-            if file.endswith('.xlsx') and 'Rate_Test' in file:
+            # Check for Excel files that contain "GITT" in the filename (case insensitive)
+            if file.endswith('.xlsx') and 'GITT' in file.upper():
                 full_path = os.path.join(root, file)
                 cell_identifier = extract_cell_identifier(file)
                 if cell_identifier is None:
@@ -154,56 +64,27 @@ def generate_file_paths_keys(directory, lookup_table_path):
 
 
 # ==========================
-# 6. Function to plot voltage vs capacity for a given cell identifier group
+# 3. NEW: Process all cycles for Voltage vs. Capacity
 # ==========================
-def plot_grouped_files(group, normalized=False):
+def process_all_cycles_for_voltage_vs_capacity(file_path, dataset_key, normalized=False):
     """
-    Given a list of (file_path, key, cell_code) tuples (all sharing the same cell code),
-    load the cycling data for each file and plot their charge and discharge curves.
-    """
-    plt.figure(figsize=(10, 6))
-    for file_path, key, cell_code in group:
-        try:
-            charge, discharge, norm_factor = process_and_plot(file_path, key, normalized)
-        except Exception as e:
-            print(f"Error processing {file_path}: {e}")
-            continue
-        color = get_color(key)
-        if not charge.empty:
-            plt.plot(charge['Charge Capacity (Ah)'] / norm_factor, charge['Voltage (V)'],
-                     label=f'{key} (Charge)', linestyle='-', color=color)
-        if not discharge.empty:
-            plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor, discharge['Voltage (V)'],
-                     label=f'{key} (Discharge)', linestyle='--', color=color)
-    plt.xlabel('Capacity (Ah)')
-    plt.ylabel('Voltage (V)')
-    plt.title(f'Voltage vs Capacity for Cell Code {group[0][2]}')
-    plt.legend()
-    plt.grid()
-    plt.tight_layout()
-    save_name = f"{sanitize_filename(group[0][2])}_Voltage_vs_Capacity.png"
-    # plt.savefig(save_name, dpi=300)
-    plt.show()
-
-
-# ==========================
-# 7. New function: Process cycle data for capacity vs cycle plot
-# ==========================
-def process_cycle_data(file_path, dataset_key, normalized=False):
-    """
-    Process the Excel file to extract cycle-wise capacity data.
+    Loads cycling data from an Excel file, groups it by cycle,
+    and for each cycle separates the charge and discharge data.
+    For each cycle, transient portions are removed (first two and last two rows)
+    and the normalization factor is computed based on the dataset key.
     Returns:
-      cycle_numbers, charge_capacities, discharge_capacities, coulombic_efficiency
+      cycles_data: a list of tuples (cycle_index, charge_group, discharge_group)
+      norm_factor: the normalization factor (same for all cycles)
     """
     capacities = {
-        'LFP': 2.0075 / 1000 / 100,  # mAh
-        'NMC': 3.212 / 1000 / 100,  # mAh
-        'Gr': 3.8544 / 1000 / 100  # mAh
+        'LFP': 2.0075 / 1000 / 100,
+        'NMC': 3.212 / 1000 / 100,
+        'Gr': 3.8544 / 1000 / 100
     }
     weights_g = {
-        'LFP': 7.09 / 1000 * 1.606 / 1000,  # g
-        'NMC': 12.45 / 1000 * 1.606 / 1000,  # g
-        'Gr': 6.61 / 1000 * 2.01 / 1000  # g
+        'LFP': 7.09 / 1000 * 1.606 / 1000,
+        'NMC': 12.45 / 1000 * 1.606 / 1000,
+        'Gr': 6.61 / 1000 * 2.01 / 1000
     }
 
     if normalized:
@@ -230,16 +111,199 @@ def process_cycle_data(file_path, dataset_key, normalized=False):
     if not data_sheets:
         raise ValueError(f"No sheet starting with 'Channel' found in {file_path}")
     sheet_data = data.parse(data_sheets[0])
+    # Filter out rows where Current equals zero
     filtered_data = sheet_data[sheet_data['Current (A)'] != 0]
 
-    groups = list(filtered_data.groupby('Cycle Index'))
+    cycles_data = []
+    # Group by 'Cycle Index' and process each cycle
+    for cycle, group in filtered_data.groupby('Cycle Index'):
+        # Remove transients if possible
+        if len(group) > 4:
+            charge_group = group[group['Current (A)'] > 0].iloc[2:-2]
+            discharge_group = group[group['Current (A)'] < 0].iloc[2:-2]
+        else:
+            charge_group = group[group['Current (A)'] > 0]
+            discharge_group = group[group['Current (A)'] < 0]
+        cycles_data.append((cycle, charge_group, discharge_group))
+    return cycles_data, norm_factor
+
+
+# ==========================
+# 4. NEW: Process all cycles for Voltage vs. Time
+# ==========================
+def process_all_cycles_for_voltage_vs_time(file_path, dataset_key, normalized=False):
+    """
+    Loads cycling data from an Excel file, groups it by cycle,
+    and for each cycle separates the charge and discharge data.
+    Unlike the capacity functions, no trimming is done so that all steps (including rest steps)
+    are included. Uses the 'Test Time (s)' column.
+    Returns:
+      cycles_data: a list of tuples (cycle_index, charge_group, discharge_group)
+      norm_factor: the normalization factor (same for all cycles)
+    """
+    capacities = {
+        'LFP': 2.0075 / 1000 / 100,
+        'NMC': 3.212 / 1000 / 100,
+        'Gr': 3.8544 / 1000 / 100
+    }
+    weights_g = {
+        'LFP': 7.09 / 1000 * 1.606 / 1000,
+        'NMC': 12.45 / 1000 * 1.606 / 1000,
+        'Gr': 6.61 / 1000 * 2.01 / 1000
+    }
+
+    if normalized:
+        if 'LFP' in dataset_key:
+            norm_factor = capacities['LFP']
+        elif 'NMC' in dataset_key:
+            norm_factor = capacities['NMC']
+        elif 'Gr' in dataset_key:
+            norm_factor = capacities['Gr']
+        else:
+            raise ValueError("Dataset key does not match known capacities")
+    else:
+        if 'LFP' in dataset_key:
+            norm_factor = weights_g['LFP']
+        elif 'NMC' in dataset_key:
+            norm_factor = weights_g['NMC']
+        elif 'Gr' in dataset_key:
+            norm_factor = weights_g['Gr']
+        else:
+            raise ValueError("Dataset key does not match known capacities")
+
+    data = pd.ExcelFile(file_path)
+    data_sheets = [sheet for sheet in data.sheet_names if sheet.startswith('Channel')]
+    if not data_sheets:
+        raise ValueError(f"No sheet starting with 'Channel' found in {file_path}")
+    sheet_data = data.parse(data_sheets[0])
+
+    # Do NOT filter out any rows, so that all steps are included.
+    cycles_data = []
+    for cycle, group in sheet_data.groupby('Cycle Index'):
+        # For voltage vs time, we simply separate rows based on Current sign.
+        charge_group = group[group['Current (A)'] > 0]
+        discharge_group = group[group['Current (A)'] <= 0]
+        cycles_data.append((cycle, charge_group, discharge_group))
+    return cycles_data, norm_factor
+
+
+# ==========================
+# 5. Helper: Determine color based on dataset key
+# ==========================
+color_map = {
+    'LFP': 'blue',
+    'NMC': 'green',
+    'Gr': 'red',
+    'LTO': 'purple'
+}
+
+
+def get_color(key):
+    """Return a color based on which chemistry substring is found in the key."""
+    for chem, col in color_map.items():
+        if chem in key:
+            return col
+    return 'black'
+
+
+# ==========================
+# 6. Function to generate file paths and keys from directory and lookup table
+# ==========================
+def extract_cell_identifier(filename):
+    """
+    Extract a substring that matches two letters followed by two digits (e.g., 'DB01')
+    from the filename.
+    """
+    match = re.search(r'([A-Z]{2}\d{2})', filename)
+    if match:
+        return match.group(1)
+    else:
+        return None
+
+
+def generate_file_paths_keys(directory, lookup_table_path):
+    """
+    Walk through the directory (and subdirectories) to find Excel files.
+    For each file, extract the cell identifier and lookup additional details in the provided lookup table.
+    Returns a list of tuples: (full_path, key, cell_code)
+    """
+    file_paths_keys = []
+    lookup_df = pd.read_excel(lookup_table_path)
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if file.endswith('.xlsx') and 'Rate_Test' in file:
+                full_path = os.path.join(root, file)
+                cell_identifier = extract_cell_identifier(file)
+                if cell_identifier is None:
+                    print(f"Could not extract cell identifier from file: {file}")
+                    continue
+                cell_code = cell_identifier[:2]
+                lookup_row = lookup_df[lookup_df['Cell Code'] == cell_code]
+                if lookup_row.empty:
+                    print(f"Cell code {cell_code} not found in lookup table for file: {file}")
+                    continue
+                row = lookup_row.iloc[0]
+                anode = row['Anode'] if not pd.isna(row['Anode']) else ''
+                cathode = row['Cathode'] if not pd.isna(row['Cathode']) else ''
+                electrolyte = row['Electrolyte'] if not pd.isna(row['Electrolyte']) else ''
+                key = f"{anode}|{cathode} - {electrolyte} Elyte ({cell_identifier})"
+                file_paths_keys.append((full_path, key, cell_code))
+    return file_paths_keys
+
+# ==========================
+# 7. Plot Voltage vs. Capacity for all cycles with distinct colors for each file
+# ==========================
+def process_cycle_data(file_path, dataset_key, normalized=False):
+    """
+    Process the Excel file to extract cycle-wise capacity data.
+    Returns:
+      cycle_numbers, charge_capacities, discharge_capacities, coulombic_efficiency
+    """
+    capacities = {
+        'LFP': 2.0075 / 1000 / 100,
+        'NMC': 3.212 / 1000 / 100,
+        'Gr': 3.8544 / 1000 / 100
+    }
+    weights_g = {
+        'LFP': 7.09 / 1000 * 1.606 / 1000,
+        'NMC': 12.45 / 1000 * 1.606 / 1000,
+        'Gr': 6.61 / 1000 * 2.01 / 1000
+    }
+
+    if normalized:
+        if 'LFP' in dataset_key:
+            norm_factor = capacities['LFP']
+        elif 'NMC' in dataset_key:
+            norm_factor = capacities['NMC']
+        elif 'Gr' in dataset_key:
+            norm_factor = capacities['Gr']
+        else:
+            raise ValueError("Dataset key does not match known capacities")
+    else:
+        if 'LFP' in dataset_key:
+            norm_factor = weights_g['LFP']
+        elif 'NMC' in dataset_key:
+            norm_factor = weights_g['NMC']
+        elif 'Gr' in dataset_key:
+            norm_factor = weights_g['Gr']
+        else:
+            raise ValueError("Dataset key does not match known capacities")
+
+    data = pd.ExcelFile(file_path)
+    data_sheets = [sheet for sheet in data.sheet_names if sheet.startswith('Channel')]
+    if not data_sheets:
+        raise ValueError(f"No sheet starting with 'Channel' found in {file_path}")
+    sheet_data = data.parse(data_sheets[0])
+    # Filter out rows where Current equals zero
+    filtered_data = sheet_data[sheet_data['Current (A)'] != 0]
+
     cycle_numbers = []
     charge_capacities = []
     discharge_capacities = []
     coulombic_efficiency = []
 
-    for cycle, group in groups:
-        # Optionally, remove transients (e.g., group = group.iloc[2:-2] if desired)
+    # Group by 'Cycle Index' and process each cycle
+    for cycle, group in filtered_data.groupby('Cycle Index'):
         charge_data = group[group['Current (A)'] > 0]
         discharge_data = group[group['Current (A)'] < 0]
         if not charge_data.empty and not discharge_data.empty:
@@ -252,26 +316,60 @@ def process_cycle_data(file_path, dataset_key, normalized=False):
                 coulombic_efficiency.append((discharge_cap / charge_cap) * 100)
     return cycle_numbers, charge_capacities, discharge_capacities, coulombic_efficiency
 
+def plot_grouped_files(group, normalized=False):
+    """
+    For each file in the group, process all cycles and plot their charge and discharge curves
+    (Voltage vs. Capacity). Each cycle is plotted with a label including its cycle number.
+    All cycles for all files in the cell are shown in one figure.
+    """
+    plt.figure(figsize=(10, 6))
+    # One color per file
+    cmap = matplotlib.colormaps["tab10"].resampled(len(group))
+    for file_idx, (file_path, key, cell_code) in enumerate(group):
+        color = cmap(file_idx)
+        try:
+            cycles_data, norm_factor = process_all_cycles_for_voltage_vs_capacity(file_path, key, normalized)
+        except Exception as e:
+            print(f"Error processing {file_path} for voltage vs capacity: {e}")
+            continue
+        # Plot each cycle's charge and discharge data.
+        for cycle, charge, discharge in cycles_data:
+            # Label includes file key and cycle number
+            if not charge.empty:
+                plt.plot(charge['Charge Capacity (Ah)'] / norm_factor, charge['Voltage (V)'],
+                         label=f'{key} Cycle {cycle} (Charge)', linestyle='-', color=color)
+            if not discharge.empty:
+                plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor, discharge['Voltage (V)'],
+                         label=f'{key} Cycle {cycle} (Discharge)', linestyle='--', color=color)
+    plt.xlabel('Capacity (Ah)')
+    plt.ylabel('Voltage (V)')
+    plt.title(f'Voltage vs Capacity for Cell Code {group[0][2]} (All Cycles)')
+    plt.legend(fontsize='small', ncol=2)
+    plt.grid()
+    plt.tight_layout()
+    plt.show()
+
 
 # ==========================
-# 8. New function: Plot capacity (mAh/g) vs Cycle Number Comparison with vertical lines
+# 8. Plot Capacity vs Cycle Number (with vertical lines)
+# (This function already processes all cycles.)
 # ==========================
 def plot_capacity_vs_cycle(group, normalized=False):
     """
-    Given a list of (file_path, key, cell_code) tuples (all sharing the same cell code),
-    this function plots capacity (mAh/g) vs cycle number with vertical dashed lines.
+    For each file in the group, extract cycle-wise capacity data and plot them
+    versus cycle number. Vertical dashed lines mark specified cycle numbers.
     """
     plt.figure(figsize=(10, 6))
-    colors = plt.cm.tab10.colors
+    colors = matplotlib.colormaps["tab10"].resampled(len(group)).colors
     for i, (file_path, key, cell_code) in enumerate(group):
         try:
             cycles, charge_caps, discharge_caps, _ = process_cycle_data(file_path, key, normalized)
         except Exception as e:
             print(f"Error processing {file_path} for cycle data: {e}")
             continue
-        plt.plot(cycles, charge_caps, marker='o', linestyle='-', color=colors[i % len(colors)],
+        plt.plot(cycles, charge_caps, marker='o', linestyle='-', color=colors[i],
                  label=f'{key} (Charge)')
-        plt.plot(cycles, discharge_caps, marker='x', linestyle='--', color=colors[i % len(colors)],
+        plt.plot(cycles, discharge_caps, marker='x', linestyle='--', color=colors[i],
                  label=f'{key} (Discharge)')
 
     plt.xlabel('Cycle Number')
@@ -282,25 +380,102 @@ def plot_capacity_vs_cycle(group, normalized=False):
         plt.ylabel('Capacity (mAh/g)')
         plt.ylim(0, 200)
     plt.title(f'Capacity vs Cycle Number for Cell Code {group[0][2]}')
-
-    # Add vertical dashed lines at specified cycle numbers
     for cycle in [1.5, 4.5, 7.5, 10.5, 13.5, 16.5, 19.5]:
         plt.axvline(x=cycle, color='black', linestyle='--')
-
-    plt.legend()
+    plt.legend(fontsize='small', ncol=2)
     plt.grid(True)
     plt.tight_layout()
     plt.show()
 
 
 # ==========================
-# 9. Main execution
+# 9. Plot Voltage vs. Time for all cycles with markers and limit 5 files per cell
+# ==========================
+def plot_voltage_vs_time(group, normalized=False):
+    """
+    For up to 5 files in the group, process all cycles and plot their Voltage vs. Test Time.
+    Charging curves use circle markers with a solid line.
+    Discharging curves use square markers with a dashed line.
+    Each cycle is plotted (with its own label showing the cycle number).
+    """
+    plt.figure(figsize=(10, 6))
+    # Limit number of files to 5 per cell
+    cmap = matplotlib.colormaps["tab10"].resampled(min(len(group), 5))
+    for file_idx, (file_path, key, cell_code) in enumerate(group[:5]):
+        color = cmap(file_idx)
+        try:
+            cycles_data, _ = process_all_cycles_for_voltage_vs_time(file_path, key, normalized)
+        except Exception as e:
+            print(f"Error processing {file_path} for voltage vs time: {e}")
+            continue
+        for cycle, charge, discharge in cycles_data:
+            if not charge.empty:
+                if 'Test Time (s)' in charge.columns:
+                    plt.plot(charge['Test Time (s)'], charge['Voltage (V)'],
+                             label=f'{key} Cycle {cycle} (Charge)', marker='o', linestyle='-', color=color)
+                else:
+                    print(f"'Test Time (s)' column not found in charge data for {file_path}")
+            if not discharge.empty:
+                if 'Test Time (s)' in discharge.columns:
+                    plt.plot(discharge['Test Time (s)'], discharge['Voltage (V)'],
+                             label=f'{key} Cycle {cycle} (Discharge)', marker='s', linestyle='--', color=color)
+                else:
+                    print(f"'Test Time (s)' column not found in discharge data for {file_path}")
+    plt.xlabel('Test Time (s)')
+    plt.ylabel('Voltage (V)')
+    plt.title(f'Voltage vs Time for Cell Code {group[0][2]} (All Cycles)')
+    plt.legend(fontsize='small', ncol=2)
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_gitt_file(file_path, dataset_key, normalized=False):
+    """
+    Plots a GITT experiment file individually using Voltage vs. Test Time.
+    This function assumes the file contains columns 'Test Time (s)' and 'Voltage (V)'.
+    It does not group by cycle; it simply plots the entire time series.
+    """
+    try:
+        data = pd.ExcelFile(file_path)
+        data_sheets = [sheet for sheet in data.sheet_names if sheet.startswith('Channel')]
+        if not data_sheets:
+            raise ValueError(f"No sheet starting with 'Channel' found in {file_path}")
+        sheet_data = data.parse(data_sheets[0])
+    except Exception as e:
+        print(f"Error loading {file_path}: {e}")
+        return
+
+    if 'Test Time (s)' not in sheet_data.columns or 'Voltage (V)' not in sheet_data.columns:
+        print(f"Columns 'Test Time (s)' or 'Voltage (V)' not found in {file_path}")
+        return
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(sheet_data['Test Time (s)'], sheet_data['Voltage (V)'],
+             marker='o', linestyle='-', color='blue')
+    plt.xlabel('Test Time (s)')
+    plt.ylabel('Voltage (V)')
+    plt.title(f'GITT Experiment: {dataset_key}')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
+# ==========================
+# 10. Main Execution
 # ==========================
 file_paths_keys = generate_file_paths_keys(os.getcwd(), lookup_table_path)
+
 
 print("Generated file_paths_keys:")
 for full_path, key, cell_code in file_paths_keys:
     print(f"File: {full_path}\nKey: {key}\nCell Code: {cell_code}\n")
+
+gitt_file_paths_keys = generate_gitt_file_paths_keys(os.getcwd(), lookup_table_path)
+for full_path, key, cell_code in gitt_file_paths_keys:
+    print(f"File: {full_path}\nKey: {key}\nCell Code: {cell_code}\n")
+    # Then call your GITT-specific plotting function, for example:
+    plot_gitt_file(full_path, key, normalized=False)
 
 if not file_paths_keys:
     print("No valid Excel files were found. Please check your directory and filtering criteria.")
@@ -310,11 +485,16 @@ else:
     for full_path, key, cell_code in file_paths_keys:
         grouped_files.setdefault(cell_code, []).append((full_path, key, cell_code))
 
-    # For each group, first plot the voltage vs capacity curves...
+    # For each cell group, generate the three plots.
     for cell_code, group in grouped_files.items():
-        print(f"Plotting voltage vs capacity for {len(group)} files for cell code {cell_code}...")
+        print(f"Plotting Voltage vs Capacity for {len(group)} files for cell code {cell_code} (all cycles)...")
         plot_grouped_files(group, normalized=False)
 
-        # ...and then plot the capacity (mAh/g) vs cycle number comparison (with vertical lines).
-        print(f"Plotting capacity vs cycle number for {len(group)} files for cell code {cell_code}...")
+        print(f"Plotting Capacity vs Cycle Number for {len(group)} files for cell code {cell_code}...")
         plot_capacity_vs_cycle(group, normalized=False)
+
+        print(
+            f"Plotting Voltage vs Time for up to {min(len(group), 5)} files for cell code {cell_code} (all cycles)...")
+        plot_voltage_vs_time(group, normalized=False)
+
+
