@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from tkinter import filedialog
 import matplotlib
 
+
 # Provide the path to your lookup table Excel file.
 lookup_table_path = r'C:\Users\benja\OneDrive - Northeastern University\Spring 2025 Cell List.xlsx'
 # lookup_table_path = filedialog.askopenfilename(title="Select Lookup Table")
@@ -231,7 +232,7 @@ def generate_file_paths_keys(directory, lookup_table_path):
     lookup_df = pd.read_excel(lookup_table_path)
     for root, dirs, files in os.walk(directory):
         for file in files:
-            if file.endswith('.xlsx') and 'Rate_Test' in file:
+            if file.endswith('.xlsx') and 'Rate_Test' or 'RateTest' in file:
                 full_path = os.path.join(root, file)
                 cell_identifier = extract_cell_identifier(file)
                 if cell_identifier is None:
@@ -461,21 +462,143 @@ def plot_gitt_file(file_path, dataset_key, normalized=False):
     plt.show()
 
 
+def compare_cells_on_same_plot(file_tuples, normalized=False):
+    """
+    Compare multiple cells on one plot:
+      - Left y-axis: Capacity (mAh/g) vs. Cycle Number
+      - Right y-axis: Coulombic Efficiency (%) vs. Cycle Number
+      - No grid lines and vertical dashed lines at specified cycle indices
+    Args:
+        file_tuples (list): A list of (full_path, key, cell_code) tuples.
+        normalized (bool): Whether to use normalization.
+    """
+    if not file_tuples:
+        raise ValueError("No file tuples provided for comparison.")
+
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+    ax2 = ax1.twinx()
+
+    # Use the new colormap API and resample to the number of cells provided
+    cmap = matplotlib.colormaps["tab10"].resampled(len(file_tuples))
+
+    for i, tup in enumerate(file_tuples):
+        # Ensure each tuple has exactly three elements
+        if not (isinstance(tup, tuple) and len(tup) == 3):
+            print(f"Skipping invalid tuple at index {i}: {tup}")
+            continue
+
+        file_path, key, cell_code = tup
+        try:
+            cycles, charge_caps, discharge_caps, ce = process_cycle_data(file_path, key, normalized)
+        except Exception as e:
+            print(f"Error processing {file_path}: {e}")
+            continue
+
+        color = cmap(i)
+        # Plot capacity on left y-axis
+        ax1.scatter(cycles, charge_caps, marker='o', color=color,
+                 label=f'{key} (Charge)')
+        ax1.scatter(cycles, discharge_caps, marker='x', color=color,
+                 label=f'{key} (Discharge)')
+        # Plot coulombic efficiency on right y-axis
+        ax2.scatter(cycles, ce, marker='d', color=color,
+                 label=f'{key} (CE)')
+
+    # Remove grid lines
+    ax1.grid(False)
+    ax2.grid(False)
+
+    # Add vertical dashed lines at specified cycle numbers
+    for cycle in [1.5, 4.5, 7.5, 10.5, 13.5, 16.5, 19.5]:
+        ax1.axvline(x=cycle, color='black', linestyle='--')
+
+    ax1.set_xlabel('Cycle Number')
+    ax1.set_ylim(0, 200)
+    ax1.set_xlim(0, 25)
+    if normalized:
+        ax1.set_ylabel('Capacity (%)')
+    else:
+        ax1.set_ylabel('Capacity (mAh/g)')
+    ax2.set_ylabel('Coulombic Efficiency (%)')
+    ax2.set_ylim(0, 120)
+
+    # Combine legends from both axes
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax2.legend(lines1 + lines2, labels1 + labels2, loc='lower left', fontsize='small')
+
+    plt.title('Capacity and Coulombic Efficiency vs. Cycle Number')
+    plt.tight_layout()
+    plt.show()
+
+
+def get_tuples_by_cell_code(file_paths_keys, target_cell_code):
+    """
+    Search the list of (full_path, key, cell_code) tuples for a given cell_code.
+
+    Args:
+        file_paths_keys (list): A list of (full_path, key, cell_code) tuples.
+        target_cell_code (str): The cell code to search for (e.g., 'DN').
+
+    Returns:
+        list: A list of all matching (full_path, key, cell_code) tuples.
+              If no matches are found, returns an empty list.
+    """
+    matches = []
+    for (full_path, key, cell_code) in file_paths_keys:
+        if  target_cell_code in key:
+            matches.append((full_path, key, cell_code))
+    return matches
+
+def get_tuples_by_full_cell_code(file_paths_keys, pattern):
+    """
+    Filter a list of (full_path, key, cell_identifier) tuples by matching the full cell identifier
+    against a given regex pattern. This version will "unwrap" an item if it’s a list containing a single tuple.
+
+    Args:
+        file_paths_keys (list): A list of tuples (or lists containing a tuple) in the form (full_path, key, cell_identifier)
+        pattern (str): A regular expression pattern to match the full cell identifier.
+                       (Uses re.fullmatch, so the entire cell_identifier must match.)
+
+    Returns:
+        list: A list of all tuples that match the pattern.
+    """
+    matches = []
+    for index, item in enumerate(file_paths_keys):
+        # Unwrap if item is a list with one element
+        if isinstance(item, list):
+            if len(item) == 1 and isinstance(item[0], tuple) and len(item[0]) == 3:
+                tup = item[0]
+            else:
+                print(f"Skipping invalid tuple at index {index}: {item}")
+                continue
+        elif isinstance(item, tuple) and len(item) == 3:
+            tup = item
+        else:
+            print(f"Skipping invalid tuple at index {index}: {item}")
+            continue
+
+        full_path, key, cell_identifier = tup
+        if pattern in key:
+            matches.append(tup)
+    return matches
+
+
+
 # ==========================
 # 10. Main Execution
 # ==========================
 file_paths_keys = generate_file_paths_keys(os.getcwd(), lookup_table_path)
 
-
 print("Generated file_paths_keys:")
 for full_path, key, cell_code in file_paths_keys:
     print(f"File: {full_path}\nKey: {key}\nCell Code: {cell_code}\n")
 
-gitt_file_paths_keys = generate_gitt_file_paths_keys(os.getcwd(), lookup_table_path)
-for full_path, key, cell_code in gitt_file_paths_keys:
-    print(f"File: {full_path}\nKey: {key}\nCell Code: {cell_code}\n")
-    # Then call your GITT-specific plotting function, for example:
-    plot_gitt_file(full_path, key, normalized=False)
+# gitt_file_paths_keys = generate_gitt_file_paths_keys(os.getcwd(), lookup_table_path)
+# for full_path, key, cell_code in gitt_file_paths_keys:
+#     print(f"File: {full_path}\nKey: {key}\nCell Code: {cell_code}\n")
+#     # Then call your GITT-specific plotting function, for example:
+#     plot_gitt_file(full_path, key, normalized=False)
 
 if not file_paths_keys:
     print("No valid Excel files were found. Please check your directory and filtering criteria.")
@@ -487,14 +610,71 @@ else:
 
     # For each cell group, generate the three plots.
     for cell_code, group in grouped_files.items():
-        print(f"Plotting Voltage vs Capacity for {len(group)} files for cell code {cell_code} (all cycles)...")
-        plot_grouped_files(group, normalized=False)
+        # print(f"Plotting Voltage vs Capacity for {len(group)} files for cell code {cell_code} (all cycles)...")
+        # plot_grouped_files(group, normalized=False)
 
         print(f"Plotting Capacity vs Cycle Number for {len(group)} files for cell code {cell_code}...")
-        plot_capacity_vs_cycle(group, normalized=False)
+        #plot_capacity_vs_cycle(group, normalized=False)
 
-        print(
-            f"Plotting Voltage vs Time for up to {min(len(group), 5)} files for cell code {cell_code} (all cycles)...")
-        plot_voltage_vs_time(group, normalized=False)
+        # print(
+        #     f"Plotting Voltage vs Time for up to {min(len(group), 5)} files for cell code {cell_code} (all cycles)...")
+        # plot_voltage_vs_time(group, normalized=False)
+filtered_tuples = get_tuples_by_cell_code(file_paths_keys, r'DQ01')
+#print("Filtered tuples:", filtered_tuples)
+#compare_cells_on_same_plot(filtered_tuples, normalized=False)
+
+# files_to_compare = [
+#     get_tuples_by_cell_code(file_paths_keys, r'DN02')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DO03')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DP01')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DQ01')[0],
+# ]
+# compare_cells_on_same_plot(files_to_compare, normalized=False)
+#
+# files_to_compare = [
+#     get_tuples_by_cell_code(file_paths_keys, r'DR02')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DS03')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DT03')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DU02')[0],
+# ]
+# compare_cells_on_same_plot(files_to_compare, normalized=False)
+#
+# files_to_compare = [
+#     get_tuples_by_cell_code(file_paths_keys, r'DZ03')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'EA02')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'EB03')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],
+# ]
+# compare_cells_on_same_plot(files_to_compare, normalized=False)
+#
+# files_to_compare = [
+#     get_tuples_by_cell_code(file_paths_keys, r'DN01')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DR02')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DZ03')[0],
+# ]
+# compare_cells_on_same_plot(files_to_compare, normalized=False)
+#
+# files_to_compare = [
+#     get_tuples_by_cell_code(file_paths_keys, r'DO03')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DS03')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'EA02')[0],
+# ]
+# compare_cells_on_same_plot(files_to_compare, normalized=False)
+#
+# files_to_compare = [
+#     get_tuples_by_cell_code(file_paths_keys, r'DP01')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DT03')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'EB03')[0],
+# ]
+# compare_cells_on_same_plot(files_to_compare, normalized=False)
+
+files_to_compare = [
+    get_tuples_by_cell_code(file_paths_keys, r'DQ01')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'DU02')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'DD03')[0],
+]
+compare_cells_on_same_plot(files_to_compare, normalized=False)
+
 
 
