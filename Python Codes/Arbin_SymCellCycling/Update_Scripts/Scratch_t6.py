@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 from tkinter import filedialog
 import matplotlib
 
-
 # Provide the path to your lookup table Excel file.
 lookup_table_path = r'C:\Users\benja\OneDrive - Northeastern University\Spring 2025 Cell List.xlsx'
 # lookup_table_path = filedialog.askopenfilename(title="Select Lookup Table")
@@ -19,7 +18,7 @@ os.chdir(search_directory)
 
 
 # ==========================
-# 2. Helper function to sanitize filenames
+# 2. Helper functions
 # ==========================
 def sanitize_filename(name):
     """Sanitize a string to create a valid filename by replacing invalid characters."""
@@ -29,6 +28,24 @@ def sanitize_filename(name):
     return name
 
 
+def reset_cycle_capacity(df, capacity_column, threshold=1e-6):
+    """
+    Reset the capacity values in a DataFrame for a given column.
+    If the first value is greater than a threshold (i.e. not close to zero),
+    subtract that baseline from all entries.
+    """
+    if df.empty:
+        return df
+    baseline = df[capacity_column].iloc[0]
+    if abs(baseline) > threshold:
+        df = df.copy()  # avoid modifying the original DataFrame
+        df[capacity_column] = df[capacity_column] - baseline
+    return df
+
+
+# ==========================
+# 3. Generate file paths and keys for GITT experiments
+# ==========================
 def generate_gitt_file_paths_keys(directory, lookup_table_path):
     """
     Walk through the directory (and subdirectories) to find Excel files related to GITT experiments.
@@ -65,14 +82,15 @@ def generate_gitt_file_paths_keys(directory, lookup_table_path):
 
 
 # ==========================
-# 3. NEW: Process all cycles for Voltage vs. Capacity
+# 4. Process all cycles for Voltage vs. Capacity (with capacity reset)
 # ==========================
 def process_all_cycles_for_voltage_vs_capacity(file_path, dataset_key, normalized=False):
     """
     Loads cycling data from an Excel file, groups it by cycle,
     and for each cycle separates the charge and discharge data.
     For each cycle, transient portions are removed (first two and last two rows)
-    and the normalization factor is computed based on the dataset key.
+    and the capacity is reset to start at zero.
+    The normalization factor is computed based on the dataset key.
     Returns:
       cycles_data: a list of tuples (cycle_index, charge_group, discharge_group)
       norm_factor: the normalization factor (same for all cycles)
@@ -118,19 +136,25 @@ def process_all_cycles_for_voltage_vs_capacity(file_path, dataset_key, normalize
     cycles_data = []
     # Group by 'Cycle Index' and process each cycle
     for cycle, group in filtered_data.groupby('Cycle Index'):
-        # Remove transients if possible
         if len(group) > 4:
             charge_group = group[group['Current (A)'] > 0].iloc[2:-2]
             discharge_group = group[group['Current (A)'] < 0].iloc[2:-2]
         else:
             charge_group = group[group['Current (A)'] > 0]
             discharge_group = group[group['Current (A)'] < 0]
+
+        # Reset the capacity columns so that each cycle starts at zero
+        if not charge_group.empty and 'Charge Capacity (Ah)' in charge_group.columns:
+            charge_group = reset_cycle_capacity(charge_group, 'Charge Capacity (Ah)')
+        if not discharge_group.empty and 'Discharge Capacity (Ah)' in discharge_group.columns:
+            discharge_group = reset_cycle_capacity(discharge_group, 'Discharge Capacity (Ah)')
+
         cycles_data.append((cycle, charge_group, discharge_group))
     return cycles_data, norm_factor
 
 
 # ==========================
-# 4. NEW: Process all cycles for Voltage vs. Time
+# 5. Process all cycles for Voltage vs. Time
 # ==========================
 def process_all_cycles_for_voltage_vs_time(file_path, dataset_key, normalized=False):
     """
@@ -189,7 +213,7 @@ def process_all_cycles_for_voltage_vs_time(file_path, dataset_key, normalized=Fa
 
 
 # ==========================
-# 5. Helper: Determine color based on dataset key
+# 6. Helper: Determine color based on dataset key
 # ==========================
 color_map = {
     'LFP': 'blue',
@@ -208,7 +232,7 @@ def get_color(key):
 
 
 # ==========================
-# 6. Function to generate file paths and keys from directory and lookup table
+# 7. Helper: Extract cell identifier from filename
 # ==========================
 def extract_cell_identifier(filename):
     match = re.search(r'([A-Z]{2}\d{2})', filename)
@@ -228,7 +252,7 @@ def generate_file_paths_keys(directory, lookup_table_path):
     lookup_df = pd.read_excel(lookup_table_path)
     for root, dirs, files in os.walk(directory):
         for file in files:
-            if file.endswith('.xlsx') and 'Rate_Test' or 'RateTest' in file:
+            if file.endswith('.xlsx') and ('Rate_Test' in file or 'RateTest' in file):
                 full_path = os.path.join(root, file)
                 cell_identifier = extract_cell_identifier(file)
                 if cell_identifier is None:
@@ -247,12 +271,14 @@ def generate_file_paths_keys(directory, lookup_table_path):
                 file_paths_keys.append((full_path, key, cell_code))
     return file_paths_keys
 
+
 # ==========================
-# 7. Plot Voltage vs. Capacity for all cycles with distinct colors for each file
+# 8. Process cycle data for Capacity vs Cycle Number (with capacity reset)
 # ==========================
 def process_cycle_data(file_path, dataset_key, normalized=False):
     """
     Process the Excel file to extract cycle-wise capacity data.
+    Resets the capacity data for each cycle so that it starts at zero.
     Returns:
       cycle_numbers, charge_capacities, discharge_capacities, coulombic_efficiency
     """
@@ -303,6 +329,13 @@ def process_cycle_data(file_path, dataset_key, normalized=False):
     for cycle, group in filtered_data.groupby('Cycle Index'):
         charge_data = group[group['Current (A)'] > 0]
         discharge_data = group[group['Current (A)'] < 0]
+
+        # Reset capacities so that they start at zero for each cycle
+        if not charge_data.empty and 'Charge Capacity (Ah)' in charge_data.columns:
+            charge_data = reset_cycle_capacity(charge_data, 'Charge Capacity (Ah)')
+        if not discharge_data.empty and 'Discharge Capacity (Ah)' in discharge_data.columns:
+            discharge_data = reset_cycle_capacity(discharge_data, 'Discharge Capacity (Ah)')
+
         if not charge_data.empty and not discharge_data.empty:
             charge_cap = charge_data['Charge Capacity (Ah)'].max()
             discharge_cap = discharge_data['Discharge Capacity (Ah)'].max()
@@ -313,6 +346,10 @@ def process_cycle_data(file_path, dataset_key, normalized=False):
                 coulombic_efficiency.append((discharge_cap / charge_cap) * 100)
     return cycle_numbers, charge_capacities, discharge_capacities, coulombic_efficiency
 
+
+# ==========================
+# 9. Plot Voltage vs. Capacity for all cycles with distinct colors for each file
+# ==========================
 def plot_grouped_files(group, normalized=False):
     """
     For each file in the group, process all cycles and plot their charge and discharge curves
@@ -332,13 +369,13 @@ def plot_grouped_files(group, normalized=False):
         # Plot each cycle's charge and discharge data.
         for cycle, charge, discharge in cycles_data:
             # Label includes file key and cycle number
-            if cycle in (1,2,5,10,25,50):
+            if cycle in (1, 2, 5, 10, 25, 50):
                 if not charge.empty:
                     plt.plot(charge['Charge Capacity (Ah)'] / norm_factor, charge['Voltage (V)'],
-                         label=f'{key} Cycle {cycle} (Charge)', linestyle='-', color=color)
+                             label=f'{key} Cycle {cycle} (Charge)', linestyle='-', color=color)
                 if not discharge.empty:
                     plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor, discharge['Voltage (V)'],
-                         label=f'{key} Cycle {cycle} (Discharge)', linestyle='--', color=color)
+                             label=f'{key} Cycle {cycle} (Discharge)', linestyle='--', color=color)
     plt.xlabel('Capacity (Ah)')
     plt.ylabel('Voltage (V)')
     plt.title(f'Voltage vs Capacity for Cell Code {group[0][2]} (All Cycles)')
@@ -349,7 +386,7 @@ def plot_grouped_files(group, normalized=False):
 
 
 # ==========================
-# 8. Plot Capacity vs Cycle Number (with vertical lines)
+# 10. Plot Capacity vs Cycle Number (with vertical lines)
 # (This function already processes all cycles.)
 # ==========================
 def plot_capacity_vs_cycle(group, normalized=False):
@@ -383,14 +420,14 @@ def plot_capacity_vs_cycle(group, normalized=False):
     plt.legend(fontsize='small', ncol=2)
     plt.grid(True)
     plt.tight_layout()
-    save_path = os.getcwd()+'/figures/'+f'{sanitize_filename(group[0][2])}_Capacity_vs_Cycle.png'
-    plt.savefig(save_path, dpi=300,)
+    save_path = os.getcwd() + '/figures/' + f'{sanitize_filename(group[0][2])}_Capacity_vs_Cycle.png'
+    plt.savefig(save_path, dpi=300, )
     plt.close()
-    #plt.show()
+    # plt.show()
 
 
 # ==========================
-# 9. Plot Voltage vs. Time for all cycles with markers and limit 5 files per cell
+# 11. Plot Voltage vs. Time for all cycles with markers and limit 5 files per cell
 # ==========================
 def plot_voltage_vs_time(group, normalized=False):
     """
@@ -497,12 +534,12 @@ def compare_cells_on_same_plot(file_tuples, normalized=False):
         color = cmap(i)
         # Plot capacity on left y-axis
         ax1.scatter(cycles, charge_caps, marker='o', color=color,
-                 label=f'{key} (Charge)')
+                    label=f'{key} (Charge)')
         ax1.scatter(cycles, discharge_caps, marker='x', color=color,
-                 label=f'{key} (Discharge)')
+                    label=f'{key} (Discharge)')
         # Plot coulombic efficiency on right y-axis
         ax2.scatter(cycles, ce, marker='d', color=color,
-                 label=f'{key} (CE)')
+                    label=f'{key} (CE)')
 
     # Remove grid lines
     ax1.grid(False)
@@ -514,7 +551,7 @@ def compare_cells_on_same_plot(file_tuples, normalized=False):
 
     ax1.set_xlabel('Cycle Number')
     ax1.set_ylim(0, 200)
-    ax1.set_xlim(0, 25)
+    ax1.set_xlim(0, 50)
     if normalized:
         ax1.set_ylabel('Capacity (%)')
     else:
@@ -525,7 +562,7 @@ def compare_cells_on_same_plot(file_tuples, normalized=False):
     # Combine legends from both axes
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
-    ax2.legend(lines1 + lines2, labels1 + labels2, loc='lower left', fontsize='small')
+    ax2.legend(lines1 + lines2, labels1 + labels2, loc='upper center', bbox_to_anchor=(0.5, -0.15), fontsize='small', ncol=2)
 
     plt.title('Capacity and Coulombic Efficiency vs. Cycle Number')
     plt.tight_layout()
@@ -546,9 +583,10 @@ def get_tuples_by_cell_code(file_paths_keys, target_cell_code):
     """
     matches = []
     for (full_path, key, cell_code) in file_paths_keys:
-        if  target_cell_code in key:
+        if target_cell_code in key:
             matches.append((full_path, key, cell_code))
     return matches
+
 
 def get_tuples_by_full_cell_code(file_paths_keys, pattern):
     """
@@ -584,9 +622,8 @@ def get_tuples_by_full_cell_code(file_paths_keys, pattern):
     return matches
 
 
-
 # ==========================
-# 10. Main Execution
+# 12. Main Execution
 # ==========================
 file_paths_keys = generate_file_paths_keys(os.getcwd(), lookup_table_path)
 
@@ -615,15 +652,16 @@ else:
 
         print(f"Plotting Capacity vs Cycle Number for {len(group)} files for cell code {cell_code}...")
         #plot_capacity_vs_cycle(group, normalized=False)
-        #plt.savefig(f'Capacity_vs_Cycle_{cell_code}.png')
+        # plt.savefig(f'Capacity_vs_Cycle_{cell_code}.png')
 
         # print(
         #     f"Plotting Voltage vs Time for up to {min(len(group), 5)} files for cell code {cell_code} (all cycles)...")
         # plot_voltage_vs_time(group, normalized=False)
-#filtered_tuples = get_tuples_by_cell_code(file_paths_keys, r'DQ01')
-#print("Filtered tuples:", filtered_tuples)
-#compare_cells_on_same_plot(filtered_tuples, normalized=False)
+# filtered_tuples = get_tuples_by_cell_code(file_paths_keys, r'DQ01')
+# print("Filtered tuples:", filtered_tuples)
+# compare_cells_on_same_plot(filtered_tuples, normalized=False)
 
+#DT14 Set
 # files_to_compare = [
 #     get_tuples_by_cell_code(file_paths_keys, r'DN02')[0],
 #     get_tuples_by_cell_code(file_paths_keys, r'DO03')[0],
@@ -632,19 +670,17 @@ else:
 #     get_tuples_by_cell_code(file_paths_keys, r'DD03')[0],
 # ]
 # compare_cells_on_same_plot(files_to_compare, normalized=False)
-
-files_to_compare = [
-    get_tuples_by_cell_code(file_paths_keys, r'DR02')[0],
-    get_tuples_by_cell_code(file_paths_keys, r'DS03')[0],
-    get_tuples_by_cell_code(file_paths_keys, r'DT03')[0],
-    get_tuples_by_cell_code(file_paths_keys, r'DU02')[0],
-    get_tuples_by_cell_code(file_paths_keys, r'EG02')[0],
-    get_tuples_by_cell_code(file_paths_keys, r'EH02')[0],
-    get_tuples_by_cell_code(file_paths_keys, r'EI03')[0],
-    get_tuples_by_cell_code(file_paths_keys, r'EJ03')[0],
-]
-compare_cells_on_same_plot(files_to_compare, normalized=False)
-
+#
+# #DTF14 Set
+# files_to_compare = [
+#     get_tuples_by_cell_code(file_paths_keys, r'DR02')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DS03')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DT03')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DU02')[0],
+# ]
+# compare_cells_on_same_plot(files_to_compare, normalized=False)
+#
+# #MF91 Set
 # files_to_compare = [
 #     get_tuples_by_cell_code(file_paths_keys, r'DZ03')[0],
 #     get_tuples_by_cell_code(file_paths_keys, r'EA02')[0],
@@ -653,31 +689,48 @@ compare_cells_on_same_plot(files_to_compare, normalized=False)
 # ]
 # compare_cells_on_same_plot(files_to_compare, normalized=False)
 #
+# #DTV14 Set
+# files_to_compare = [
+#     get_tuples_by_cell_code(file_paths_keys, r'DV01')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DW02')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DX02')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DY01')[0],
+# ]
+# compare_cells_on_same_plot(files_to_compare, normalized=False)
+#
+# #Li|LFP
 # files_to_compare = [
 #     get_tuples_by_cell_code(file_paths_keys, r'DN01')[0],
 #     get_tuples_by_cell_code(file_paths_keys, r'DR02')[0],
 #     get_tuples_by_cell_code(file_paths_keys, r'DZ03')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DV01')[0],
 # ]
 # compare_cells_on_same_plot(files_to_compare, normalized=False)
 #
+# #LTO|LFP
 # files_to_compare = [
 #     get_tuples_by_cell_code(file_paths_keys, r'DO03')[0],
 #     get_tuples_by_cell_code(file_paths_keys, r'DS03')[0],
 #     get_tuples_by_cell_code(file_paths_keys, r'EA02')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DW02')[0],
 # ]
 # compare_cells_on_same_plot(files_to_compare, normalized=False)
 #
+# #Li|NMC
 # files_to_compare = [
 #     get_tuples_by_cell_code(file_paths_keys, r'DP01')[0],
 #     get_tuples_by_cell_code(file_paths_keys, r'DT03')[0],
 #     get_tuples_by_cell_code(file_paths_keys, r'EB03')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DX02')[0],
 # ]
 # compare_cells_on_same_plot(files_to_compare, normalized=False)
 #
+# #Gr|NMC
 # files_to_compare = [
 #     get_tuples_by_cell_code(file_paths_keys, r'DQ01')[0],
 #     get_tuples_by_cell_code(file_paths_keys, r'DU02')[0],
 #     get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DY01')[0],
 #     get_tuples_by_cell_code(file_paths_keys, r'DD03')[0],
 # ]
 # compare_cells_on_same_plot(files_to_compare, normalized=False)
@@ -695,7 +748,33 @@ compare_cells_on_same_plot(files_to_compare, normalized=False)
 #     get_tuples_by_cell_code(file_paths_keys, r'EB06')[0],
 #     get_tuples_by_cell_code(file_paths_keys, r'EC06')[0],
 # ]
-#compare_cells_on_same_plot(files_to_compare, normalized=False)
+#
+
+# compare_cells_on_same_plot(files_to_compare, normalized=False)
+
+files_to_compare = [
+    #get_tuples_by_cell_code(file_paths_keys, r'DR02')[0],
+    #get_tuples_by_cell_code(file_paths_keys, r'DS03')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'DT03')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'DU02')[0],
+    #get_tuples_by_cell_code(file_paths_keys, r'EG02')[0],
+    #get_tuples_by_cell_code(file_paths_keys, r'EH02')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'EI03')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'EJ03')[0],
+]
+compare_cells_on_same_plot(files_to_compare, normalized=False)
+
+files_to_compare = [
+    get_tuples_by_cell_code(file_paths_keys, r'DR02')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'DS03')[0],
+    #get_tuples_by_cell_code(file_paths_keys, r'DT03')[0],
+    #get_tuples_by_cell_code(file_paths_keys, r'DU02')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'EG02')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'EH02')[0],
+    #get_tuples_by_cell_code(file_paths_keys, r'EI03')[0],
+    #get_tuples_by_cell_code(file_paths_keys, r'EJ03')[0],
+]
+compare_cells_on_same_plot(files_to_compare, normalized=False)
 
 def plot_discharge_curves_at_minus_51C(file_paths_keys, normalized=False):
     """Plot the -51°C discharge curves for all cells."""
@@ -728,6 +807,7 @@ def plot_discharge_curves_at_minus_51C(file_paths_keys, normalized=False):
     plt.tight_layout()
     plt.show()
 
+
 def generate_file_paths_keys_low_temp(directory, lookup_table_path):
     """
     Walk through the directory (and subdirectories) to find Excel files that contain '-51C'
@@ -757,4 +837,3 @@ def generate_file_paths_keys_low_temp(directory, lookup_table_path):
                 key = f"{anode}|{cathode} - {electrolyte} Elyte ({cell_identifier})"
                 file_paths_keys.append((full_path, key, cell_code))
     return file_paths_keys
-
