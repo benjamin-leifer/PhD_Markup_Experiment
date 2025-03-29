@@ -74,18 +74,22 @@ def process_all_cycles_for_voltage_vs_capacity(file_path, dataset_key, normalize
     capacities = {
         'LFP': 2.0075 / 1000 / 100,
         'NMC': 3.212 / 1000 / 100,
-        'Gr': 3.8544 / 1000 / 100
+        'Gr': 3.8544 / 1000 / 100,
+        'NEI-16mm': 4.02 / 1000 / 100
     }
     weights_g = {
         'LFP': 7.09 / 1000 * 1.606 / 1000,
         'NMC': 12.45 / 1000 * 1.606 / 1000,
-        'Gr': 6.61 / 1000 * 2.01 / 1000
+        'Gr': 6.61 / 1000 * 2.01 / 1000,
+        'NEI-16mm': 12.45 / 1000 * 1.606 / 1000 *4.02/3.212,
     }
 
     # Use weights for non-normalized data
     if normalized:
         if 'LFP' in dataset_key:
             norm_factor = capacities['LFP']
+        elif 'NEI-16mm' in dataset_key:
+            norm_factor = capacities['NEI-16mm']
         elif 'NMC' in dataset_key:
             norm_factor = capacities['NMC']
         elif 'Gr' in dataset_key:
@@ -95,6 +99,8 @@ def process_all_cycles_for_voltage_vs_capacity(file_path, dataset_key, normalize
     else:
         if 'LFP' in dataset_key:
             norm_factor = weights_g['LFP']
+        elif 'NEI-16mm' in dataset_key:
+            norm_factor = capacities['NEI-16mm']
         elif 'NMC' in dataset_key:
             norm_factor = weights_g['NMC']
         elif 'Gr' in dataset_key:
@@ -162,7 +168,7 @@ def plot_last_cells_discharge_curves(file_tuples, normalized=False):
                          label=f'{key} Cycle {cycle}', linestyle='-', color=color, marker=marker)
     plt.xlabel('Capacity (mAh/g)')
     plt.ylabel('Voltage (V)')
-    plt.title('Discharge Curves for Selected Cells')
+    plt.title('Discharge Curves for DTF Cells')
     plt.gca().set_ylim(0, 4.5)
     plt.gca().set_xlim(0, 130)
     # Only show legend if there are labeled artists
@@ -200,7 +206,9 @@ for full_path, key, cell_code in file_paths_keys:
 
 files_to_compare = []
 #target_codes = ['DN06', 'DO06', 'DP06', 'DR06', 'DS06', 'DT06', 'DU06','DV06','DW06','DX06', 'DY06', 'DZ06', 'EA06', 'EB06', 'EC06']
-target_codes = ['DR06', 'DU06', 'EG05', 'EH05','EI04','EJ05', ]
+target_codes = [ 'DU06','EJ05', 'EN04', 'EO05', 'ES05','EP04', 'EQ04','ER05','ET05','EC06' ]
+target_codes = [ 'EP04','ER05','ET05','EC06' ]
+#target_codes = [ 'DU06','EJ05', 'EN04', 'EO05','ES05', ]
 for code in target_codes:
     matches = get_tuples_by_cell_code(file_paths_keys, code)
     if matches:
