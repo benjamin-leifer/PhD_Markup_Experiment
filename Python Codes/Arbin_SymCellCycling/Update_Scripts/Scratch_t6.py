@@ -9,8 +9,9 @@ import matplotlib
 lookup_table_path = r'C:\Users\benja\OneDrive - Northeastern University\Spring 2025 Cell List.xlsx'
 # lookup_table_path = filedialog.askopenfilename(title="Select Lookup Table")
 
-search_directory = r'C:\Users\benja\Downloads\Temp\Cycle Life Best Survivors'
+search_directory = r'C:\Users\benja\OneDrive - Northeastern University\Gallaway Group\Gallaway Extreme SSD Drive\Equipment Data\Lab Arbin\Li-Ion\Low Temp Li Ion\2025\03\Cycle Life Best Survivors'
 
+search_directory = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Cycle Life Best Survivors'
 # ==========================
 # 1. Set the working directory
 # ==========================
@@ -505,15 +506,20 @@ def plot_gitt_file(file_path, dataset_key, normalized=False):
     plt.show()
 
 
-def compare_cells_on_same_plot(file_tuples, normalized=False,x_bounds=(0, 100), save_str = ''):
+def compare_cells_on_same_plot(file_tuples, normalized=False, x_bounds=(0, 100), save_str='', color_scheme=None):
     """
     Compare multiple cells on one plot:
       - Left y-axis: Capacity (mAh/g) vs. Cycle Number
       - Right y-axis: Coulombic Efficiency (%) vs. Cycle Number
-      - No grid lines and vertical dashed lines at specified cycle indices
+      - Marker shapes, fills, and colors reflect LPV/DT14, Gr/Li, LFP/NMC identities.
+      - Optional color_scheme overrides default color logic.
+
     Args:
-        file_tuples (list): A list of (full_path, key, cell_code) tuples.
-        normalized (bool): Whether to use normalization.
+        file_tuples (list): List of (file_path, key, cell_code)
+        normalized (bool): Normalize capacity if True
+        x_bounds (tuple): x-axis limits
+        save_str (str): Filename prefix for saving plot
+        color_scheme (dict): Optional mapping of cell_code to color
     """
     if not file_tuples:
         raise ValueError("No file tuples provided for comparison.")
@@ -521,59 +527,98 @@ def compare_cells_on_same_plot(file_tuples, normalized=False,x_bounds=(0, 100), 
     fig, ax1 = plt.subplots(figsize=(10, 6))
     ax2 = ax1.twinx()
 
-    # Use the new colormap API and resample to the number of cells provided
-    cmap = matplotlib.colormaps["tab10"].resampled(len(file_tuples))
+    # Define C-Rate annotations for specific cycles
+    c_rate_labels = {
+        2: "Form",
+        4: "C/10",
+        7: "C/8",
+        10: "C/4",
+        13: "C/2",
+        16: "1C",
+        19: "2C"
+    }
 
-    for i, tup in enumerate(file_tuples):
-        # Ensure each tuple has exactly three elements
-        if not (isinstance(tup, tuple) and len(tup) == 3):
-            print(f"Skipping invalid tuple at index {i}: {tup}")
-            continue
+    # Track annotated cycles
+    annotated_cycles = set()
 
-        file_path, key, cell_code = tup
+    for i, (file_path, key, cell_code) in enumerate(file_tuples):
         try:
             cycles, charge_caps, discharge_caps, ce = process_cycle_data(file_path, key, normalized)
         except Exception as e:
             print(f"Error processing {file_path}: {e}")
             continue
 
-        color = cmap(i)
-        # Plot capacity on left y-axis
-        ax1.scatter(cycles, charge_caps, marker='o', color=color,
+        # === Custom Plot Appearance ===
+        is_gr = 'Gr' in key
+        is_li = 'Li' in key
+        print(f"Key: {key}, is_gr: {is_gr}, is_li: {is_li}")
+        is_dt14 = 'DT14' in key
+        is_lpv = 'LPV' in key
+        is_lfp = 'LFP' in key
+        is_nmc = 'NMC' in key
+
+        # Marker shape: square for DT14, circle for LPV
+        base_marker = 's' if is_dt14 else 'o'
+        ce_marker = '*' if is_dt14 else 'D'
+
+        # Fill style: solid for Gr, open for Li
+        facecolor = 'none' if is_li else ''
+
+        # Color logic: use custom scheme if provided
+        if color_scheme and cell_code in color_scheme:
+            color = color_scheme[cell_code]
+        else:
+            color = 'blue' if is_lfp else 'black'
+
+            # Fill style: solid for Gr, open for Li
+        facecolor = 'none' if is_li else color
+
+        #color = 'blue' if is_lfp else 'black'
+        # === Plotting ===
+        # Replace 'auto' with a valid color or 'none'
+        ax1.scatter(cycles, charge_caps, marker=base_marker,
+                    facecolors=facecolor, edgecolors=color,
                     label=f'{key} (Charge)')
-        ax1.scatter(cycles, discharge_caps, marker='x', color=color,
-                    label=f'{key} (Discharge)')
-        # Plot coulombic efficiency on right y-axis
-        ax2.scatter(cycles, ce, marker='d', color=color,
+        # ax1.scatter(cycles, discharge_caps, marker=base_marker,
+        #             facecolors=color, edgecolors=color,
+        #             label=f'{key} (Discharge)', linestyle='--')
+
+        ax2.scatter(cycles, ce, marker=ce_marker,
+                    facecolors=facecolor, edgecolors=color,
                     label=f'{key} (CE)')
 
-    # Remove grid lines
+        # Add C-Rate annotations
+        if x_bounds[1]<20:
+            for cycle, label in c_rate_labels.items():
+                if cycle in cycles and cycle not in annotated_cycles:
+                    x = cycle-1
+                    y = 200
+                    ax1.text(x, y + 5, label, fontsize=10, ha='center', color='black')
+                    annotated_cycles.add(cycle)
+
+    # Formatting
     ax1.grid(False)
     ax2.grid(False)
 
-    # Add vertical dashed lines at specified cycle numbers
     for cycle in [1.5, 4.5, 7.5, 10.5, 13.5, 16.5, 19.5]:
         ax1.axvline(x=cycle, color='black', linestyle='--')
 
     ax1.set_xlabel('Cycle Number')
-    ax1.set_ylim(0, 200)
     ax1.set_xlim(x_bounds)
-    if normalized:
-        ax1.set_ylabel('Capacity (%)')
-    else:
-        ax1.set_ylabel('Capacity (mAh/g)')
+    ax1.set_ylim(0, 220)
+    ax1.set_ylabel('Capacity (%)' if normalized else 'Capacity (mAh/g)')
     ax2.set_ylabel('Coulombic Efficiency (%)')
     ax2.set_ylim(0, 120)
 
-    # Combine legends from both axes
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
-    ax2.legend(lines1 + lines2, labels1 + labels2, loc='upper center', bbox_to_anchor=(0.5, -0.15), fontsize='small', ncol=2)
+    ax2.legend(lines1 + lines2, labels1 + labels2, loc='upper center', bbox_to_anchor=(0.5, -0.15), fontsize='small',
+               ncol=2)
 
     plt.title('Capacity and Coulombic Efficiency vs. Cycle Number')
     plt.tight_layout()
-    plt.savefig(save_str+'Capacity_and_Coulombic_Efficiency_vs_Cycle.png', dpi=300)
-    #plt.clf()
+    if save_str:
+        plt.savefig(f'{save_str}_Capacity_and_Coulombic_Efficiency_vs_Cycle.png', dpi=300)
     plt.show()
 
 
@@ -653,7 +698,7 @@ def plot_selected_cycles_charge_and_discharge_vs_voltage(cell_tuple, normalized=
 
     # Mapping from cycle number to custom label
     cycle_labels = {
-        1: "Formation",
+        1: "Form",
         4: "C/10",
         7: "C/8",
         10: "C/4",
@@ -734,13 +779,15 @@ def create_excel_summary(file_paths_keys, output_path, normalized=False):
 
         summary_data.append({
             'Cell Code': cell_code,
+            'Electrolyte': key.split(' - ')[-1],
+            'Formation CE': ce[0] if len(ce) > 0 else None,
             'C/10': specific_capacities.get(4, None),
             'C/8': specific_capacities.get(7, None),
             'C/4': specific_capacities.get(10, None),
             'C/2': specific_capacities.get(13, None),
             '1C': specific_capacities.get(16, None),
             '2C': specific_capacities.get(19, None),
-            'Avg CE > 20': avg_ce_past_20
+
         })
 
     # Create a DataFrame and save to Excel
@@ -789,6 +836,34 @@ def compare_cells_cycle_2(file_tuples, normalized=False):
     plt.tight_layout()
     plt.show()
 # Example usage
+def assign_tol_colors(cell_codes):
+    """
+    Assign Paul Tol's color palette (bright or nightfall) based on the number of unique cell codes.
+    Returns a dict mapping cell_code → hex color.
+    """
+    tol_bright = [
+        "#E69F00", "#56B4E9", "#009E73", "#F0E442",
+        "#0072B2", "#D55E00", "#CC79A7"
+    ]
+
+    tol_nightfall = [
+        "#332288", "#88CCEE", "#44AA99", "#117733", "#999933", "#DDCC77",
+        "#CC6677", "#882255", "#AA4499", "#661100", "#6699CC", "#888888"
+    ]
+
+
+    color_dict = {}
+
+    if len(cell_codes) <= len(tol_bright):
+        palette = tol_bright
+    else:
+        palette = tol_nightfall
+
+    for i, code in enumerate(cell_codes):
+        color_dict[str(code)] = palette[i % len(palette)]
+
+    return color_dict
+
 
 
 
@@ -798,7 +873,7 @@ def compare_cells_cycle_2(file_tuples, normalized=False):
 # ==========================
 file_paths_keys = generate_file_paths_keys(os.getcwd(), lookup_table_path)
 print('Starting')
-#create_excel_summary(file_paths_keys, 'output_summary.xlsx', normalized=False)
+create_excel_summary(file_paths_keys, 'output_summary_2.xlsx', normalized=False)
 
 print("Generated file_paths_keys:")
 for full_path, key, cell_code in file_paths_keys:
@@ -879,6 +954,7 @@ else:
 #      get_tuples_by_cell_code(file_paths_keys, r'DN02')[0],
 #      get_tuples_by_cell_code(file_paths_keys, r'DR02')[0],
 #     get_tuples_by_cell_code(file_paths_keys, r'DT01')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'DU02')[0],
 #     get_tuples_by_cell_code(file_paths_keys, r'DV01')[0],
 #     get_tuples_by_cell_code(file_paths_keys, r'DW02')[0],
 #     get_tuples_by_cell_code(file_paths_keys, r'DX02')[0],
@@ -890,14 +966,69 @@ else:
 #      get_tuples_by_cell_code(file_paths_keys, r'EH02')[0],
 #      get_tuples_by_cell_code(file_paths_keys, r'EI03')[0],
 #      get_tuples_by_cell_code(file_paths_keys, r'EJ03')[0],
+#      #get_tuples_by_cell_code(file_paths_keys, r'EL03')[0],
+#      get_tuples_by_cell_code(file_paths_keys, r'EM01')[0],
+#      get_tuples_by_cell_code(file_paths_keys, r'EN02')[0],
+#      get_tuples_by_cell_code(file_paths_keys, r'EO02')[0],
 #  ]
 # compare_cells_on_same_plot(files_to_compare, normalized=False)
 
-tuple_controls = [get_tuples_by_cell_code(file_paths_keys, r'EV03')[0],
+DTFV_set = [get_tuples_by_cell_code(file_paths_keys, r'FC03')[0],
+            get_tuples_by_cell_code(file_paths_keys, r'FD03')[0],
+        get_tuples_by_cell_code(file_paths_keys, r'FE01')[0],
+        get_tuples_by_cell_code(file_paths_keys, r'FF02')[0],
+        get_tuples_by_cell_code(file_paths_keys, r'FG03')[0],
+            get_tuples_by_cell_code(file_paths_keys, r'ES03')[0],
+]
+DTF_set = [get_tuples_by_cell_code(file_paths_keys, r'EN02')[0],
+           get_tuples_by_cell_code(file_paths_keys, r'DU02')[0],
+        get_tuples_by_cell_code(file_paths_keys, r'EO02')[0],
+        get_tuples_by_cell_code(file_paths_keys, r'EJ03')[0],
+]
+LPV_controls = [get_tuples_by_cell_code(file_paths_keys, r'EV03')[0],
     get_tuples_by_cell_code(file_paths_keys, r'EU03')[0],]
 
 tuple_control_gr = [get_tuples_by_cell_code(file_paths_keys, r'EV03')[0],
     ]
+DT14_control = [get_tuples_by_cell_code(file_paths_keys, r'DP01')[0],]
+import pprint as pp
+#pp.pprint(DT14_control)
+
+
+DT_Set = []
+DT_Set.extend(DT14_control)
+DT_Set.extend(LPV_controls)
+
+Full_set = []
+Full_set.extend(LPV_controls)
+Full_set.extend(DT14_control)
+Full_set.extend(DTF_set)
+Full_set.extend(DTFV_set)
+cell_codes= [cell_code for _, _, cell_code in Full_set]
+custom_colors = assign_tol_colors(cell_codes)
+
+compare_cells_on_same_plot(DT_Set, normalized=False, x_bounds=(19.5, 100), save_str='CycleLife_TolColors', color_scheme=custom_colors)
+compare_cells_on_same_plot(DTF_set, normalized=False, x_bounds=(19.5, 100), save_str='CycleLife_TolColors', color_scheme=custom_colors)
+compare_cells_on_same_plot(DTFV_set, normalized=False, x_bounds=(19.5, 100), save_str='CycleLife_TolColors', color_scheme=custom_colors)
+compare_cells_on_same_plot(Full_set, normalized=False, x_bounds=(19.5, 100), save_str='CycleLife_TolColors', color_scheme=custom_colors)
+
+files_to_compare = []
+files_to_compare.extend(DT14_control)
+files_to_compare.extend(LPV_controls)
+files_to_compare.extend(DTF_set)
+cell_codes = [cell_code for _, _, cell_code in files_to_compare]
+custom_colors = assign_tol_colors(files_to_compare)
+compare_cells_on_same_plot(DT_Set, normalized=False, x_bounds=(0, 19.5), save_str='CycleLife_TolColors', color_scheme=custom_colors)
+#pp.pprint(files_to_compare)
+# Flatten the list if it contains nested lists
+
+
+# Now extract cell codes
+#cell_codes = [cell_code for _, _, cell_code in files_to_compare]
+
+
+compare_cells_on_same_plot(files_to_compare, normalized=False, x_bounds=(0, 20), save_str='CycleLife_TolColors', color_scheme=custom_colors)
+
 
 files_to_compare  = [
     get_tuples_by_cell_code(file_paths_keys, r'EN02')[0],
@@ -906,7 +1037,6 @@ get_tuples_by_cell_code(file_paths_keys, r'EO02')[0],
 get_tuples_by_cell_code(file_paths_keys, r'EJ03')[0],
 get_tuples_by_cell_code(file_paths_keys, r'ES03')[0],
 get_tuples_by_cell_code(file_paths_keys, r'EU03')[0],
-
     ]
 compare_cells_on_same_plot(files_to_compare, normalized=False, x_bounds = (0, 19.4),save_str='DTF14_19_5')
 compare_cells_cycle_2(files_to_compare, normalized=False)
