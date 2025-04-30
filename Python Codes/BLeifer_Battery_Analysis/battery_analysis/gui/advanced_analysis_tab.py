@@ -470,17 +470,22 @@ class AdvancedAnalysisTab(ttk.Frame):
         try:
             voltage, capacity = advanced_analysis.get_voltage_capacity_data(test_id, cycle_number)
 
-            # Run dQ/dV analysis
-            v_centers, dq_dv = advanced_analysis.differential_capacity_analysis(
-                voltage, capacity, smooth, window_size
+            from battery_analysis.advanced_analysis import compute_dqdv  # NEW import
+
+            v_mid, dqdv = compute_dqdv(
+                capacity,
+                voltage,
+                smooth=True,  # or expose GUI checkbox
+                window_size=11,  # or GUI spin-box
+                polyorder=3,
             )
 
             # Store the results
             self.current_dqdv_data = {
                 'voltage': voltage,
                 'capacity': capacity,
-                'v_centers': v_centers,
-                'dq_dv': dq_dv,
+                'v_centers': v_mid,
+                'dq_dv': dqdv,
                 'cycle': cycle_number
             }
 

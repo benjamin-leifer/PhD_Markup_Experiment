@@ -3,6 +3,10 @@ Utility functions for the battery analysis package.
 """
 import logging
 from mongoengine import connect
+# ---------------------------------------------------------------------------
+# Database helper (robust connector)
+# ---------------------------------------------------------------------------
+from .db import connect_with_fallback as connect_to_database
 
 
 def connect_to_database(db_name="battery_test_db", host="localhost", port=27017):

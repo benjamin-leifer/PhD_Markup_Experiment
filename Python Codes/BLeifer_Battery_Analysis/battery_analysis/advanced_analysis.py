@@ -14,110 +14,181 @@ from sklearn.decomposition import PCA
 from . import models
 from . import utils
 
+# ---------------------------------------------------------------------------
+# Column-name aliases so the code works with Arbin, BioLogic, Neware, etc.
+# ---------------------------------------------------------------------------
+ALIAS_CAPACITY = {
+    "capacity",
+    "Capacity",
+    "q-q0",
+    "Cap. Discharge",
+    "Cap. Charge",
+    "Specific Capacity",
+}
+
+ALIAS_VOLTAGE = {
+    "voltage",
+    "Voltage",
+    "Ecell / V",
+    "Ewe/V",
+    "Ecell_V",
+    "Potential (V)",
+}
+
+def _get_series(df, aliases):
+    """Return the first matching column in *df* whose name is in *aliases*."""
+    for key in aliases:
+        if key in df.columns:
+            return df[key]
+    raise KeyError(
+        f"None of the expected column names {sorted(aliases)} "
+        f"were found in {list(df.columns)}"
+    )
+
 
 def get_voltage_capacity_data(test_id, cycle_number=None):
     """
-    Extract voltage vs capacity data for a specific cycle or all cycles.
+    Return voltage-vs-capacity arrays for *test_id*.
 
-    Args:
-        test_id: ID of the TestResult to analyze
-        cycle_number: Optional specific cycle to extract (default: None = all cycles)
+    The routine now recognises multiple column-name variants (Arbin, BioLogic,
+    Neware, etc.) so the “Could not identify required data columns” error
+    should disappear.
 
-    Returns:
-        tuple: (voltage_data, capacity_data) lists for the specified cycle(s)
+    Parameters
+    ----------
+    test_id : ObjectId | str
+        ID of the TestResult document.
+    cycle_number : int | None, optional
+        If given, only that cycle is returned; otherwise all cycles.
+
+    Returns
+    -------
+    tuple[list[float], list[float]]
+        (voltages, capacities)
     """
-    # First, try to get data from GridFS
+    import logging
+    import os
+    import pandas as pd
+    from battery_analysis import models
+
+    # ------------------------------------------------------------------ #
+    # 1)  Try detailed data stored in GridFS
+    # ------------------------------------------------------------------ #
     try:
-        from battery_analysis.utils.detailed_data_manager import get_detailed_cycle_data
+        from battery_analysis.utils.detailed_data_manager import (
+            get_detailed_cycle_data,
+        )
+
         detailed_data = get_detailed_cycle_data(test_id, cycle_number)
 
         if detailed_data and cycle_number in detailed_data:
             cycle_data = detailed_data[cycle_number]
 
-            # Check if we have charge or discharge data
-            if 'charge' in cycle_data and 'voltage' in cycle_data['charge'] and 'capacity' in cycle_data['charge']:
+            if (
+                "charge" in cycle_data
+                and "voltage" in cycle_data["charge"]
+                and "capacity" in cycle_data["charge"]
+            ):
                 return (
-                    cycle_data['charge']['voltage'],
-                    cycle_data['charge']['capacity']
+                    cycle_data["charge"]["voltage"],
+                    cycle_data["charge"]["capacity"],
                 )
-            elif 'discharge' in cycle_data and 'voltage' in cycle_data['discharge'] and 'capacity' in cycle_data[
-                'discharge']:
+            elif (
+                "discharge" in cycle_data
+                and "voltage" in cycle_data["discharge"]
+                and "capacity" in cycle_data["discharge"]
+            ):
                 return (
-                    cycle_data['discharge']['voltage'],
-                    cycle_data['discharge']['capacity']
+                    cycle_data["discharge"]["voltage"],
+                    cycle_data["discharge"]["capacity"],
                 )
 
-        # If we reached here, detailed data wasn't found or was incomplete
-        logging.warning(f"GridFS data not found or incomplete for test {test_id}, cycle {cycle_number}")
-    except Exception as e:
-        logging.warning(f"Error retrieving GridFS data for test {test_id}: {e}")
+        logging.warning(
+            f"GridFS data not found or incomplete for test {test_id}, "
+            f"cycle {cycle_number}"
+        )
+    except Exception as exc:
+        logging.warning(f"Error retrieving GridFS data for test {test_id}: {exc}")
 
-    # Fall back to examining TestResult document
+    # ------------------------------------------------------------------ #
+    # 2)  Fall back to the TestResult document and original data file
+    # ------------------------------------------------------------------ #
     test = models.TestResult.objects(id=test_id).first()
     if test is None:
         raise ValueError(f"Test with ID {test_id} not found")
 
-    # Check if raw data is available in original file
-    if hasattr(test, 'file_path') and test.file_path and os.path.exists(test.file_path):
+    if getattr(test, "file_path", None) and os.path.exists(test.file_path):
         try:
-            # Try to parse the original data file
             logging.info(f"Reading data from original file: {test.file_path}")
-
-            # Determine the parser to use based on file extension
             file_path = test.file_path
             file_ext = os.path.splitext(file_path)[1].lower()
 
-            if file_ext in ['.xlsx', '.xls', '.csv']:
-                # For Excel and CSV, read the file
-                import pandas as pd
+            # ---------------- Excel / CSV into DataFrame ---------------- #
+            if file_ext in {".xlsx", ".xls"}:
+                xl = pd.ExcelFile(file_path)
+                # pick a sheet that looks like data
+                sheet_name = next(
+                    (s for s in xl.sheet_names if "channel" in s.lower() or "data" in s.lower()),
+                    xl.sheet_names[0],
+                )
+                df = pd.read_excel(file_path, sheet_name=sheet_name)
+            elif file_ext == ".csv":
+                df = pd.read_csv(file_path)
+            else:
+                raise ValueError(f"Unsupported file type: {file_ext}")
 
-                if file_ext in ['.xlsx', '.xls']:
-                    # Try to determine which sheet to read
-                    xl = pd.ExcelFile(file_path)
-                    sheet_name = None
-                    for s in xl.sheet_names:
-                        if 'Channel' in s or 'Data' in s:
-                            sheet_name = s
-                            break
+            # -------------- robust column-name matching ----------------- #
+            VOLT_ALIASES = {
+                "voltage",
+                "potential",
+                "volt",
+                "ewe/v",
+                "ewe",
+                "ecell / v",
+                "ecell_v",
+                "cell voltage",
+            }
+            CAP_ALIASES = {
+                "capacity",
+                "q-q0",
+                "cap. discharge",
+                "cap discharge",
+                "cap. charge",
+                "cap charge",
+                "specific capacity",
+                "capacity (mah)",
+                "cap(",
+            }
 
-                    if sheet_name is None:
-                        sheet_name = xl.sheet_names[0]
+            def _match_alias(col_name: str, aliases) -> bool:
+                col = col_name.lower()
+                return any(alias in col for alias in aliases)
 
-                    df = pd.read_excel(file_path, sheet_name=sheet_name)
-                else:
-                    df = pd.read_csv(file_path)
+            voltage_col = next((c for c in df.columns if _match_alias(c, VOLT_ALIASES)), None)
+            capacity_col = next((c for c in df.columns if _match_alias(c, CAP_ALIASES)), None)
 
-                # Find voltage and current columns
-                voltage_col = None
-                capacity_col = None
+            if voltage_col is None or capacity_col is None:
+                raise ValueError("Could not identify required data columns")
 
-                for col in df.columns:
-                    col_str = str(col).lower()
-                    if any(term in col_str for term in ['voltage', 'potential', 'volt']):
-                        voltage_col = col
-                    elif any(term in col_str for term in ['capacity', 'cap(']):
-                        capacity_col = col
+            # ------------ optional cycle filter ------------------------- #
+            if cycle_number is not None:
+                cycle_col = next(
+                    (c for c in df.columns if "cycle" in str(c).lower() or "cyc" in str(c).lower()),
+                    None,
+                )
+                if cycle_col is not None:
+                    df = df[df[cycle_col] == cycle_number]
 
-                if voltage_col and capacity_col:
-                    # If a specific cycle is requested, filter the data
-                    if cycle_number is not None:
-                        # Try to find a cycle column
-                        cycle_col = None
-                        for col in df.columns:
-                            if any(term in str(col).lower() for term in ['cycle', 'cyc']):
-                                cycle_col = col
-                                break
+            return df[voltage_col].values.tolist(), df[capacity_col].values.tolist()
 
-                        if cycle_col:
-                            df = df[df[cycle_col] == cycle_number]
+        except Exception as exc:
+            logging.error(f"Error extracting data from file: {exc}")
 
-                    return df[voltage_col].values.tolist(), df[capacity_col].values.tolist()
-
-        except Exception as e:
-            logging.error(f"Error extracting data from file: {e}")
-
-    # If all else fails, raise an error
+    # ------------------------------------------------------------------ #
+    # 3)  Still nothing?  Raise an error that caller can catch.
+    # ------------------------------------------------------------------ #
     raise ValueError("Could not identify required data columns")
+
 
 
 def differential_capacity_analysis(voltage_data, capacity_data, smooth=True, window_size=11):
@@ -1382,3 +1453,70 @@ def calculate_differential_capacity(test_id, cycle_number, smoothing=True):
                 }
 
     return result
+
+
+
+
+def compute_dqdv(capacity, voltage, *, smooth=True, window_size=11, polyorder=3):
+    """
+    Return (voltage_midpoints, dQ/dV) for a single charge *or* discharge curve.
+
+    Parameters
+    ----------
+    capacity : array-like
+        Capacity values (mAh or mAh g-1).  Any iterable accepted.
+    voltage : array-like
+        Corresponding cell voltages (V).
+    smooth : bool, default True
+        Apply Savitzky–Golay smoothing to the raw derivative.
+    window_size : int, default 11
+        S-G window width; must be odd and <= len(dQ/dV).
+    polyorder : int, default 3
+        Polynomial order for Savitzky–Golay filter.
+
+    Returns
+    -------
+    v_mid : np.ndarray
+        Mid-point voltages (length = len(voltage) - 1).
+    dqdv : np.ndarray
+        dQ/dV values (same length as *v_mid*).
+
+    Raises
+    ------
+    ValueError
+        If fewer than three valid (non-NaN) points remain.
+    """
+    from scipy.signal import savgol_filter
+    # -- 1. to numpy + drop NaNs with a single mask -------------------------
+    capacity = np.asarray(capacity, dtype=float)
+    voltage  = np.asarray(voltage, dtype=float)
+
+    mask = (~np.isnan(capacity)) & (~np.isnan(voltage))
+    capacity, voltage = capacity[mask], voltage[mask]
+
+    if capacity.size < 3:
+        raise ValueError("Not enough valid points to compute dQ/dV")
+
+    # -- 2. ensure increasing capacity so dq > 0 ----------------------------
+    if not np.all(np.diff(capacity) > 0):
+        order = np.argsort(capacity)
+        capacity, voltage = capacity[order], voltage[order]
+
+    # -- 3. raw derivative --------------------------------------------------
+    dq = np.diff(capacity)
+    dv = np.diff(voltage)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        dqdv = dq / dv
+
+    v_mid = (voltage[:-1] + voltage[1:]) / 2  # align derivative to mid-points
+
+    # -- 4. optional Savitzky–Golay smoothing -------------------------------
+    if smooth and dqdv.size >= 5:  # need at least 5 pts for SG to make sense
+        if window_size % 2 == 0:
+            window_size += 1
+        if window_size > dqdv.size:
+            window_size = dqdv.size if dqdv.size % 2 else dqdv.size - 1
+        if window_size >= polyorder + 2:       # SG requirement
+            dqdv = savgol_filter(dqdv, window_size, polyorder)
+
+    return v_mid, dqdv
