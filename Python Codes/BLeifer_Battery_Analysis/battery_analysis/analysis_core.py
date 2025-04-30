@@ -8,115 +8,13 @@ test results, and propagate properties across related samples.
 import numpy as np
 import logging
 from . import models
-
-
-def compute_metrics(cycles_summary):
-    """
-    Compute aggregate metrics from a list of cycle summaries.
-
-    Args:
-        cycles_summary: List of dicts or CycleSummary objects with keys
-                       ['cycle_index', 'charge_capacity', 'discharge_capacity', 'coulombic_efficiency']
-
-    Returns:
-        dict: Dictionary of computed metrics
-    """
-    if not cycles_summary:
-        return {}
-
-    # If cycles_summary is a list of dicts, we can use it directly
-    # If it's a list of CycleSummary objects, convert to dicts
-    if hasattr(cycles_summary[0], 'cycle_index'):
-        # It's likely a CycleSummary object (EmbeddedDocument). Convert to dict.
-        data = [{
-            "cycle_index": cs.cycle_index,
-            "charge_capacity": cs.charge_capacity,
-            "discharge_capacity": cs.discharge_capacity,
-            "coulombic_efficiency": cs.coulombic_efficiency,
-            "charge_energy": getattr(cs, 'charge_energy', None),
-            "discharge_energy": getattr(cs, 'discharge_energy', None),
-            "energy_efficiency": getattr(cs, 'energy_efficiency', None),
-            "internal_resistance": getattr(cs, 'internal_resistance', None)
-        } for cs in cycles_summary]
-    else:
-        data = cycles_summary
-
-    # Sort by cycle_index just in case
-    data.sort(key=lambda x: x['cycle_index'])
-
-    # Basic cycle metrics
-    first_cycle = data[0]
-    last_cycle = data[-1]
-
-    initial_cap = first_cycle.get('discharge_capacity', 0.0)
-    final_cap = last_cycle.get('discharge_capacity', 0.0)
-
-    # Capacity retention is final vs initial (fraction)
-    capacity_retention = (final_cap / initial_cap) if initial_cap else 0.0
-
-    # Average coulombic efficiency
-    eff_values = [c.get('coulombic_efficiency', 0.0) for c in data
-                  if c.get('coulombic_efficiency') is not None]
-    avg_eff = float(np.mean(eff_values)) if eff_values else 0.0
-
-    # Energy efficiency (if available)
-    energy_eff_values = [c.get('energy_efficiency', 0.0) for c in data
-                         if c.get('energy_efficiency') is not None]
-    avg_energy_eff = float(np.mean(energy_eff_values)) if energy_eff_values else None
-
-    # Internal resistance (if available)
-    ir_values = [c.get('internal_resistance', 0.0) for c in data
-                 if c.get('internal_resistance') is not None]
-    median_ir = float(np.median(ir_values)) if ir_values else None
-
-    # Rate capability analysis (if cycles with different rates are present)
-    # This would require additional information about C-rates per cycle
-
-    # Advanced metrics
-
-    # Capacity fade rate (%/cycle)
-    cycle_count = len(data)
-    if cycle_count > 1 and initial_cap > 0:
-        capacity_fade_rate = ((initial_cap - final_cap) / initial_cap) * (100.0 / cycle_count)
-    else:
-        capacity_fade_rate = 0.0
-
-    # First 10 cycles fade rate (if we have at least 10 cycles)
-    first_10_fade_rate = None
-    if cycle_count >= 10:
-        cycle_10 = data[9]  # 10th cycle (index 9)
-        cycle_10_cap = cycle_10.get('discharge_capacity', 0.0)
-        if initial_cap > 0:
-            first_10_fade_rate = ((initial_cap - cycle_10_cap) / initial_cap) * (100.0 / 10)
-
-    # Metrics dictionary
-    metrics = {
-        "cycle_count": len(data),
-        "initial_capacity": float(initial_cap),
-        "final_capacity": float(final_cap),
-        "capacity_retention": float(capacity_retention),
-        "avg_coulombic_eff": float(avg_eff),
-        "capacity_fade_rate": float(capacity_fade_rate)  # %/cycle
-    }
-
-    # Add optional metrics if available
-    if avg_energy_eff is not None:
-        metrics["avg_energy_efficiency"] = float(avg_energy_eff)
-
-    if median_ir is not None:
-        metrics["median_internal_resistance"] = float(median_ir)
-
-    if first_10_fade_rate is not None:
-        metrics["first_10_cycles_fade_rate"] = float(first_10_fade_rate)
-
-    return metrics
+import numpy as np
+import pandas as pd
 
 
 def create_test_result(sample, cycles_summary, tester, metadata=None):
     """
     Create a TestResult document from parsed cycle data and attach it to a Sample.
-
-    This function computes metrics, saves the TestResult in the database, and updates the Sample.
 
     Args:
         sample: Sample object to which the test result will be attached
@@ -156,6 +54,33 @@ def create_test_result(sample, cycles_summary, tester, metadata=None):
 
         if 'internal_resistance' in cycle and cycle['internal_resistance'] is not None:
             cycle_doc.internal_resistance = cycle['internal_resistance']
+
+        # NEW: Add detailed cycle data if available
+        # Charge data
+        if 'voltage_charge' in cycle and cycle['voltage_charge']:
+            cycle_doc.voltage_charge = cycle['voltage_charge']
+
+        if 'current_charge' in cycle and cycle['current_charge']:
+            cycle_doc.current_charge = cycle['current_charge']
+
+        if 'capacity_charge' in cycle and cycle['capacity_charge']:
+            cycle_doc.capacity_charge = cycle['capacity_charge']
+
+        if 'time_charge' in cycle and cycle['time_charge']:
+            cycle_doc.time_charge = cycle['time_charge']
+
+        # Discharge data
+        if 'voltage_discharge' in cycle and cycle['voltage_discharge']:
+            cycle_doc.voltage_discharge = cycle['voltage_discharge']
+
+        if 'current_discharge' in cycle and cycle['current_discharge']:
+            cycle_doc.current_discharge = cycle['current_discharge']
+
+        if 'capacity_discharge' in cycle and cycle['capacity_discharge']:
+            cycle_doc.capacity_discharge = cycle['capacity_discharge']
+
+        if 'time_discharge' in cycle and cycle['time_discharge']:
+            cycle_doc.time_discharge = cycle['time_discharge']
 
         cycle_docs.append(cycle_doc)
 
@@ -444,3 +369,33 @@ def get_cycle_data(test_id, include_raw=False):
     # TODO: If include_raw=True, load and include raw data points from file if available
 
     return result
+
+
+def compute_metrics(cycles_summary):
+    """
+    Compute overall metrics from cycle summary data.
+
+    Args:
+        cycles_summary: List of cycle summary dictionaries
+
+    Returns:
+        dict: Dictionary with computed metrics
+    """
+    if not cycles_summary:
+        return {}
+
+    # Convert to DataFrame for easier calculations
+    df = pd.DataFrame(cycles_summary)
+
+    # Compute metrics
+    metrics = {
+        'cycle_count': len(df),
+        'initial_capacity': df['charge_capacity'].iloc[0] if not df.empty else None,
+        'final_capacity': df['discharge_capacity'].iloc[-1] if not df.empty else None,
+        'capacity_retention': (df['discharge_capacity'].iloc[-1] / df['charge_capacity'].iloc[0]) * 100
+        if not df.empty and df['charge_capacity'].iloc[0] > 0 else None,
+        'avg_coulombic_eff': np.mean(df['coulombic_efficiency']) if not df.empty else None,
+        'avg_energy_efficiency': np.mean(df['energy_efficiency']) if 'energy_efficiency' in df.columns else None
+    }
+
+    return metrics

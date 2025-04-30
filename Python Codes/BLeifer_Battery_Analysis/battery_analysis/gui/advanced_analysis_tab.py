@@ -17,6 +17,7 @@ import os
 
 from battery_analysis import models
 from battery_analysis import advanced_analysis
+from battery_analysis.cycle_detail_viewer import CycleDetailViewer
 
 
 class AdvancedAnalysisTab(ttk.Frame):
@@ -111,6 +112,14 @@ class AdvancedAnalysisTab(ttk.Frame):
             self.top_frame, text="Run Analysis", command=self.run_analysis
         )
         self.run_btn.pack(side=tk.LEFT, padx=20, pady=5, ipadx=10, ipady=10)
+
+        # In your create_widgets method, find your options frame and add:
+        self.view_cycle_btn = ttk.Button(
+            self.options_frame,  # Make sure to use the correct frame name from your code
+            text="View Cycle Details",
+            command=self.view_cycle_details
+        )
+        self.view_cycle_btn.pack(fill=tk.X, padx=5, pady=5)
 
         # Create a notebook for results
         self.notebook = ttk.Notebook(self)
@@ -1522,3 +1531,50 @@ class AdvancedAnalysisTab(ttk.Frame):
 
         # Disable editing
         self.results_text.config(state=tk.DISABLED)
+
+    def view_cycle_details(self):
+        """View detailed data for a specific cycle."""
+        if not self.current_test:
+            messagebox.showinfo("No Test Selected", "Please select a test to analyze.")
+            return
+
+        # Ask which cycle to view
+        cycle_dialog = tk.Toplevel(self)
+        cycle_dialog.title("Select Cycle")
+        cycle_dialog.geometry("300x150")
+        cycle_dialog.transient(self.main_app)
+        cycle_dialog.grab_set()
+
+        ttk.Label(
+            cycle_dialog,
+            text="Enter cycle number to view:"
+        ).pack(pady=(20, 5))
+
+        cycle_var = tk.StringVar()
+        cycle_entry = ttk.Entry(cycle_dialog, textvariable=cycle_var, width=10)
+        cycle_entry.pack(pady=5)
+        cycle_entry.insert(0, "1")
+
+        def on_view():
+            try:
+                cycle_num = int(cycle_var.get())
+                cycle_dialog.destroy()
+                self.show_cycle_detail_window(str(self.current_test.id), cycle_num)
+            except ValueError:
+                messagebox.showerror("Error", "Please enter a valid cycle number")
+
+        ttk.Button(
+            cycle_dialog, text="View", command=on_view
+        ).pack(pady=10)
+
+    def show_cycle_detail_window(self, test_id, cycle_num):
+        """Show a window with detailed cycle data."""
+        try:
+            CycleDetailViewer(self.main_app, test_id, cycle_num)
+        except Exception as e:
+            self.main_app.log_message(f"Error viewing cycle details: {str(e)}", logging.ERROR)
+            messagebox.showerror("Error", f"Error viewing cycle details: {str(e)}")
+
+
+
+

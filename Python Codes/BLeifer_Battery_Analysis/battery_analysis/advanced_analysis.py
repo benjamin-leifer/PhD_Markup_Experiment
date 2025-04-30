@@ -26,110 +26,98 @@ def get_voltage_capacity_data(test_id, cycle_number=None):
     Returns:
         tuple: (voltage_data, capacity_data) lists for the specified cycle(s)
     """
-    # Get TestResult object
+    # First, try to get data from GridFS
+    try:
+        from battery_analysis.utils.detailed_data_manager import get_detailed_cycle_data
+        detailed_data = get_detailed_cycle_data(test_id, cycle_number)
+
+        if detailed_data and cycle_number in detailed_data:
+            cycle_data = detailed_data[cycle_number]
+
+            # Check if we have charge or discharge data
+            if 'charge' in cycle_data and 'voltage' in cycle_data['charge'] and 'capacity' in cycle_data['charge']:
+                return (
+                    cycle_data['charge']['voltage'],
+                    cycle_data['charge']['capacity']
+                )
+            elif 'discharge' in cycle_data and 'voltage' in cycle_data['discharge'] and 'capacity' in cycle_data[
+                'discharge']:
+                return (
+                    cycle_data['discharge']['voltage'],
+                    cycle_data['discharge']['capacity']
+                )
+
+        # If we reached here, detailed data wasn't found or was incomplete
+        logging.warning(f"GridFS data not found or incomplete for test {test_id}, cycle {cycle_number}")
+    except Exception as e:
+        logging.warning(f"Error retrieving GridFS data for test {test_id}: {e}")
+
+    # Fall back to examining TestResult document
     test = models.TestResult.objects(id=test_id).first()
-    if not test:
+    if test is None:
         raise ValueError(f"Test with ID {test_id} not found")
 
-    # Check if raw data is available
-    if not hasattr(test, 'file_path') or not test.file_path:
-        raise ValueError("Raw data file path not available for this test")
+    # Check if raw data is available in original file
+    if hasattr(test, 'file_path') and test.file_path and os.path.exists(test.file_path):
+        try:
+            # Try to parse the original data file
+            logging.info(f"Reading data from original file: {test.file_path}")
 
-    # Determine file format based on extension
-    file_path = test.file_path
-    file_extension = file_path.lower().split('.')[-1]
+            # Determine the parser to use based on file extension
+            file_path = test.file_path
+            file_ext = os.path.splitext(file_path)[1].lower()
 
-    voltage_data = []
-    capacity_data = []
+            if file_ext in ['.xlsx', '.xls', '.csv']:
+                # For Excel and CSV, read the file
+                import pandas as pd
 
-    try:
-        # Read the raw data file based on format
-        if file_extension in ['csv', 'txt']:
-            df = pd.read_csv(file_path)
-        elif file_extension in ['xlsx', 'xls']:
-            df = pd.read_excel(file_path)
-        elif file_extension == 'mpt':
-            # For BioLogic .mpt files, need to skip header lines
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                header_lines = 0
-                for line in f:
-                    if "Nb header lines" in line:
-                        try:
-                            header_lines = int(line.split(':')[1].strip())
+                if file_ext in ['.xlsx', '.xls']:
+                    # Try to determine which sheet to read
+                    xl = pd.ExcelFile(file_path)
+                    sheet_name = None
+                    for s in xl.sheet_names:
+                        if 'Channel' in s or 'Data' in s:
+                            sheet_name = s
                             break
-                        except (ValueError, IndexError):
-                            pass
-            df = pd.read_csv(file_path, sep='\t', skiprows=header_lines)
-        else:
-            raise ValueError(f"Unsupported file format: {file_extension}")
 
-        # Identify column names for voltage, current, and capacity
-        # This is challenging due to different naming conventions across testers
-        voltage_col = None
-        current_col = None
-        capacity_col = None
-        cycle_col = None
+                    if sheet_name is None:
+                        sheet_name = xl.sheet_names[0]
 
-        # Map lowercase column names for case-insensitive matching
-        col_map = {col.lower(): col for col in df.columns}
+                    df = pd.read_excel(file_path, sheet_name=sheet_name)
+                else:
+                    df = pd.read_csv(file_path)
 
-        # Look for voltage column
-        for candidate in ['voltage', 'voltage(v)', 'ewe/v', 'ecell/v', 'e/v', 'v']:
-            if candidate in col_map:
-                voltage_col = col_map[candidate]
-                break
+                # Find voltage and current columns
+                voltage_col = None
+                capacity_col = None
 
-        # Look for current column
-        for candidate in ['current', 'current(a)', 'i/ma', 'i', 'current(ma)']:
-            if candidate in col_map:
-                current_col = col_map[candidate]
-                break
+                for col in df.columns:
+                    col_str = str(col).lower()
+                    if any(term in col_str for term in ['voltage', 'potential', 'volt']):
+                        voltage_col = col
+                    elif any(term in col_str for term in ['capacity', 'cap(']):
+                        capacity_col = col
 
-        # Look for capacity column
-        for candidate in ['capacity', 'capacity(ah)', 'q/ma.h', 'q charge/ma.h', 'q discharge/ma.h']:
-            if candidate in col_map:
-                capacity_col = col_map[candidate]
-                break
+                if voltage_col and capacity_col:
+                    # If a specific cycle is requested, filter the data
+                    if cycle_number is not None:
+                        # Try to find a cycle column
+                        cycle_col = None
+                        for col in df.columns:
+                            if any(term in str(col).lower() for term in ['cycle', 'cyc']):
+                                cycle_col = col
+                                break
 
-        # Look for cycle column
-        for candidate in ['cycle', 'cycle_index', 'cycle number', 'cycle_number']:
-            if candidate in col_map:
-                cycle_col = col_map[candidate]
-                break
+                        if cycle_col:
+                            df = df[df[cycle_col] == cycle_number]
 
-        if not voltage_col or (not capacity_col and not current_col):
-            raise ValueError("Could not identify required data columns")
+                    return df[voltage_col].values.tolist(), df[capacity_col].values.tolist()
 
-        # Filter for the specified cycle if provided
-        if cycle_number is not None and cycle_col:
-            df = df[df[cycle_col] == cycle_number]
-            if df.empty:
-                raise ValueError(f"No data found for cycle {cycle_number}")
+        except Exception as e:
+            logging.error(f"Error extracting data from file: {e}")
 
-        # Extract voltage data
-        voltage_data = df[voltage_col].values
-
-        # Extract capacity data
-        if capacity_col:
-            capacity_data = df[capacity_col].values
-        elif current_col:
-            # If no capacity column but current available, integrate current over time
-            if 'time' in col_map:
-                time_col = col_map['time']
-                time_data = df[time_col].values
-                current_data = df[current_col].values
-
-                # Calculate capacity by integrating current (Q = ∫I dt)
-                dt_values = np.diff(time_data, prepend=time_data[0])
-                capacity_incremental = current_data * dt_values / 3600  # Convert to hours
-                capacity_data = np.cumsum(capacity_incremental)
-            else:
-                raise ValueError("Time data required for capacity calculation")
-
-        return voltage_data, capacity_data
-
-    except Exception as e:
-        raise ValueError(f"Error extracting voltage-capacity data: {e}")
+    # If all else fails, raise an error
+    raise ValueError("Could not identify required data columns")
 
 
 def differential_capacity_analysis(voltage_data, capacity_data, smooth=True, window_size=11):
@@ -1196,3 +1184,201 @@ def find_similar_tests(test_id, metrics=None, max_results=5):
 
     # Return top matches
     return similarities[:max_results]
+
+
+def get_cycle_voltage_capacity_data(test_id, cycle_number):
+    """
+    Get detailed voltage vs capacity data for a specific cycle.
+
+    Args:
+        test_id: ID of the TestResult to analyze
+        cycle_number: Specific cycle to extract
+
+    Returns:
+        dict: Dictionary with charge and discharge data
+    """
+    # Get TestResult object
+    test = models.TestResult.objects(id=test_id).first()
+    if not test:
+        raise ValueError(f"Test with ID {test_id} not found")
+
+    # Find the requested cycle
+    cycle = None
+    for c in test.cycles:
+        if c.cycle_index == cycle_number:
+            cycle = c
+            break
+
+    if not cycle:
+        raise ValueError(f"Cycle {cycle_number} not found in test {test_id}")
+
+    # Check if detailed data is available
+    has_detailed_data = (
+            hasattr(cycle, 'voltage_charge') and
+            hasattr(cycle, 'capacity_charge') and
+            hasattr(cycle, 'voltage_discharge') and
+            hasattr(cycle, 'capacity_discharge')
+    )
+
+    if not has_detailed_data or not cycle.voltage_charge:
+        raise ValueError(f"Detailed data not available for cycle {cycle_number}")
+
+    # Return the detailed data
+    return {
+        'charge': {
+            'voltage': cycle.voltage_charge,
+            'current': cycle.current_charge if hasattr(cycle, 'current_charge') else [],
+            'capacity': cycle.capacity_charge,
+            'time': cycle.time_charge if hasattr(cycle, 'time_charge') else []
+        },
+        'discharge': {
+            'voltage': cycle.voltage_discharge,
+            'current': cycle.current_discharge if hasattr(cycle, 'current_discharge') else [],
+            'capacity': cycle.capacity_discharge,
+            'time': cycle.time_discharge if hasattr(cycle, 'time_discharge') else []
+        }
+    }
+
+
+def plot_cycle_voltage_capacity(test_id, cycle_number):
+    """
+    Plot voltage vs. capacity for a specific cycle.
+
+    Args:
+        test_id: ID of the TestResult to analyze
+        cycle_number: Specific cycle to plot
+
+    Returns:
+        matplotlib.figure.Figure: The generated figure
+    """
+    import matplotlib.pyplot as plt
+
+    # Get the cycle data
+    cycle_data = get_cycle_voltage_capacity_data(test_id, cycle_number)
+
+    # Create the plot
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Plot charge data
+    if cycle_data['charge']['voltage'] and cycle_data['charge']['capacity']:
+        ax.plot(
+            cycle_data['charge']['capacity'],
+            cycle_data['charge']['voltage'],
+            'b-',
+            label='Charge'
+        )
+
+    # Plot discharge data
+    if cycle_data['discharge']['voltage'] and cycle_data['discharge']['capacity']:
+        ax.plot(
+            cycle_data['discharge']['capacity'],
+            cycle_data['discharge']['voltage'],
+            'r-',
+            label='Discharge'
+        )
+
+    # Set labels and title
+    ax.set_xlabel('Capacity (mAh)')
+    ax.set_ylabel('Voltage (V)')
+    ax.set_title(f'Voltage vs. Capacity - Cycle {cycle_number}')
+    ax.grid(True)
+    ax.legend()
+
+    return fig
+
+
+def calculate_differential_capacity(test_id, cycle_number, smoothing=True):
+    """
+    Calculate differential capacity (dQ/dV) for a specific cycle.
+
+    Args:
+        test_id: ID of the TestResult to analyze
+        cycle_number: Specific cycle to analyze
+        smoothing: Whether to apply smoothing to the result
+
+    Returns:
+        dict: Dictionary with charge and discharge dQ/dV data
+    """
+    import numpy as np
+    from scipy.signal import savgol_filter
+
+    # Get the cycle data
+    cycle_data = get_cycle_voltage_capacity_data(test_id, cycle_number)
+
+    result = {'charge': {}, 'discharge': {}}
+
+    # Process charge data
+    if cycle_data['charge']['voltage'] and cycle_data['charge']['capacity']:
+        v = np.array(cycle_data['charge']['voltage'])
+        q = np.array(cycle_data['charge']['capacity'])
+
+        # Sort by voltage (increasing)
+        sort_idx = np.argsort(v)
+        v_sorted = v[sort_idx]
+        q_sorted = q[sort_idx]
+
+        # Remove duplicates in voltage
+        unique_idx = np.concatenate(([True], np.diff(v_sorted) > 1e-5))
+        v_unique = v_sorted[unique_idx]
+        q_unique = q_sorted[unique_idx]
+
+        # Calculate dQ/dV
+        if len(v_unique) > 3:
+            dq = np.diff(q_unique)
+            dv = np.diff(v_unique)
+            dqdv = dq / dv
+            v_centers = (v_unique[1:] + v_unique[:-1]) / 2
+
+            # Apply smoothing if requested
+            if smoothing and len(dqdv) > 10:
+                window = min(11, len(dqdv) - 2 if len(dqdv) % 2 == 0 else len(dqdv) - 1)
+                window = max(3, window - 1 if window % 2 == 0 else window)
+                dqdv_smooth = savgol_filter(dqdv, window, 1)
+                result['charge'] = {
+                    'voltage': v_centers.tolist(),
+                    'dqdv': dqdv_smooth.tolist()
+                }
+            else:
+                result['charge'] = {
+                    'voltage': v_centers.tolist(),
+                    'dqdv': dqdv.tolist()
+                }
+
+    # Process discharge data
+    if cycle_data['discharge']['voltage'] and cycle_data['discharge']['capacity']:
+        v = np.array(cycle_data['discharge']['voltage'])
+        q = np.array(cycle_data['discharge']['capacity'])
+
+        # Sort by voltage (decreasing for discharge)
+        sort_idx = np.argsort(v)[::-1]
+        v_sorted = v[sort_idx]
+        q_sorted = q[sort_idx]
+
+        # Remove duplicates in voltage
+        unique_idx = np.concatenate(([True], np.diff(v_sorted) < -1e-5))
+        v_unique = v_sorted[unique_idx]
+        q_unique = q_sorted[unique_idx]
+
+        # Calculate dQ/dV
+        if len(v_unique) > 3:
+            dq = np.diff(q_unique)
+            dv = np.diff(v_unique)
+            dqdv = dq / dv
+            v_centers = (v_unique[1:] + v_unique[:-1]) / 2
+
+            # Apply smoothing if requested
+            if smoothing and len(dqdv) > 10:
+                window = min(11, len(dqdv) - 2 if len(dqdv) % 2 == 0 else len(dqdv) - 1)
+                window = max(3, window - 1 if window % 2 == 0 else window)
+                dqdv_smooth = savgol_filter(dqdv, window, 1)
+                result['discharge'] = {
+                    'voltage': v_centers.tolist(),
+                    'dqdv': dqdv_smooth.tolist()
+                }
+            else:
+                result['discharge'] = {
+                    'voltage': v_centers.tolist(),
+                    'dqdv': dqdv.tolist()
+                }
+
+    return result

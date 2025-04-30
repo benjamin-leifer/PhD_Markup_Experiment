@@ -3,6 +3,7 @@ import re
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib
+matplotlib.use('TkAgg')  # Or try 'QtAgg' if 'TkAgg' doesn't work
 
 # Provide the path to your lookup table Excel file.
 lookup_table_path = r'C:\Users\benja\OneDrive - Northeastern University\Spring 2025 Cell List.xlsx'
@@ -214,7 +215,7 @@ def plot_last_cells_discharge_curves(file_tuples, normalized=False, color_dict=N
                 if norm_factor > 4e-5:
                     if 'DT14' in key:
                         plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor*1.6, discharge['Voltage (V)'],
-                         label=f'{key} Cycle {cycle}', linestyle='-', color=color, lw = 3)
+                         label=f'{key} Cycle {cycle}', linestyle='-', color='0.5', lw = 3)
                     elif 'DTF14' in key:
                         plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor*1.6, discharge['Voltage (V)'],
                          label=f'{key} Cycle {cycle}', linestyle='-', color=color, lw = 1)
@@ -224,7 +225,7 @@ def plot_last_cells_discharge_curves(file_tuples, normalized=False, color_dict=N
                 else:
                     if 'DT14' in key:
                         plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor, discharge['Voltage (V)'],
-                                 label=f'{key} Cycle {cycle}', linestyle='-', color=color, lw=3)
+                                 label=f'{key} Cycle {cycle}', linestyle='-', color='0.5', lw=3)
                     elif 'DTF14' in key:
                         plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor, discharge['Voltage (V)'],
                                  label=f'{key} Cycle {cycle}', linestyle='-', color=color, lw=1)

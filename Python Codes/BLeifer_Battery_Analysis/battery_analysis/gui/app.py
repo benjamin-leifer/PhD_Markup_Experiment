@@ -1,10 +1,36 @@
-"""
-Main GUI application for battery analysis package.
+# Prevent import issues by adding parent directory to path
+import sys
+import os
+import importlib
 
-This module provides a Tkinter-based GUI for the battery_analysis package,
-allowing users to upload and analyze battery test data.
-"""
+# Add parent directory to path
+package_dir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+if package_dir not in sys.path:
+    sys.path.insert(0, package_dir)
+    print(f"Added to path: {package_dir}")
 
+# First import cycle_summary since it has no dependencies
+print("Importing cycle_summary...")
+from battery_analysis.models.cycle_summary import CycleSummary
+
+# Now import the models with circular dependencies
+print("Importing sample and test_result...")
+from battery_analysis.models.sample import Sample
+from battery_analysis.models.test_result import TestResult
+from battery_analysis.cycle_detail_viewer import CycleDetailViewer
+
+# Verify registration
+from mongoengine.base.common import _document_registry
+print("Registered models:", _document_registry.keys())
+
+# Now import the main models module to finalize setup
+print("Importing main models module...")
+import battery_analysis.models
+
+# Double-check registration
+print("Final registered models:", _document_registry.keys())
+
+import battery_analysis.models
 import os
 import sys
 import tkinter as tk
@@ -14,8 +40,12 @@ import threading
 import queue
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+
 import numpy as np
 import pandas as pd
+# Force-load all models early to register them with MongoEngine
+
+
 
 # Add parent directory to path to run the GUI directly
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -42,12 +72,18 @@ try:
 except ImportError:
     HAS_PYBAMM = False
 
-# Import GUI components
-from .comparison_tab import ComparisonTab
-from .advanced_analysis_tab import AdvancedAnalysisTab
-from .eis_tab import EISTab
-from .document_flow_tab import DocumentFlowTab
-from .pybamm_tab import PyBAMMTab
+# With this:
+from battery_analysis.gui.comparison_tab import ComparisonTab
+
+# And do the same for all other relative imports:
+from battery_analysis.gui.advanced_analysis_tab import AdvancedAnalysisTab
+from battery_analysis.gui.eis_tab import EISTab
+from battery_analysis.gui.document_flow_tab import DocumentFlowTab
+from battery_analysis.gui.pybamm_tab import PyBAMMTab
+
+from mongoengine.base.common import _document_registry
+print(_document_registry.keys())
+
 
 
 class BatteryAnalysisApp(tk.Tk):
@@ -82,6 +118,10 @@ class BatteryAnalysisApp(tk.Tk):
 
         # Start queue processing
         self.process_queue()
+
+        # Attempt to auto-connect to the database
+        self.after(500, self.auto_connect_to_db)
+
 
     def setup_logging(self):
         """Setup logging to both file and a text widget."""
@@ -240,6 +280,71 @@ class BatteryAnalysisApp(tk.Tk):
         self.log_text.see(tk.END)
         self.log_text.config(state=tk.DISABLED)
 
+    # Add this method to your BatteryAnalysisApp class
+    def auto_connect_to_db(self):
+        """Attempt to automatically connect to the local MongoDB database on startup."""
+        # Default connection parameters
+        host = "localhost"
+        port = 27017
+        db_name = "battery_test_db"
+
+        self.log_message(f"Attempting automatic connection to MongoDB at {host}:{port}/{db_name}")
+
+        # Use a thread to avoid blocking the UI during connection attempt
+        def connect_thread():
+            try:
+                connected = utils.connect_to_database(db_name, host, port)
+
+                if connected:
+                    self.queue.put({
+                        'type': 'status',
+                        'text': f"Connected to database {db_name}"
+                    })
+                    self.queue.put({
+                        'type': 'db_status',
+                        'connected': True
+                    })
+                    self.log_message(f"Connected to MongoDB at {host}:{port}/{db_name}")
+
+                    # Refresh sample lists in all tabs that support it
+                    if hasattr(self.data_tab, 'refresh_samples'):
+                        self.data_tab.refresh_samples()
+                    if hasattr(self.analysis_tab, 'refresh_samples'):
+                        self.analysis_tab.refresh_samples()
+                    if hasattr(self.comparison_tab, 'refresh_samples'):
+                        self.comparison_tab.refresh_samples()
+                    if hasattr(self.advanced_tab, 'refresh_samples'):
+                        self.advanced_tab.refresh_samples()
+                else:
+                    self.queue.put({
+                        'type': 'status',
+                        'text': "Automatic database connection failed. Please connect manually."
+                    })
+                    self.queue.put({
+                        'type': 'db_status',
+                        'connected': False
+                    })
+                    self.log_message("Failed to automatically connect to database", logging.WARNING)
+            except Exception as e:
+                self.queue.put({
+                    'type': 'status',
+                    'text': f"Error connecting to database: {str(e)}"
+                })
+                self.queue.put({
+                    'type': 'db_status',
+                    'connected': False
+                })
+                self.log_message(f"Error connecting to database: {str(e)}", logging.ERROR)
+
+        # Start the connection thread
+        import threading
+        threading.Thread(target=connect_thread, daemon=True).start()
+
+    def schedule_queue_processing(self):
+        """Schedule the process_queue method."""
+        self.after(100, self.schedule_queue_processing)
+        self.process_queue()
+
 
 class QueueHandler(logging.Handler):
     """
@@ -254,6 +359,8 @@ class QueueHandler(logging.Handler):
 
     def emit(self, record):
         self.log_queue.put(record)
+
+
 
 
 class DataUploadTab(ttk.Frame):
@@ -313,6 +420,16 @@ class DataUploadTab(ttk.Frame):
         )
         self.select_dir_btn.pack(side=tk.LEFT, padx=5)
 
+        self.preview_btn = ttk.Button(
+            btn_frame, text="Preview Matching", command=self.preview_sample_matching
+        )
+        self.preview_btn.pack(side=tk.LEFT, padx=5)
+        # Add this after your 'select_dir_btn'
+        self.import_samples_btn = ttk.Button(
+            btn_frame, text="Import Sample List", command=self.import_sample_list
+        )
+        self.import_samples_btn.pack(side=tk.LEFT, padx=5)
+
         self.process_btn = ttk.Button(
             btn_frame, text="Process Selected Files", command=self.process_files,
             state=tk.DISABLED
@@ -361,6 +478,13 @@ class DataUploadTab(ttk.Frame):
         )
         self.refresh_samples_btn.pack(side=tk.RIGHT, padx=5)
 
+        # Add this button to your UI, right after the other buttons in btn_frame
+        self.test_parser_btn = ttk.Button(
+            btn_frame, text="Test Parser",
+            command=lambda: self.test_parser(self.file_listbox.get(tk.ACTIVE))
+        )
+        self.test_parser_btn.pack(side=tk.LEFT, padx=5)
+
         # New sample creation (initially hidden)
         self.new_sample_frame = ttk.Frame(sample_frame)
 
@@ -390,6 +514,68 @@ class DataUploadTab(ttk.Frame):
         else:
             self.sample_select_frame.grid_forget()
             self.new_sample_frame.grid(row=1, column=0, columnspan=3, sticky=tk.W+tk.E, padx=5, pady=5)
+
+    def import_sample_list(self):
+        """Import a list of samples from an Excel file."""
+        if not self.main_app.db_connected:
+            messagebox.showwarning("Not Connected", "Please connect to the database first.")
+            return
+
+        # Open file dialog
+        file_path = filedialog.askopenfilename(
+            title="Select Sample List File",
+            filetypes=[("Excel files", "*.xlsx *.xls"), ("All files", "*.*")]
+        )
+
+        if not file_path:
+            return  # User cancelled
+
+        # Import the samples
+        try:
+            from battery_analysis.parsers.sample_parser import import_samples
+
+            # Show a dialog to ask about updating
+            update_existing = messagebox.askyesno(
+                "Update Existing?",
+                "Update existing samples with new information?",
+                default=messagebox.YES
+            )
+
+            # Import the samples
+            self.main_app.update_status(f"Importing samples from {os.path.basename(file_path)}...")
+
+            # Use a thread to avoid freezing the UI
+            def import_thread():
+                try:
+                    success, updated, error = import_samples(file_path, update_existing)
+
+                    if error:
+                        self.main_app.log_message(f"Error importing samples: {error}", logging.ERROR)
+                        messagebox.showerror("Import Error", error)
+                        self.main_app.update_status("Import failed")
+                    else:
+                        self.main_app.log_message(
+                            f"Imported {success} new samples, updated {updated} existing samples")
+                        messagebox.showinfo(
+                            "Import Complete",
+                            f"Successfully imported {success} new samples and updated {updated} existing samples."
+                        )
+                        self.main_app.update_status("Import complete")
+
+                        # Refresh the sample list
+                        self.refresh_samples()
+
+                except Exception as e:
+                    self.main_app.log_message(f"Error importing samples: {str(e)}", logging.ERROR)
+                    messagebox.showerror("Import Error", f"Error importing samples: {str(e)}")
+                    self.main_app.update_status("Import failed")
+
+            # Start the thread
+            threading.Thread(target=import_thread, daemon=True).start()
+
+        except Exception as e:
+            self.main_app.log_message(f"Error importing samples: {str(e)}", logging.ERROR)
+            messagebox.showerror("Import Error", f"Error importing samples: {str(e)}")
 
     def connect_db(self):
         """Connect to the MongoDB database."""
@@ -466,6 +652,69 @@ class DataUploadTab(ttk.Frame):
             self.main_app.log_message(f"Loaded {len(sample_names)} samples from database")
         except Exception as e:
             self.main_app.log_message(f"Error loading samples: {str(e)}", logging.ERROR)
+
+    # Add this method to the DataUploadTab class
+    def import_sample_list(self):
+        """Import a list of samples from an Excel file."""
+        if not self.main_app.db_connected:
+            messagebox.showwarning("Not Connected", "Please connect to the database first.")
+            return
+
+        # Open file dialog
+        file_path = filedialog.askopenfilename(
+            title="Select Sample List File",
+            filetypes=[("Excel files", "*.xlsx *.xls"), ("All files", "*.*")]
+        )
+
+        if not file_path:
+            return  # User cancelled
+
+        # Import the samples
+        try:
+            from battery_analysis.parsers.sample_parser import import_samples
+
+            # Show a dialog to ask about updating
+            update_existing = messagebox.askyesno(
+                "Update Existing?",
+                "Update existing samples with new information?",
+                default=messagebox.YES
+            )
+
+            # Import the samples
+            self.main_app.update_status(f"Importing samples from {os.path.basename(file_path)}...")
+
+            # Use a thread to avoid freezing the UI
+            def import_thread():
+                try:
+                    success, updated, error = import_samples(file_path, update_existing)
+
+                    if error:
+                        self.main_app.log_message(f"Error importing samples: {error}", logging.ERROR)
+                        messagebox.showerror("Import Error", error)
+                        self.main_app.update_status("Import failed")
+                    else:
+                        self.main_app.log_message(
+                            f"Imported {success} new samples, updated {updated} existing samples")
+                        messagebox.showinfo(
+                            "Import Complete",
+                            f"Successfully imported {success} new samples and updated {updated} existing samples."
+                        )
+                        self.main_app.update_status("Import complete")
+
+                        # Refresh the sample list
+                        self.refresh_samples()
+
+                except Exception as e:
+                    self.main_app.log_message(f"Error importing samples: {str(e)}", logging.ERROR)
+                    messagebox.showerror("Import Error", f"Error importing samples: {str(e)}")
+                    self.main_app.update_status("Import failed")
+
+            # Start the thread
+            threading.Thread(target=import_thread, daemon=True).start()
+
+        except Exception as e:
+            self.main_app.log_message(f"Error importing samples: {str(e)}", logging.ERROR)
+            messagebox.showerror("Import Error", f"Error importing samples: {str(e)}")
 
     def select_files(self):
         """Open a file dialog to select data files."""
@@ -702,25 +951,150 @@ class DataUploadTab(ttk.Frame):
 
         self.main_app.update_status("Processing cancelled")
 
-    def _process_files_thread(self, selected_files, sample, update_strategy):
-        """Thread function for processing files with update handling."""
+    def preview_sample_matching(self):
+        """Preview which samples will be matched with each file."""
+        if not self.main_app.db_connected:
+            messagebox.showwarning("Not Connected", "Please connect to the database first.")
+            return
+
+        selected_indices = self.file_listbox.curselection()
+        if not selected_indices:
+            messagebox.showinfo("No Files Selected", "Please select files to preview.")
+            return
+
+        selected_files = [self.uploaded_files[i] for i in selected_indices]
+
+        # Create preview dialog
+        preview_dialog = tk.Toplevel(self)
+        preview_dialog.title("Sample Matching Preview")
+        preview_dialog.geometry("600x400")
+        preview_dialog.transient(self)
+
+        # Create a Treeview widget
+        preview_tree = ttk.Treeview(
+            preview_dialog,
+            columns=("file", "sample_code", "matched_sample"),
+            show="headings"
+        )
+
+        preview_tree.heading("file", text="File")
+        preview_tree.heading("sample_code", text="Detected Code")
+        preview_tree.heading("matched_sample", text="Matched Sample")
+
+        preview_tree.column("file", width=250)
+        preview_tree.column("sample_code", width=100)
+        preview_tree.column("matched_sample", width=200)
+
+        preview_tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(preview_tree, orient=tk.VERTICAL, command=preview_tree.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        preview_tree.config(yscrollcommand=scrollbar.set)
+
+        # Process files to see what samples they match
+        from battery_analysis.parsers import parse_file_with_sample_matching
+
+        for file_path in selected_files:
+            try:
+                _, _, sample_code = parse_file_with_sample_matching(file_path)
+
+                # Look up the sample
+                matched_sample = "No match"
+                if sample_code:
+                    sample = models.Sample.objects(name=sample_code).first()
+                    if not sample:
+                        samples = models.Sample.objects(name__contains=sample_code)
+                        if samples:
+                            sample = samples.first()
+
+                    if sample:
+                        matched_sample = sample.name
+
+                # Add to the tree
+                preview_tree.insert(
+                    "", "end",
+                    values=(os.path.basename(file_path), sample_code or "Not detected", matched_sample)
+                )
+
+            except Exception as e:
+                preview_tree.insert(
+                    "", "end",
+                    values=(os.path.basename(file_path), "Error", str(e))
+                )
+
+        # Add button at the bottom
+        ttk.Button(
+            preview_dialog,
+            text="Close",
+            command=preview_dialog.destroy
+        ).pack(pady=10)
+
+    def _process_files_thread(self, selected_files, default_sample, update_strategy):
+        """Thread function for processing files with update handling and sample matching."""
         try:
             success_count = 0
             update_count = 0
             failed_count = 0
+            unmatched_count = 0
+
+            # Import the sample matching parser
+            from battery_analysis.parsers import parse_file_with_sample_matching
+
+            # For keeping track of processed sample codes
+            processed_samples = {}
 
             for file_path in selected_files:
                 try:
                     self.main_app.log_message(f"Processing file: {os.path.basename(file_path)}")
 
-                    if update_strategy == "new":
-                        # Always create new tests
-                        parsed_data, metadata = parse_file(file_path)
-                        # Add file path to metadata
-                        if metadata is None:
-                            metadata = {}
-                        metadata['file_path'] = file_path
+                    # Parse file with sample matching
+                    # Find this line in the _process_files_thread method:
+                    parsed_data, metadata, sample_code = parse_file_with_sample_matching(file_path)
 
+
+
+                    # Add these lines right after it:
+                    self.main_app.log_message(f"  - Detected tester: {metadata.get('tester', 'Unknown')}")
+                    self.main_app.log_message(f"  - Detected sample code: {sample_code}")
+                    self.main_app.log_message(f"  - Found {len(parsed_data)} cycles")
+
+                    # Look up the sample by code
+                    sample = None
+                    if sample_code:
+                        # Try exact match on name
+                        sample = models.Sample.objects(name=sample_code).first()
+
+                        # If no exact match, try searching in the name field
+                        if not sample:
+                            samples = models.Sample.objects(name__contains=sample_code)
+                            if samples:
+                                sample = samples.first()
+
+                    # Use the default sample if no match found
+                    if not sample:
+                        self.main_app.log_message(f"No matching sample found for code '{sample_code}', using default")
+                        sample = default_sample
+                        unmatched_count += 1
+                    else:
+                        self.main_app.log_message(f"Matched file to sample: {sample.name}")
+                        processed_samples[sample_code] = sample
+
+                    # Add file path to metadata
+                    if metadata is None:
+                        metadata = {}
+                    metadata['file_path'] = file_path
+
+                    # Process based on strategy
+                    if update_strategy == "auto":
+                        # Use automatic update detection
+                        test_result, was_update = data_update.process_file_with_update(file_path, sample)
+
+                        if was_update:
+                            update_count += 1
+                        else:
+                            success_count += 1
+                    else:
                         # Create a new test
                         test_result = analysis.create_test_result(
                             sample=sample,
@@ -730,12 +1104,129 @@ class DataUploadTab(ttk.Frame):
                         )
 
                         success_count += 1
-                        self.main_app.log_message(
-                            f"Created new test: {test_result.name} with {test_result.cycle_count} cycles"
-                        )
 
-                    elif update_strategy == "auto":
+                except Exception as e:
+                    self.main_app.log_message(f"Error processing file {os.path.basename(file_path)}: {str(e)}",
+                                              logging.ERROR)
+                    failed_count += 1
+
+            # Update status
+            self.main_app.update_status(
+                f"Processed {success_count} new, {update_count} updated, " +
+                f"{unmatched_count} unmatched, {failed_count} failed"
+            )
+
+            # Message about processed samples
+            if processed_samples:
+                sample_list = ", ".join(f"{code}: {sample.name}" for code, sample in processed_samples.items())
+                self.main_app.log_message(f"Files were associated with these samples: {sample_list}")
+
+            # Add right after parsing the file:
+            parsed_data, metadata, sample_code = parse_file_with_sample_matching(file_path)
+            self.main_app.log_message(f"File parsed as tester type: {metadata.get('tester', 'Unknown')}")
+
+            # Create or update test result
+            test_result = analysis.create_test_result(
+                sample=sample,
+                cycles_summary=parsed_data,
+                tester=metadata.get('tester', 'Other'),
+                metadata=metadata
+            )
+
+            # Store the raw file
+            try:
+                store_raw_data_file(
+                    file_path=file_path,
+                    test_result=test_result,
+                    file_type=metadata.get('tester', 'Other').lower()
+                )
+                self.main_app.log_message(f"Stored raw data file: {os.path.basename(file_path)}")
+            except Exception as e:
+                self.main_app.log_message(f"Error storing raw file: {str(e)}", logging.ERROR)
+
+            # Update the sample selection combobox
+            self.refresh_samples()
+
+        except Exception as e:
+            self.main_app.log_message(f"Error processing files: {str(e)}", logging.ERROR)
+            self.main_app.queue.put({
+                'type': 'status',
+                'text': f"Error processing files: {str(e)}"
+            })
+
+        finally:
+            # Re-enable the process button
+            self.process_btn.config(state=tk.NORMAL)
+
+    def _process_files_thread(self, selected_files, default_sample, update_strategy):
+        """Thread function for processing files with update handling and sample matching."""
+        try:
+            success_count = 0
+            update_count = 0
+            failed_count = 0
+            unmatched_count = 0
+
+            # Import the sample matching parser
+            from battery_analysis.parsers import parse_file_with_sample_matching
+
+            # For raw file storage
+            try:
+                from battery_analysis.utils.file_storage import store_raw_data_file
+            except ImportError:
+                self.main_app.log_message(
+                    "Raw file storage module not available. Files will not be stored in database.")
+                store_raw_data_file = None
+
+            # For keeping track of processed sample codes
+            processed_samples = {}
+
+            for file_path in selected_files:
+                try:
+                    self.main_app.log_message(f"Processing file: {os.path.basename(file_path)}")
+
+                    # Parse file with sample matching
+                    parsed_data, metadata, sample_code = parse_file_with_sample_matching(file_path)
+
+                    # Log parsing results
+                    self.main_app.log_message(f"  - Detected tester: {metadata.get('tester', 'Unknown')}")
+                    self.main_app.log_message(f"  - Detected sample code: {sample_code}")
+                    self.main_app.log_message(f"  - Found {len(parsed_data)} cycles")
+
+                    # Look up the sample by code
+                    sample = None
+                    if sample_code:
+                        # Try exact match on name
+                        sample = models.Sample.objects(name=sample_code).first()
+
+                        # If no exact match, try searching in the name field
+                        if not sample:
+                            samples = models.Sample.objects(name__contains=sample_code)
+                            if samples:
+                                sample = samples.first()
+
+                    # Use the default sample if no match found
+                    if not sample:
+                        self.main_app.log_message(f"No matching sample found for code '{sample_code}', using default")
+                        sample = default_sample
+                        unmatched_count += 1
+                    else:
+                        self.main_app.log_message(f"Matched file to sample: {sample.name}")
+                        processed_samples[sample_code] = sample
+
+                    # Add file path to metadata
+                    if metadata is None:
+                        metadata = {}
+                    metadata['file_path'] = file_path
+
+                    # Ensure valid tester value
+                    if 'tester' not in metadata or metadata['tester'] not in ['Arbin', 'BioLogic', 'Maccor', 'Neware',
+                                                                              'Other']:
+                        metadata['tester'] = 'Other'
+
+                    # Process based on strategy
+                    if update_strategy == "auto":
                         # Use automatic update detection
+                        self.main_app.log_message(f"Using auto-update detection for file")
                         test_result, was_update = data_update.process_file_with_update(file_path, sample)
 
                         if was_update:
@@ -748,161 +1239,58 @@ class DataUploadTab(ttk.Frame):
                             self.main_app.log_message(
                                 f"Created new test: {test_result.name} with {test_result.cycle_count} cycles"
                             )
+                    else:
+                        # Create a new test
+                        self.main_app.log_message(f"Creating new test with tester: {metadata.get('tester')}")
+                        test_result = analysis.create_test_result(
+                            sample=sample,
+                            cycles_summary=parsed_data,
+                            tester=metadata.get('tester', 'Other'),
+                            metadata=metadata
+                        )
 
-                    elif update_strategy == "ask":
-                        # Ask for each file
+                        success_count += 1
+                        self.main_app.log_message(
+                            f"Created new test: {test_result.name} with {test_result.cycle_count} cycles"
+                        )
 
-                        # Parse the file
-                        parsed_data, metadata = parse_file(file_path)
-                        # Add file path to metadata
-                        if metadata is None:
-                            metadata = {}
-                        metadata['file_path'] = file_path
-
-                        # Check for existing tests
-                        identifiers = data_update.extract_test_identifiers(file_path, parsed_data, metadata)
-                        matching_tests = data_update.find_matching_tests(identifiers, sample.id)
-
-                        if matching_tests:
-                            # Ask user what to do
-                            response_queue = queue.Queue()
-
-                            def show_update_dialog():
-                                existing_test = matching_tests[0]
-
-                                dialog = tk.Toplevel(self)
-                                dialog.title("Update Existing Test")
-                                dialog.geometry("500x300")
-                                dialog.transient(self.main_app)
-                                dialog.grab_set()
-
-                                ttk.Label(
-                                    dialog,
-                                    text=f"File appears to match existing test: {existing_test.name}",
-                                    font=("Arial", 10, "bold")
-                                ).pack(pady=(15, 5))
-
-                                # Show comparison
-                                comparison_frame = ttk.LabelFrame(dialog, text="Comparison")
-                                comparison_frame.pack(fill=tk.X, padx=15, pady=5)
-
-                                comparison_data = [
-                                    ("Existing test cycles:", str(existing_test.cycle_count)),
-                                    ("New file cycles:", str(len(parsed_data))),
-                                    ("Existing test date:", existing_test.date.strftime("%Y-%m-%d %H:%M:%S") if existing_test.date else "Unknown"),
-                                    ("File name:", os.path.basename(file_path))
-                                ]
-
-                                for i, (label, value) in enumerate(comparison_data):
-                                    ttk.Label(comparison_frame, text=label, anchor=tk.E).grid(
-                                        row=i, column=0, sticky=tk.E, padx=5, pady=2)
-                                    ttk.Label(comparison_frame, text=value).grid(
-                                        row=i, column=1, sticky=tk.W, padx=5, pady=2)
-
-                                # Actions
-                                action_frame = ttk.LabelFrame(dialog, text="Action")
-                                action_frame.pack(fill=tk.X, padx=15, pady=5)
-
-                                action_var = tk.StringVar(value="append")
-
-                                ttk.Radiobutton(
-                                    action_frame, text="Append new cycles (if any)",
-                                    variable=action_var, value="append"
-                                ).pack(anchor=tk.W, padx=5)
-
-                                ttk.Radiobutton(
-                                    action_frame, text="Replace completely",
-                                    variable=action_var, value="replace"
-                                ).pack(anchor=tk.W, padx=5)
-
-                                ttk.Radiobutton(
-                                    action_frame, text="Create as new test anyway",
-                                    variable=action_var, value="new"
-                                ).pack(anchor=tk.W, padx=5)
-
-                                ttk.Radiobutton(
-                                    action_frame, text="Skip this file",
-                                    variable=action_var, value="skip"
-                                ).pack(anchor=tk.W, padx=5)
-
-                                # Buttons
-                                button_frame = ttk.Frame(dialog)
-                                button_frame.pack(side=tk.BOTTOM, pady=15)
-
-                                ttk.Button(
-                                    button_frame, text="Apply",
-                                    command=lambda: response_queue.put(action_var.get()) or dialog.destroy()
-                                ).pack(side=tk.LEFT, padx=5)
-
-                                # Wait for response
-                                dialog.protocol("WM_DELETE_WINDOW", lambda: response_queue.put("skip") or dialog.destroy())
-
-                            # Show dialog in main thread and wait for response
-                            self.main_app.after(0, show_update_dialog)
-                            action = response_queue.get()  # This blocks until user responds
-
-                            if action == "skip":
-                                continue  # Skip this file
-
-                            elif action == "new":
-                                # Create as new test
-                                test_result = analysis.create_test_result(
-                                    sample=sample,
-                                    cycles_summary=parsed_data,
-                                    tester=metadata.get('tester', 'Unknown'),
-                                    metadata=metadata
-                                )
-
-                                success_count += 1
-                                self.main_app.log_message(
-                                    f"Created new test: {test_result.name} with {test_result.cycle_count} cycles"
-                                )
-
-                            else:  # append or replace
-                                # Update existing test
-                                existing_test = matching_tests[0]
-                                updated_test = data_update.update_test_data(
-                                    existing_test, parsed_data, metadata, strategy=action
-                                )
-
-                                update_count += 1
-                                self.main_app.log_message(
-                                    f"Updated existing test: {updated_test.name} ({action}) to {updated_test.cycle_count} cycles"
-                                )
-
-                        else:
-                            # No match, create new test
-                            test_result = analysis.create_test_result(
-                                sample=sample,
-                                cycles_summary=parsed_data,
-                                tester=metadata.get('tester', 'Unknown'),
-                                metadata=metadata
+                    # Store the raw file if the storage function is available
+                    if store_raw_data_file:
+                        try:
+                            store_raw_data_file(
+                                file_path=file_path,
+                                test_result=test_result,
+                                file_type=metadata.get('tester', 'Other').lower()
                             )
-
-                            success_count += 1
-                            self.main_app.log_message(
-                                f"Created new test: {test_result.name} with {test_result.cycle_count} cycles"
-                            )
+                            self.main_app.log_message(f"Stored raw data file: {os.path.basename(file_path)}")
+                        except Exception as e:
+                            self.main_app.log_message(f"Error storing raw file: {str(e)}", logging.ERROR)
 
                 except Exception as e:
-                    self.main_app.log_message(f"Error processing file {os.path.basename(file_path)}: {str(e)}", logging.ERROR)
+                    self.main_app.log_message(f"Error processing file {os.path.basename(file_path)}: {str(e)}",
+                                              logging.ERROR)
                     failed_count += 1
 
             # Update status
             self.main_app.update_status(
-                f"Processed {success_count} new, {update_count} updated, {failed_count} failed"
+                f"Processed {success_count} new, {update_count} updated, " +
+                f"{unmatched_count} unmatched, {failed_count} failed"
             )
+
+            # Message about processed samples
+            if processed_samples:
+                sample_list = ", ".join(f"{code}: {sample.name}" for code, sample in processed_samples.items())
+                self.main_app.log_message(f"Files were associated with these samples: {sample_list}")
 
             # Update the sample selection combobox
             self.refresh_samples()
 
-            # Notify analysis tab that new data is available
+            # Get the latest test result for the analysis tab
             if success_count > 0 or update_count > 0:
-                # Get the latest test result
-                sample_obj = models.Sample.objects(id=sample.id).first()
+                # Notify analysis tab that new data is available
+                sample_obj = models.Sample.objects(id=default_sample.id).first()
                 if sample_obj and sample_obj.tests:
                     latest_test = models.TestResult.objects(id=sample_obj.tests[-1].id).first()
-
                     if latest_test:
                         self.main_app.queue.put({
                             'type': 'data_loaded',
@@ -922,6 +1310,25 @@ class DataUploadTab(ttk.Frame):
         finally:
             # Re-enable the process button
             self.process_btn.config(state=tk.NORMAL)
+
+    def test_parser(self, file_path):
+        """Test the parser on a selected file."""
+        if not file_path:
+            self.main_app.log_message("No file selected. Please select a file first.")
+            return
+
+        self.main_app.log_message(f"Testing parser on file: {os.path.basename(file_path)}")
+
+        try:
+            from battery_analysis.parsers import test_parser
+            success = test_parser(file_path)
+
+            if success:
+                self.main_app.log_message("Parser test completed successfully")
+            else:
+                self.main_app.log_message("Parser test encountered issues", logging.WARNING)
+        except Exception as e:
+            self.main_app.log_message(f"Parser test failed: {str(e)}", logging.ERROR)
 
 
 class AnalysisTab(ttk.Frame):
@@ -975,6 +1382,11 @@ class AnalysisTab(ttk.Frame):
             analysis_frame, text="Generate Report", command=self.generate_report
         )
         self.report_btn.pack(fill=tk.X, padx=5, pady=5)
+
+        self.view_cycle_btn = ttk.Button(
+            analysis_frame, text="View Cycle Details", command=self.view_cycle_details
+        )
+        self.view_cycle_btn.pack(fill=tk.X, padx=5, pady=5)
 
         # Right panel: Visualization and results
         self.right_frame = ttk.Frame(self)
@@ -1405,6 +1817,65 @@ class AnalysisTab(ttk.Frame):
         except Exception as e:
             self.main_app.log_message(f"Error generating report: {str(e)}", logging.ERROR)
             messagebox.showerror("Error", f"Error generating report: {str(e)}")
+
+    """
+    This file contains code to update the AnalysisTab class in the GUI.
+
+    You should add this code to your AnalysisTab class in battery_analysis/gui/app.py.
+    """
+
+    # Add this import at the top of your file:
+    from battery_analysis.cycle_detail_viewer import CycleDetailViewer
+
+    # Add this method to your AnalysisTab class:
+    def view_cycle_details(self):
+        """View detailed data for a specific cycle."""
+        if not self.current_data:
+            messagebox.showinfo("No Data", "Please select a test first.")
+            return
+
+        test = self.current_data['test']
+
+        # Ask which cycle to view
+        cycle_dialog = tk.Toplevel(self)
+        cycle_dialog.title("Select Cycle")
+        cycle_dialog.geometry("300x150")
+        cycle_dialog.transient(self.main_app)
+        cycle_dialog.grab_set()
+
+        ttk.Label(
+            cycle_dialog,
+            text="Enter cycle number to view:"
+        ).pack(pady=(20, 5))
+
+        cycle_var = tk.StringVar()
+        cycle_entry = ttk.Entry(cycle_dialog, textvariable=cycle_var, width=10)
+        cycle_entry.pack(pady=5)
+        cycle_entry.insert(0, "1")
+
+        def on_view():
+            try:
+                cycle_num = int(cycle_var.get())
+                cycle_dialog.destroy()
+                self.show_cycle_detail_window(test.id, cycle_num)
+            except ValueError:
+                messagebox.showerror("Error", "Please enter a valid cycle number")
+
+        ttk.Button(
+            cycle_dialog, text="View", command=on_view
+        ).pack(pady=10)
+
+    def show_cycle_detail_window(self, test_id, cycle_num):
+        """Show a window with detailed cycle data."""
+        try:
+            # Create the cycle detail viewer
+            CycleDetailViewer(self.main_app, str(test_id), cycle_num)
+        except Exception as e:
+            self.main_app.log_message(f"Error viewing cycle details: {str(e)}", logging.ERROR)
+            messagebox.showerror("Error", f"Error viewing cycle details: {str(e)}")
+
+
+
 
 
 class SettingsTab(ttk.Frame):
