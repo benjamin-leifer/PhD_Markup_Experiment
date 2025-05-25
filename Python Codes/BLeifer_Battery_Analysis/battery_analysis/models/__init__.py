@@ -24,3 +24,12 @@ print("Final registered models:", _document_registry.keys())
 
 # Export the classes
 __all__ = ["Sample", "TestResult", "CycleSummary", "RawDataFile", "CycleDetailData"]
+
+from mongoengine.fields import LazyReferenceField, ReferenceField
+
+for attr_name, field in Model._fields.items():
+    if isinstance(field, (ReferenceField, LazyReferenceField)):
+        column_name = field.db_field            # this is the actual DB key
+    else:
+        column_name = field.field               # for normal fields
+    # …then use column_name when you wire up your rules…

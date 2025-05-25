@@ -182,6 +182,16 @@ def add_snowflake_to_plot(ax, image_path, x, y, zoom=0.1):
 # Add a snowflake image to the plot
 snowflake_image_path = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Snowflake.png'  # Replace with the path to your snowflake image
 
+def format_key(key):
+    """
+    Remove (NEI-16mm) from the key and format it for display.
+    Remove cell code from end of the key.
+    """
+    if '(NEI-16mm)' in key:
+        key = key.replace('(NEI-16mm)', '')
+    key = key[:-6]  # Remove the last 5 characters (cell code)
+
+    return key.strip()
 # ==========================
 # 6. New: Plot only the discharge curves for selected cells
 # ==========================
@@ -215,23 +225,26 @@ def plot_last_cells_discharge_curves(file_tuples, normalized=False, color_dict=N
                 if norm_factor > 4e-5:
                     if 'DT14' in key:
                         plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor*1.6, discharge['Voltage (V)'],
-                         label=f'{key} Cycle {cycle}', linestyle='-', color='0.5', lw = 3)
+                         label=f'{format_key(key)}', linestyle='-', color='0.5', lw = 3)
                     elif 'DTF14' in key:
                         plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor*1.6, discharge['Voltage (V)'],
-                         label=f'{key} Cycle {cycle}', linestyle='-', color=color, lw = 1)
+                         label=f'{format_key(key)}', linestyle='-', color=color, lw = 1)
                     elif 'DTFV' in key:
                         plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor*1.6, discharge['Voltage (V)'],
-                         label=f'{key} Cycle {cycle}', linestyle='-', color=color, lw = 2)
+                         label=f'{format_key(key)}', linestyle='-', color=color, lw = 2)
                 else:
                     if 'DT14' in key:
                         plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor, discharge['Voltage (V)'],
-                                 label=f'{key} Cycle {cycle}', linestyle='-', color='0.5', lw=3)
+                                 label=f'{format_key(key)}', linestyle='-', color='0.5', lw=3)
                     elif 'DTF14' in key:
                         plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor, discharge['Voltage (V)'],
-                                 label=f'{key} Cycle {cycle}', linestyle='-', color=color, lw=1)
+                                 label=f'{format_key(key)}', linestyle='-', color=color, lw=1)
                     elif 'DTFV' in key:
                         plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor, discharge['Voltage (V)'],
-                                 label=f'{key} Cycle {cycle}', linestyle='-', color=color, lw=2)
+                                 label=f'{format_key(key)}', linestyle='-', color=color, lw=2)
+                    elif 'MF91' in key:
+                        plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor, discharge['Voltage (V)'],
+                         label=f'{format_key(key)}', linestyle='-', color=color, lw = 2)
     plt.xlabel('Capacity (mAh/g)')
     plt.ylabel('Voltage (V)')
     plt.title('Discharge Curves for DT Cells at -51°C')
@@ -262,13 +275,15 @@ def assign_tol_colors(cell_codes):
         "#CC6677", "#882255", "#AA4499", "#661100", "#6699CC", "#888888"
     ]
 
-
+    josh_colors = [
+        '#000000', '#8A2BE2', '#1e90ff', '#32CD32', '#FFD700', '#DC143C'
+    ]
     color_dict = {}
 
     if len(cell_codes) <= len(tol_bright):
-        palette = tol_bright
+        palette = josh_colors
     else:
-        palette = tol_nightfall
+        palette = josh_colors
 
     for i, code in enumerate(cell_codes):
         color_dict[str(code)] = palette[i % len(palette)]
@@ -311,11 +326,11 @@ target_codes = [ 'FA01','EN04','DU06','EO05','EJ05',
                  'FE04',
                  'FF05',
                  'FG05',
-                 'ES05',]
-                 #'EC06',]
-holder_codes = ['holder1','holder2']
-holder_codes.extend(target_codes)
-cell_codes= [cell_code for cell_code in holder_codes]
+                 'ES05',
+                 'EC06',]
+#holder_codes = ['holder1','holder2']
+#holder_codes.extend(target_codes)
+cell_codes= [cell_code for cell_code in target_codes]
 custom_colors = assign_tol_colors(cell_codes)
 #target_codes = [ 'FA01','DU06','FC04', 'FD04', 'EB06', 'EC06', ]
 for code in target_codes:
