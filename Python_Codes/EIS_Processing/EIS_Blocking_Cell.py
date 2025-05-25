@@ -143,17 +143,17 @@ def plotNyquist_calcRohm(data, i, label, offset):
 
 # **** Get data
 
-#file = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_NoCalendar_EIS_RT_C01.mpt'  # 'MIT cell C3_01_PEIS_C03.mpt'
+#file = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python_Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_NoCalendar_EIS_RT_C01.mpt'  # 'MIT cell C3_01_PEIS_C03.mpt'
 file = '0720_05_EIS_0.5MTFSI_Blocking_InsideGB_0hr_25C_0x_Thin_Sample_C01.mpt'
 data = readMPTData(file)
 labels = '25C Thin Cell'
 
-#file2 = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_Calendar_30C_EIS_RT_C01.mpt'  # 'MIT cell B6_01_PEIS_C03.mpt' #B6 filename
+#file2 = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python_Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_Calendar_30C_EIS_RT_C01.mpt'  # 'MIT cell B6_01_PEIS_C03.mpt' #B6 filename
 file2 = '0720_05_EIS_0.5MTFSI_Blocking_InsideGB_0hr_40C_0x_Thin_Sample_t2_C01.mpt'
 data2 = readMPTData(file2)
 label2 = '40C Thin Cell'
 
-#file3 = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_Calendar_60C_EIS_RT_C01.mpt'  # 'MIT cell B3_01_PEIS_C04.mpt' #B3 filename
+#file3 = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python_Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_Calendar_60C_EIS_RT_C01.mpt'  # 'MIT cell B3_01_PEIS_C04.mpt' #B3 filename
 file3 = '0720_05_EIS_0.5MTFSI_Blocking_InsideGB_0hr_60C_0x_Thin_Sample_t2_C01.mpt'
 data3 = readMPTData(file3)
 label3 = '60C Thin Cell'

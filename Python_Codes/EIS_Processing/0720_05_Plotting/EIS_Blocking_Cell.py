@@ -147,12 +147,12 @@ def plotNyquist_calcRohm(data, i, label, offset):
 
 # **** Get data
 
-#file = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_NoCalendar_EIS_RT_C01.mpt'  # 'MIT cell C3_01_PEIS_C03.mpt'
+#file = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python_Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_NoCalendar_EIS_RT_C01.mpt'  # 'MIT cell C3_01_PEIS_C03.mpt'
 file = '0919_01_0.5MTFSI_ZnSym_InsideGB_0hr_RT_Tranference_01_PEIS_C05.mpt'
 data = readMPTData(file)
 labels = 'Pre Chronoamperometry'
 
-#file2 = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_Calendar_30C_EIS_RT_C01.mpt'  # 'MIT cell B6_01_PEIS_C03.mpt' #B6 filename
+#file2 = 'C:\Users\benja\OneDrive - Northeastern University\Northeastern\Gallaway Group\PhD Markup Experiment\Python_Codes\Alyssa_Old_Files\Functions.py\EIS Results\LL GPE\2023\0523\FullCell_EMD_ZnAnode_Calendar_30C_EIS_RT_C01.mpt'  # 'MIT cell B6_01_PEIS_C03.mpt' #B6 filename
 file2 = '0919_01_0.5MTFSI_ZnSym_InsideGB_0hr_RT_Tranference_03_PEIS_C05.mpt'
 data2 = readMPTData(file2)
 label2 = 'Post Chronoamperometry'
