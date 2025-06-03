@@ -17,7 +17,7 @@ def test_arbin_parse_basic():
     if not os.path.exists(test_file):
         # If fixture not present, skip this test
         return
-    cycles = arbin_parser.parse_arbin(test_file)
+    cycles = arbin_parser.parse_arbin_excel(test_file)
     # The fixture is known to have 3 cycles
     assert len(cycles) == 3
     # Check that keys exist
