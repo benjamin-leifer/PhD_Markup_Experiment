@@ -234,16 +234,24 @@ def differential_capacity_analysis(voltage_data, capacity_data, smooth=True, win
 
 
 def incremental_capacity_analysis(test_id, cycle_numbers=None, smooth=True):
-    """
-    Perform incremental capacity analysis (ICA) for specified cycles.
+    """Perform incremental capacity analysis (ICA) for selected cycles.
 
-    Args:
-        test_id: ID of the TestResult to analyze
-        cycle_numbers: List of cycle numbers to analyze (default: None = first and last cycles)
-        smooth: Whether to apply smoothing to the derivatives
+    Parameters
+    ----------
+    test_id : ObjectId | str
+        ID of the ``TestResult`` to analyze.
+    cycle_numbers : list[int] | None, optional
+        Specific cycle numbers to analyse.  If ``None`` and the test
+        contains more than four cycles, the routine analyses the first,
+        a middle, and the last cycle.  Otherwise only the first and last
+        cycles are used.
+    smooth : bool, optional
+        Whether to apply smoothing to the derivatives.
 
-    Returns:
-        dict: Dictionary with cycle numbers as keys and (voltage, dQ/dV) tuples as values
+    Returns
+    -------
+    dict
+        Dictionary mapping cycle numbers to ``(voltage, dQ/dV)`` tuples.
     """
     test = models.TestResult.objects(id=test_id).first()
     if not test:
