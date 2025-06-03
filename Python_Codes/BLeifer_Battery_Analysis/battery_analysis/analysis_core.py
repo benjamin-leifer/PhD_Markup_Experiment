@@ -392,7 +392,8 @@ def compute_metrics(cycles_summary):
     # Convert to DataFrame for easier calculations
     df = pd.DataFrame(cycles_summary)
 
-    # Compute metrics
+    # Use the first cycle's discharge capacity as the baseline for
+    # initial capacity and capacity retention calculations
     metrics = {
         'cycle_count': len(df),
         'initial_capacity': df['discharge_capacity'].iloc[0] if not df.empty else None,
