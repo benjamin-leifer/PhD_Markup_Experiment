@@ -151,8 +151,13 @@ def update_sample_properties(sample, save=True):
         return sample
 
     # Ensure we have actual TestResult objects (dereference if needed)
-    tests = [t if isinstance(t, models.TestResult) else
-             models.TestResult.objects(id=t.id).first() for t in tests]
+    if hasattr(models.TestResult, "objects"):
+        tests = [
+            t if isinstance(t, models.TestResult) else models.TestResult.objects(id=t.id).first()
+            for t in tests
+        ]
+    else:  # dataclass fallback for tests
+        tests = [t for t in tests]
     tests = [t for t in tests if t is not None]  # Remove any None values
 
     if not tests:
@@ -390,10 +395,12 @@ def compute_metrics(cycles_summary):
     # Compute metrics
     metrics = {
         'cycle_count': len(df),
-        'initial_capacity': df['charge_capacity'].iloc[0] if not df.empty else None,
+        'initial_capacity': df['discharge_capacity'].iloc[0] if not df.empty else None,
         'final_capacity': df['discharge_capacity'].iloc[-1] if not df.empty else None,
-        'capacity_retention': (df['discharge_capacity'].iloc[-1] / df['charge_capacity'].iloc[0]) * 100
-        if not df.empty and df['charge_capacity'].iloc[0] > 0 else None,
+        'capacity_retention': (
+            df['discharge_capacity'].iloc[-1] / df['discharge_capacity'].iloc[0]
+        )
+        if not df.empty and df['discharge_capacity'].iloc[0] > 0 else None,
         'avg_coulombic_eff': np.mean(df['coulombic_efficiency']) if not df.empty else None,
         'avg_energy_efficiency': np.mean(df['energy_efficiency']) if 'energy_efficiency' in df.columns else None
     }

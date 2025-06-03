@@ -1,5 +1,14 @@
 # tests/test_analysis.py
 
+import os
+import sys
+
+# Add the package root to sys.path so ``battery_analysis`` can be imported
+TESTS_DIR = os.path.dirname(__file__)
+PACKAGE_ROOT = os.path.abspath(os.path.join(TESTS_DIR, '..'))
+if PACKAGE_ROOT not in sys.path:
+    sys.path.insert(0, PACKAGE_ROOT)
+
 from battery_analysis import analysis
 
 def test_compute_metrics():
