@@ -1,6 +1,14 @@
 # tests/test_parsers.py
 
 import os
+import sys
+
+# Ensure the battery_analysis package is importable when running tests
+TESTS_DIR = os.path.dirname(__file__)
+PACKAGE_ROOT = os.path.abspath(os.path.join(TESTS_DIR, '..'))
+if PACKAGE_ROOT not in sys.path:
+    sys.path.insert(0, PACKAGE_ROOT)
+
 from battery_analysis.parsers import arbin_parser, biologic_parser
 
 def test_arbin_parse_basic():

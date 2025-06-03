@@ -2,11 +2,15 @@
 Utility functions for the battery analysis package.
 """
 import logging
-from mongoengine import connect
+
+try:  # pragma: no cover - depends on environment
+    from mongoengine import connect
+except Exception:  # pragma: no cover - executed when mongoengine missing
+    connect = None
 # ---------------------------------------------------------------------------
 # Database helper (robust connector)
 # ---------------------------------------------------------------------------
-from .db import connect_with_fallback as connect_to_database
+from .db import connect_with_fallback as _connect_with_fallback
 
 
 def connect_to_database(db_name="battery_test_db", host="localhost", port=27017):
@@ -21,6 +25,9 @@ def connect_to_database(db_name="battery_test_db", host="localhost", port=27017)
     Returns:
         bool: True if connection successful, False otherwise
     """
+    if connect is None:
+        logging.warning("mongoengine not available; skipping DB connection")
+        return False
     try:
         # Attempt to connect to the database
         conn = connect(db_name, host=host, port=port)
@@ -29,7 +36,9 @@ def connect_to_database(db_name="battery_test_db", host="localhost", port=27017)
         server_info = conn.server_info()
 
         logging.info(f"Connected to MongoDB {db_name} at {host}:{port}")
-        logging.info(f"MongoDB version: {server_info.get('version', 'unknown')}")
+        logging.info(
+            f"MongoDB version: {server_info.get('version', 'unknown')}"
+        )
 
         return True
     except Exception as e:

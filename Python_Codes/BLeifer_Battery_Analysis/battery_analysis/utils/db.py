@@ -8,7 +8,10 @@ Usage
 >>> connected = connect_to_database(ask_if_fails=False)  # silent on failure
 """
 
-from mongoengine import connect
+try:  # pragma: no cover - depends on environment
+    from mongoengine import connect
+except Exception:  # pragma: no cover - executed when mongoengine missing
+    connect = None
 import logging
 import sys
 
@@ -27,6 +30,9 @@ def connect_with_fallback(
     bool
         True if a connection was established, False otherwise.
     """
+    if connect is None:
+        logging.warning("mongoengine not available; cannot connect to database")
+        return False
     try:
         connect(
             db_name,

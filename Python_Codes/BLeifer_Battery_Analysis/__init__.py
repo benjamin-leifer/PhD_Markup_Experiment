@@ -1,3 +1,3 @@
-# In your main __init__.py
-from . import analysis
-from . import utils
+"""Distribution package for the battery_analysis library used in tests."""
+
+from .battery_analysis import *  # re-export
