@@ -79,6 +79,7 @@ from battery_analysis.gui.comparison_tab import ComparisonTab
 from battery_analysis.gui.advanced_analysis_tab import AdvancedAnalysisTab
 from battery_analysis.gui.eis_tab import EISTab
 from battery_analysis.gui.document_flow_tab import DocumentFlowTab
+from battery_analysis.gui.dashboard_tab import DashboardTab
 from battery_analysis.gui.pybamm_tab import PyBAMMTab
 
 from mongoengine.base.common import _document_registry
@@ -175,6 +176,11 @@ class BatteryAnalysisApp(tk.Tk):
         if HAS_PYBAMM:
             self.pybamm_tab = PyBAMMTab(self.notebook, self)
             self.notebook.add(self.pybamm_tab, text="PyBAMM Modeling")
+
+
+        # Dashboard tab for monitoring running tests
+        self.dashboard_tab = DashboardTab(self.notebook, self)
+        self.notebook.add(self.dashboard_tab, text="Dashboard")
 
         # Document Flow tab
         self.doc_flow_tab = DocumentFlowTab(self.notebook, self)

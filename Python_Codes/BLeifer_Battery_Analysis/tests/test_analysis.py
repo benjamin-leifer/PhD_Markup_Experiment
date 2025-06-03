@@ -10,6 +10,8 @@ if PACKAGE_ROOT not in sys.path:
     sys.path.insert(0, PACKAGE_ROOT)
 
 from battery_analysis import analysis
+from mongoengine import connect, disconnect
+import mongomock
 
 def test_compute_metrics():
     # Create a dummy cycles summary list for testing
@@ -32,8 +34,26 @@ def test_compute_metrics():
 def test_inferred_property_propagation():
     # Here we simulate using the model layer (without actual DB for simplicity)
     # Create a dummy sample and test results in memory
-    from battery_analysis.models import Sample, TestResult
-    sample = Sample(name="TestSample")
+    from battery_analysis.models import TestResult
+
+    # Use an in-memory MongoDB so TestResult.objects does not fail
+    connect("testdb", mongo_client_class=mongomock.MongoClient)
+
+    # Temporarily disable the objects manager to avoid DB lookups
+    original_manager = getattr(TestResult, "objects", None)
+    if hasattr(TestResult, "objects"):
+        delattr(TestResult, "objects")
+
+    class DummySample:
+        def __init__(self):
+            self.tests = []
+            self.parent = None
+            self.avg_initial_capacity = None
+            self.avg_final_capacity = None
+            self.avg_capacity_retention = None
+            self.avg_coulombic_eff = None
+
+    sample = DummySample()
     # Normally, sample.save() and connecting to DB is needed, but for logic test we skip DB ops.
     # Create dummy TestResult objects (not saved to DB) and assign to sample
     class DummyTest:  # Simulate minimal interface of TestResult for this test
@@ -42,7 +62,6 @@ def test_inferred_property_propagation():
             self.final_capacity = final_cap
             self.capacity_retention = final_cap/init_cap if init_cap else 0
             self.avg_coulombic_eff = 0.0
-    sample.tests = []
     # Add two dummy tests with known values
     t1 = DummyTest(1.0, 0.8)   # 80% retention
     t2 = DummyTest(1.2, 1.0)   # ~83.3% retention
@@ -51,6 +70,12 @@ def test_inferred_property_propagation():
     sample.tests.append(t2)
     # Compute inferred properties
     analysis.update_sample_properties(sample, save=False)
+
+    # Restore objects manager and clean up connection
+    if original_manager is not None:
+        TestResult.objects = original_manager
+    
+    disconnect()
     # Now check that sample averages are correct:
     # avg_initial_capacity = (1.0 + 1.2) / 2 = 1.1
     assert abs(sample.avg_initial_capacity - 1.1) < 1e-6
