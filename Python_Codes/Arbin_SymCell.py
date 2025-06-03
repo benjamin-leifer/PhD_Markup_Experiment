@@ -16,8 +16,10 @@ class arbin_import_Sym_Cell():
         self.shape = shape
         self.cycle_Num_list = ['1:C/10', '2:C/10', '3:C/10', '4:C/5', '5:C/5', '6:C/5', '7:C/2', '8:C/2', '9:C/2',]
         self.theoretical_cap = theoretical_cap
-        if not num_cycles:
-            self.num_cyles = self.data['Cycle Index'].max()
+        if num_cycles is None:
+            self.num_cycles = self.data['Cycle Index'].max()
+        else:
+            self.num_cycles = num_cycles
 
 
 
@@ -85,7 +87,7 @@ class arbin_import_Sym_Cell():
             print(mAh)
             self.max_capacity.append(mAh/self.mass*self.theoretical_cap)
             i = i + 1
-            if i==self.num_cyles:
+            if i==self.num_cycles:
                 break
 
         print(self.max_cap)
@@ -108,7 +110,7 @@ class arbin_import_Sym_Cell():
             print(mAh)
             self.max_dis_capacity.append(mAh / self.mass * self.theoretical_cap)
             i = i + 1
-            if i == self.num_cyles:
+            if i == self.num_cycles:
                 break
 
         print(self.max_dis_cap)

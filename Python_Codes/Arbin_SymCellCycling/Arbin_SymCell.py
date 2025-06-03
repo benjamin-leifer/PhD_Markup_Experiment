@@ -363,7 +363,7 @@ class arbin_import_Sym_Cell():
             print(mAh)
             self.max_capacity.append(mAh/self.mass)
             i = i + 1
-            if i==self.num_cyles:
+            if i==self.num_cycles:
                 break
         print('Charge Capacity')
         print(self.max_cap)
@@ -386,7 +386,7 @@ class arbin_import_Sym_Cell():
             print(mAh)
             self.max_dis_capacity.append(mAh/self.mass)
             i = i + 1
-            if i == self.num_cyles:
+            if i == self.num_cycles:
                 break
         print('Discharge Capacity')
         print(self.max_dis_cap)
