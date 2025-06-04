@@ -313,15 +313,11 @@ class BatteryAnalysisApp(tk.Tk):
                     })
                     self.log_message(f"Connected to MongoDB at {host}:{port}/{db_name}")
 
-                    # Refresh sample lists in all tabs that support it
-                    if hasattr(self.data_tab, 'refresh_samples'):
-                        self.data_tab.refresh_samples()
-                    if hasattr(self.analysis_tab, 'refresh_samples'):
-                        self.analysis_tab.refresh_samples()
-                    if hasattr(self.comparison_tab, 'refresh_samples'):
-                        self.comparison_tab.refresh_samples()
-                    if hasattr(self.advanced_tab, 'refresh_samples'):
-                        self.advanced_tab.refresh_samples()
+                    # Schedule sample list refresh in the GUI thread
+                    self.queue.put({
+                        'type': 'update_diagram',
+                        'callback': self.refresh_all_samples
+                    })
                 else:
                     self.queue.put({
                         'type': 'status',
@@ -346,6 +342,17 @@ class BatteryAnalysisApp(tk.Tk):
         # Start the connection thread
         import threading
         threading.Thread(target=connect_thread, daemon=True).start()
+
+    def refresh_all_samples(self):
+        """Refresh sample lists in all tabs that support it."""
+        if hasattr(self, 'data_tab') and hasattr(self.data_tab, 'refresh_samples'):
+            self.data_tab.refresh_samples()
+        if hasattr(self, 'analysis_tab') and hasattr(self.analysis_tab, 'refresh_samples'):
+            self.analysis_tab.refresh_samples()
+        if hasattr(self, 'comparison_tab') and hasattr(self.comparison_tab, 'refresh_samples'):
+            self.comparison_tab.refresh_samples()
+        if hasattr(self, 'advanced_tab') and hasattr(self.advanced_tab, 'refresh_samples'):
+            self.advanced_tab.refresh_samples()
 
     def schedule_queue_processing(self):
         """Schedule the process_queue method."""
@@ -610,8 +617,11 @@ class DataUploadTab(ttk.Frame):
                     })
                     self.main_app.log_message(f"Connected to MongoDB at {host}:{port}/{db_name}")
 
-                    # Refresh sample list
-                    self.refresh_samples()
+                    # Schedule sample list refresh in the GUI thread
+                    self.main_app.queue.put({
+                        'type': 'update_diagram',
+                        'callback': self.refresh_samples
+                    })
                 else:
                     self.main_app.queue.put({
                         'type': 'status',
