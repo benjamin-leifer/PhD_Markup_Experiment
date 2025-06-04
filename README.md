@@ -21,6 +21,14 @@ pip install ".[pybamm]"       # PyBAMM modeling
 pip install ".[all]"          # everything
 ```
 
+### Development setup
+
+Install the dependencies needed for running the tests and style checks:
+
+```bash
+pip install -r requirements-dev.txt
+```
+
 The package requires a running MongoDB instance for data storage.
 
 ## License
