@@ -239,6 +239,14 @@ def parse_chemistry_string(chemistry_str):
     return params
 
 
+def chemistry_to_label(chemistry_str: str) -> str:
+    """Return a formatted label like 'Cathode|Anode' from a chemistry string."""
+    info = parse_chemistry_string(chemistry_str)
+    cathode = info.get("cathode_material", "Cathode")
+    anode = info.get("anode_material", "Anode")
+    return f"{cathode}|{anode}"
+
+
 def extract_form_factor_parameters(form_factor):
     """
     Extract geometric parameters based on form factor.
