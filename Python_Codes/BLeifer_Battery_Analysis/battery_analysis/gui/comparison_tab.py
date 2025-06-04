@@ -112,6 +112,14 @@ class ComparisonTab(ttk.Frame):
             variable=self.boxplot_var,
         ).grid(row=len(plot_types) + 1, column=0, sticky=tk.W, padx=20, pady=2)
 
+        # Option to hide individual curves when showing box plot
+        self.boxplot_only_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            options_frame,
+            text="Hide Individual Curves",
+            variable=self.boxplot_only_var,
+        ).grid(row=len(plot_types) + 2, column=0, sticky=tk.W, padx=20, pady=2)
+
         # Create comparison button
         ttk.Button(
             self.left_panel, text="Generate Comparison", command=self.generate_comparison
@@ -334,9 +342,10 @@ class ComparisonTab(ttk.Frame):
                 # Plot data based on selected plot type
                 plot_type = self.plot_type_var.get()
                 show_box = self.boxplot_var.get()
+                box_only = self.boxplot_only_var.get()
 
                 if plot_type == "capacity_vs_cycle":
-                    self.plot_capacity_vs_cycle(cycles_data, test_info, show_box)
+                    self.plot_capacity_vs_cycle(cycles_data, test_info, show_box, box_only)
                 elif plot_type == "normalized_capacity":
                     self.plot_normalized_capacity(cycles_data, test_info)
                 elif plot_type == "coulombic_efficiency":
@@ -367,25 +376,27 @@ class ComparisonTab(ttk.Frame):
         # Start the thread
         threading.Thread(target=comparison_thread, daemon=True).start()
 
-    def plot_capacity_vs_cycle(self, cycles_data, test_info, show_box=False):
+    def plot_capacity_vs_cycle(self, cycles_data, test_info, show_box=False, box_only=False):
         """Plot discharge capacity vs cycle number for all tests.
 
-        If ``show_box`` is True, a box/whisker plot is overlaid for each cycle
-        using the discharge capacities from all tests.
+        If ``show_box`` is True, a box/whisker plot is displayed using the
+        discharge capacities from all tests. When ``box_only`` is True, the
+        individual curves are omitted.
         """
         self.fig.clear()
         ax = self.fig.add_subplot(111)
 
-        # Plot each test
-        for test_id, cycle_data in cycles_data.items():
-            info = test_info[test_id]
+        if not box_only:
+            # Plot each test
+            for test_id, cycle_data in cycles_data.items():
+                info = test_info[test_id]
 
-            # Extract cycle numbers and discharge capacities
-            cycle_nums = [c['cycle_index'] for c in cycle_data['cycles']]
-            discharge_caps = [c['discharge_capacity'] for c in cycle_data['cycles']]
+                # Extract cycle numbers and discharge capacities
+                cycle_nums = [c['cycle_index'] for c in cycle_data['cycles']]
+                discharge_caps = [c['discharge_capacity'] for c in cycle_data['cycles']]
 
-            # Plot this test
-            ax.plot(cycle_nums, discharge_caps, 'o-', label=f"{info['name']} ({info['sample_name']})")
+                # Plot this test
+                ax.plot(cycle_nums, discharge_caps, 'o-', label=f"{info['name']} ({info['sample_name']})")
 
         if show_box:
             # Gather discharge capacities by cycle index for all tests
@@ -415,7 +426,8 @@ class ComparisonTab(ttk.Frame):
         ax.set_ylabel('Discharge Capacity (mAh)')
         ax.set_title('Discharge Capacity Comparison')
         ax.grid(True, linestyle='--', alpha=0.7)
-        ax.legend(loc='best')
+        if not box_only:
+            ax.legend(loc='best')
 
         # Update the canvas
         self.fig.tight_layout()
