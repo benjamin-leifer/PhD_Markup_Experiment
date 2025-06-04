@@ -1,6 +1,7 @@
 """
 Utility functions for the battery analysis package.
 """
+
 import logging
 import pickle
 import matplotlib.pyplot as plt
@@ -38,9 +39,7 @@ def connect_to_database(db_name="battery_test_db", host="localhost", port=27017)
         server_info = conn.server_info()
 
         logging.info(f"Connected to MongoDB {db_name} at {host}:{port}")
-        logging.info(
-            f"MongoDB version: {server_info.get('version', 'unknown')}"
-        )
+        logging.info(f"MongoDB version: {server_info.get('version', 'unknown')}")
 
         return True
     except Exception as e:
@@ -52,6 +51,7 @@ def debug_connection_status():
     """Print MongoDB connection status for debugging."""
     try:
         from mongoengine.connection import get_connection, get_db
+
         conn = get_connection()
         if conn:
             print(f"MongoDB connection exists: {conn}")
@@ -104,11 +104,24 @@ def get_file_list(directory):
 
     return files
 
+
 # ---------------------------------------------------------------------------
 # Plotting helper
 # ---------------------------------------------------------------------------
 def popout_figure(fig):
-    """Open a copy of ``fig`` in a standalone matplotlib window."""
+    """Open a copy of ``fig`` in a standalone matplotlib window.
+
+    Parameters
+    ----------
+    fig : :class:`matplotlib.figure.Figure`
+        Figure embedded in the GUI.
+
+    Returns
+    -------
+    :class:`matplotlib.figure.Figure`
+        The popped out figure instance. Keeping a reference to this
+        object prevents the window from being garbage collected.
+    """
 
     fig_copy = pickle.loads(pickle.dumps(fig))
 
@@ -121,4 +134,10 @@ def popout_figure(fig):
 
     pylab_helpers.Gcf.set_active(fig_copy.canvas.manager)
     fig_copy.show()
+    # Ensure the window persists without blocking the Tk main loop
+    try:  # matplotlib >= 3.3
+        plt.show(block=False)
+    except TypeError:  # older matplotlib
+        plt.show()
 
+    return fig_copy
