@@ -8,9 +8,7 @@ test results, and propagate properties across related samples.
 import numpy as np
 import logging
 from . import models
-import numpy as np
 import pandas as pd
-
 
 def create_test_result(sample, cycles_summary, tester, metadata=None):
     """
