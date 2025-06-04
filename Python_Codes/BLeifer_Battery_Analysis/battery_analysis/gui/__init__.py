@@ -6,6 +6,7 @@ allowing users to interact with the package's functionality in a user-friendly w
 """
 
 from .app import BatteryAnalysisApp
+from .scrollable_frame import ScrollableFrame
 
 from mongoengine import connect
 
@@ -16,4 +17,4 @@ connect(
 )
 
 
-__all__ = ['BatteryAnalysisApp']
+__all__ = ['BatteryAnalysisApp', 'ScrollableFrame']
