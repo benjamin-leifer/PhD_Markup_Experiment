@@ -82,6 +82,7 @@ from battery_analysis.gui.eis_tab import EISTab
 from battery_analysis.gui.document_flow_tab import DocumentFlowTab
 from battery_analysis.gui.dashboard_tab import DashboardTab
 from battery_analysis.gui.pybamm_tab import PyBAMMTab
+from battery_analysis.gui.scrollable_frame import ScrollableFrame
 
 from mongoengine.base.common import _document_registry
 print(_document_registry.keys())
@@ -156,39 +157,38 @@ class BatteryAnalysisApp(tk.Tk):
         self.notebook = ttk.Notebook(self.main_frame)
         self.notebook.pack(fill=tk.BOTH, expand=True)
 
+        # Helper to add a scrollable tab
+        def add_tab(tab_class, title, attr_name):
+            container = ttk.Frame(self.notebook)
+            scroll = ScrollableFrame(container)
+            scroll.pack(fill=tk.BOTH, expand=True)
+            tab = tab_class(scroll.inner, self)
+            tab.pack(fill=tk.BOTH, expand=True)
+            setattr(self, attr_name, tab)
+            self.notebook.add(container, text=title)
+
         # Create tabs
-        self.data_tab = DataUploadTab(self.notebook, self)
-        self.notebook.add(self.data_tab, text="Data Upload")
-
-        self.analysis_tab = AnalysisTab(self.notebook, self)
-        self.notebook.add(self.analysis_tab, text="Analysis")
-
-        self.comparison_tab = ComparisonTab(self.notebook, self)
-        self.notebook.add(self.comparison_tab, text="Comparison")
+        add_tab(DataUploadTab, "Data Upload", "data_tab")
+        add_tab(AnalysisTab, "Analysis", "analysis_tab")
+        add_tab(ComparisonTab, "Comparison", "comparison_tab")
 
         if HAS_ADVANCED:
-            self.advanced_tab = AdvancedAnalysisTab(self.notebook, self)
-            self.notebook.add(self.advanced_tab, text="Advanced Analysis")
+            add_tab(AdvancedAnalysisTab, "Advanced Analysis", "advanced_tab")
 
         if HAS_EIS:
-            self.eis_tab = EISTab(self.notebook, self)
-            self.notebook.add(self.eis_tab, text="EIS Analysis")
+            add_tab(EISTab, "EIS Analysis", "eis_tab")
 
         if HAS_PYBAMM:
-            self.pybamm_tab = PyBAMMTab(self.notebook, self)
-            self.notebook.add(self.pybamm_tab, text="PyBAMM Modeling")
+            add_tab(PyBAMMTab, "PyBAMM Modeling", "pybamm_tab")
 
 
         # Dashboard tab for monitoring running tests
-        self.dashboard_tab = DashboardTab(self.notebook, self)
-        self.notebook.add(self.dashboard_tab, text="Dashboard")
+        add_tab(DashboardTab, "Dashboard", "dashboard_tab")
 
         # Document Flow tab
-        self.doc_flow_tab = DocumentFlowTab(self.notebook, self)
-        self.notebook.add(self.doc_flow_tab, text="Document Flow")
+        add_tab(DocumentFlowTab, "Document Flow", "doc_flow_tab")
 
-        self.settings_tab = SettingsTab(self.notebook, self)
-        self.notebook.add(self.settings_tab, text="Settings")
+        add_tab(SettingsTab, "Settings", "settings_tab")
 
         # Create a status bar at the bottom
         self.status_frame = ttk.Frame(self.main_frame)
