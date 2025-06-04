@@ -19,6 +19,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from . import utils
 
 
 def generate_report(test_result, filename=None):
@@ -446,13 +447,19 @@ def generate_comparison_report(test_results, filename=None):
         discharge_capacities = [c.discharge_capacity for c in cycles]
 
         # Plot discharge capacity
-        plt.plot(cycle_numbers, discharge_capacities, marker='o', markersize=4,
-                 linestyle='-', label=f"{test.sample.name}")
+        plt.plot(
+            cycle_numbers,
+            discharge_capacities,
+            marker='o',
+            markersize=4,
+            linestyle='-',
+            label=f"{utils.get_sample_name(test.sample)}",
+        )
 
         # Store for normalized plot
         cycle_nums.append(cycle_numbers)
         discharge_caps.append(discharge_capacities)
-        sample_names.append(test.sample.name)
+        sample_names.append(utils.get_sample_name(test.sample))
 
     plt.title("Discharge Capacity Comparison", fontsize=12)
     plt.xlabel("Cycle Number")
@@ -501,7 +508,7 @@ def generate_comparison_report(test_results, filename=None):
     # Add data for each test
     for test in test_results:
         summary_data.append([
-            test.sample.name,
+            utils.get_sample_name(test.sample),
             test.name,
             str(test.cycle_count),
             f"{test.initial_capacity:.3f}",

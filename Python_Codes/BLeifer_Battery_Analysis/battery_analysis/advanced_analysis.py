@@ -1146,7 +1146,7 @@ def pca_analysis(test_ids, metrics=None):
         test_info.append({
             'test_id': str(test.id),
             'test_name': test.name,
-            'sample_name': test.sample.name
+            'sample_name': utils.get_sample_name(test.sample)
         })
 
     # Convert to numpy array
@@ -1252,7 +1252,7 @@ def find_similar_tests(test_id, metrics=None, max_results=5):
             similarities.append({
                 'test_id': str(test.id),
                 'test_name': test.name,
-                'sample_name': test.sample.name,
+                'sample_name': utils.get_sample_name(test.sample),
                 'similarity': float(similarity),
                 'cosine_similarity': float(cosine_sim),
                 'euclidean_similarity': float(euclidean_sim)

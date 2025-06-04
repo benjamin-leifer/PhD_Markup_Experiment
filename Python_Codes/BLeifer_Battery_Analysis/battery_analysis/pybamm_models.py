@@ -21,7 +21,7 @@ except ImportError:
     HAS_PYBAMM = False
     logging.warning("PyBAMM not found. Install with: pip install pybamm")
 
-from . import models
+from . import models, utils
 
 # Constants
 DEFAULT_CHEMISTRY = "lithium-ion"
@@ -602,7 +602,7 @@ def compare_simulation_with_experiment(simulation_results, test_id):
     comparison = {
         "test_name": test.name,
         "test_id": str(test.id),
-        "sample_name": test.sample.name,
+        "sample_name": utils.get_sample_name(test.sample),
         "model": simulation_results.get("model", "Unknown"),
         "metrics": {},
         "cycles": {}
