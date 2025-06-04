@@ -15,6 +15,7 @@ import pandas as pd
 import threading
 import logging
 import os
+import traceback
 
 from battery_analysis import models, analysis, report
 
@@ -303,8 +304,12 @@ class ComparisonTab(ttk.Frame):
                             'cycle_count': test_data['cycle_count']
                         }
                     except Exception as e:
+                        tb = traceback.format_exc()
                         self.main_app.log_message(
-                            f"Error getting cycle data for test {test_data['test_name']}: {str(e)}", logging.ERROR)
+                            f"Error getting cycle data for test {test_data['test_name']} ({test_id}): {str(e)}",
+                            logging.ERROR,
+                        )
+                        self.main_app.log_message(tb, logging.ERROR)
                         # Continue with other tests
 
                 if not cycles_data:
