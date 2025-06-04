@@ -111,5 +111,14 @@ def popout_figure(fig):
     """Open a copy of ``fig`` in a standalone matplotlib window."""
 
     fig_copy = pickle.loads(pickle.dumps(fig))
+
+    # ``Figure.show`` requires a canvas manager registered with pyplot.
+    new_canvas = plt.figure().canvas
+    plt.close(new_canvas.figure)  # close the empty placeholder figure
+    fig_copy.set_canvas(new_canvas)
+
+    import matplotlib._pylab_helpers as pylab_helpers
+
+    pylab_helpers.Gcf.set_active(fig_copy.canvas.manager)
     fig_copy.show()
 
