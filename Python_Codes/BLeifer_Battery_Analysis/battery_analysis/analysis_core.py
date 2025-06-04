@@ -369,9 +369,46 @@ def get_cycle_data(test_id, include_raw=False):
         if hasattr(cycle, 'internal_resistance') and cycle.internal_resistance is not None:
             cycle_data['internal_resistance'] = cycle.internal_resistance
 
+        # If requested, gather raw data either from the document or GridFS
+        if include_raw:
+            raw = {}
+
+            if hasattr(cycle, 'voltage_charge') and getattr(cycle, 'voltage_charge'):
+                raw['charge'] = {
+                    'voltage': list(getattr(cycle, 'voltage_charge', [])),
+                    'current': list(getattr(cycle, 'current_charge', [])),
+                    'capacity': list(getattr(cycle, 'capacity_charge', [])),
+                    'time': list(getattr(cycle, 'time_charge', [])),
+                }
+
+            if hasattr(cycle, 'voltage_discharge') and getattr(cycle, 'voltage_discharge'):
+                raw['discharge'] = {
+                    'voltage': list(getattr(cycle, 'voltage_discharge', [])),
+                    'current': list(getattr(cycle, 'current_discharge', [])),
+                    'capacity': list(getattr(cycle, 'capacity_discharge', [])),
+                    'time': list(getattr(cycle, 'time_discharge', [])),
+                }
+
+            if not raw:
+                try:
+                    from battery_analysis.utils.detailed_data_manager import (
+                        get_detailed_cycle_data,
+                    )
+
+                    detailed = get_detailed_cycle_data(test_id, cycle.cycle_index)
+                    if detailed and cycle.cycle_index in detailed:
+                        raw = detailed[cycle.cycle_index]
+                except Exception as exc:  # pragma: no cover - optional
+                    logging.debug(
+                        f"Error loading detailed data for cycle {cycle.cycle_index}: {exc}"
+                    )
+
+            if raw:
+                cycle_data['raw'] = raw
+
         result['cycles'].append(cycle_data)
 
-    # TODO: If include_raw=True, load and include raw data points from file if available
+    # No further raw handling
 
     return result
 
