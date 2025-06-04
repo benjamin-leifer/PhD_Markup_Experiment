@@ -22,3 +22,7 @@ pip install ".[all]"          # everything
 ```
 
 The package requires a running MongoDB instance for data storage.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
