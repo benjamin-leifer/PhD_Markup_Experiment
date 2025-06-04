@@ -34,3 +34,16 @@ The package requires a running MongoDB instance for data storage.
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+
+## Dashboard
+
+A lightweight Dash application provides a simple interface for monitoring battery tests.
+To run the dashboard locally, install `dash` and execute:
+
+```bash
+pip install dash dash-bootstrap-components
+python -m dashboard.app
+```
+
+The app currently uses placeholder data but is structured for MongoDB integration
+via the functions in `dashboard/data_access.py`.
