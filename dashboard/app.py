@@ -1,7 +1,7 @@
 """Dash application for battery test monitoring."""
 
 import dash
-from dash import html
+from dash import html, dcc
 import dash_bootstrap_components as dbc
 from dash import Input, Output, State
 
@@ -20,11 +20,24 @@ def create_app() -> dash.Dash:
         return dbc.Container(
             [
                 html.H2("Battery Test Dashboard", className="mt-2"),
-                layout_components.summary_layout(stats),
-                html.H4("Running Tests"),
-                layout_components.running_tests_table(running),
-                html.H4("Upcoming Tests"),
-                layout_components.upcoming_tests_table(upcoming),
+                dcc.Tabs(
+                    [
+                        dcc.Tab(
+                            [
+                                layout_components.summary_layout(stats),
+                                html.H4("Running Tests"),
+                                layout_components.running_tests_table(running),
+                                html.H4("Upcoming Tests"),
+                                layout_components.upcoming_tests_table(upcoming),
+                            ],
+                            label="Overview",
+                        ),
+                        dcc.Tab(
+                            layout_components.new_material_form(),
+                            label="New Material",
+                        ),
+                    ]
+                ),
                 layout_components.metadata_modal(),
             ],
             fluid=True,
@@ -57,6 +70,18 @@ def create_app() -> dash.Dash:
         if close_clicks and is_open:
             return False, dash.no_update
         return is_open, dash.no_update
+
+    @app.callback(
+        Output("material-submit-feedback", "children"),
+        Input("submit-material", "n_clicks"),
+        State("material-name", "value"),
+        State("material-chemistry", "value"),
+        State("material-notes", "value"),
+        prevent_initial_call=True,
+    )
+    def submit_material(n_clicks, name, chemistry, notes):
+        data_access.add_new_material(name or "", chemistry or "", notes or "")
+        return dbc.Alert("Material submitted", color="success", dismissable=True)
 
     return app
 

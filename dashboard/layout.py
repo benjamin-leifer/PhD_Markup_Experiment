@@ -105,3 +105,37 @@ def metadata_modal() -> dbc.Modal:
         is_open=False,
         size="lg",
     )
+
+
+def new_material_form() -> dbc.Form:
+    """Form for entering new experimental material info."""
+    return dbc.Form(
+        [
+            dbc.Row(
+                [
+                    dbc.Col(dbc.Label("Material Name"), width=2),
+                    dbc.Col(dbc.Input(id="material-name", placeholder="e.g. NMC811"), width=10),
+                ],
+                className="mb-3",
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(dbc.Label("Chemistry"), width=2),
+                    dbc.Col(
+                        dbc.Input(id="material-chemistry", placeholder="e.g. LiNiMnCoO2"),
+                        width=10,
+                    ),
+                ],
+                className="mb-3",
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(dbc.Label("Notes"), width=2),
+                    dbc.Col(dbc.Textarea(id="material-notes"), width=10),
+                ],
+                className="mb-3",
+            ),
+            dbc.Button("Submit", id="submit-material", color="primary", className="mt-2"),
+            html.Div(id="material-submit-feedback", className="mt-2"),
+        ]
+    )
