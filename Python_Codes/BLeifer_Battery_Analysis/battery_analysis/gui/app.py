@@ -16,7 +16,7 @@ from battery_analysis.models.cycle_summary import CycleSummary
 # Now import the models with circular dependencies
 print("Importing sample and test_result...")
 from battery_analysis.models.sample import Sample
-from battery_analysis.models.test_result import TestResult
+from battery_analysis.models.testresult import TestResult
 from battery_analysis.cycle_detail_viewer import CycleDetailViewer
 
 # Verify registration

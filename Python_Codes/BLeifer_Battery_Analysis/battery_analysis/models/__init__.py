@@ -16,7 +16,7 @@ try:  # pragma: no cover - behaviour depends on environment
 
     from .cycle_summary import CycleSummary  # type: ignore
     from .sample import Sample  # type: ignore
-    from .test_result import TestResult, CycleDetailData  # type: ignore
+    from .testresult import TestResult, CycleDetailData  # type: ignore
     from .raw_file import RawDataFile  # type: ignore
 
     __all__ = [

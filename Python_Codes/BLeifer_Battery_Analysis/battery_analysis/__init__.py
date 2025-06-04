@@ -52,8 +52,15 @@ from . import models
 from . import analysis
 from . import report
 from . import utils
-from . import advanced_analysis
-from . import eis
+try:  # Some optional dependencies like scipy may be missing
+    from . import advanced_analysis
+except Exception:  # pragma: no cover - optional import
+    advanced_analysis = None
+
+try:
+    from . import eis
+except Exception:  # pragma: no cover - optional import
+    eis = None
 
 # Make parsers accessible
 from .parsers import parse_file
