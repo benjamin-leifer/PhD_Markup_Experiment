@@ -65,3 +65,8 @@ def get_test_metadata(cell_id: str) -> Dict:
         "formation_date": "2024-01-01",
         "notes": "Example cell used for demo purposes.",
     }
+
+
+def add_new_material(name: str, chemistry: str, notes: str) -> None:
+    """Placeholder for storing a new material entry."""
+    print(f"New material added: {name}, {chemistry}, {notes}")
