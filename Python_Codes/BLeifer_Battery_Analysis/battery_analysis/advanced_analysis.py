@@ -13,6 +13,7 @@ from scipy.cluster import hierarchy
 from sklearn.decomposition import PCA
 from . import models
 from . import utils
+from . import pybamm_models
 
 # ---------------------------------------------------------------------------
 # Column-name aliases so the code works with Arbin, BioLogic, Neware, etc.
@@ -1319,7 +1320,7 @@ def get_cycle_voltage_capacity_data(test_id, cycle_number):
     }
 
 
-def plot_cycle_voltage_capacity(test_id, cycle_number):
+def plot_cycle_voltage_capacity(test_id, cycle_number, chemistry=None):
     """
     Plot voltage vs. capacity for a specific cycle.
 
@@ -1335,6 +1336,12 @@ def plot_cycle_voltage_capacity(test_id, cycle_number):
     # Get the cycle data
     cycle_data = get_cycle_voltage_capacity_data(test_id, cycle_number)
 
+    # Determine label based on chemistry
+    if chemistry:
+        label = pybamm_models.chemistry_to_label(chemistry)
+    else:
+        label = "Cell"
+
     # Create the plot
     fig, ax = plt.subplots(figsize=(10, 6))
 
@@ -1344,7 +1351,7 @@ def plot_cycle_voltage_capacity(test_id, cycle_number):
             cycle_data['charge']['capacity'],
             cycle_data['charge']['voltage'],
             'b-',
-            label='Charge'
+            label=label
         )
 
     # Plot discharge data
@@ -1353,7 +1360,7 @@ def plot_cycle_voltage_capacity(test_id, cycle_number):
             cycle_data['discharge']['capacity'],
             cycle_data['discharge']['voltage'],
             'r-',
-            label='Discharge'
+            label=None
         )
 
     # Set labels and title
