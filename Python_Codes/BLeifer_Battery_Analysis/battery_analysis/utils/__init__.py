@@ -100,3 +100,17 @@ def popout_figure(fig):
     fig_copy = pickle.loads(pickle.dumps(fig))
     fig_copy.show()
 
+
+def fetch_document(doc):
+    """Return the referenced document if using ``LazyReferenceField``."""
+    try:  # pragma: no cover - simple utility
+        return doc.fetch() if hasattr(doc, "fetch") else doc
+    except Exception:
+        return None
+
+
+def get_sample_name(sample):
+    """Safely obtain the name from a ``Sample`` or lazy reference."""
+    sample_doc = fetch_document(sample)
+    return getattr(sample_doc, "name", "Unknown") if sample_doc is not None else "Unknown"
+

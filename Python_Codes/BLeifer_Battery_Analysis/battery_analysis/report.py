@@ -18,6 +18,8 @@ from reportlab.lib import colors
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+from .utils import get_sample_name
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
 
@@ -81,7 +83,10 @@ def generate_plots(test_result):
     plt.plot(cycle_numbers, charge_capacities, marker='s', linestyle='-',
              label='Charge Capacity', color='red')
 
-    plt.title(f"Capacity vs. Cycle Number - {test_result.sample.name}", fontsize=12)
+    plt.title(
+        f"Capacity vs. Cycle Number - {get_sample_name(test_result.sample)}",
+        fontsize=12,
+    )
     plt.xlabel("Cycle Number")
     plt.ylabel("Capacity (mAh)")
     plt.grid(True, linestyle='--', alpha=0.7)
@@ -108,7 +113,10 @@ def generate_plots(test_result):
     plt.plot(cycle_numbers, coulombic_efficiencies, marker='o', linestyle='-',
              color='green')
 
-    plt.title(f"Coulombic Efficiency vs. Cycle Number - {test_result.sample.name}", fontsize=12)
+    plt.title(
+        f"Coulombic Efficiency vs. Cycle Number - {get_sample_name(test_result.sample)}",
+        fontsize=12,
+    )
     plt.xlabel("Cycle Number")
     plt.ylabel("Coulombic Efficiency (%)")
     plt.grid(True, linestyle='--', alpha=0.7)
@@ -144,7 +152,10 @@ def generate_plots(test_result):
         plt.plot(cycle_numbers, normalized_capacities, marker='o', linestyle='-',
                  color='purple')
 
-        plt.title(f"Normalized Discharge Capacity - {test_result.sample.name}", fontsize=12)
+        plt.title(
+            f"Normalized Discharge Capacity - {get_sample_name(test_result.sample)}",
+            fontsize=12,
+        )
         plt.xlabel("Cycle Number")
         plt.ylabel("Normalized Capacity (%)")
         plt.grid(True, linestyle='--', alpha=0.7)
@@ -214,7 +225,7 @@ def create_pdf_report(test_result, plot_paths, filename):
 
     # Sample data table
     sample_data = [
-        ["Sample Name:", test_result.sample.name],
+        ["Sample Name:", get_sample_name(test_result.sample)],
         ["Chemistry:", getattr(test_result.sample, 'chemistry', 'N/A')],
         ["Manufacturer:", getattr(test_result.sample, 'manufacturer', 'N/A')],
         ["Form Factor:", getattr(test_result.sample, 'form_factor', 'N/A')]
@@ -446,13 +457,19 @@ def generate_comparison_report(test_results, filename=None):
         discharge_capacities = [c.discharge_capacity for c in cycles]
 
         # Plot discharge capacity
-        plt.plot(cycle_numbers, discharge_capacities, marker='o', markersize=4,
-                 linestyle='-', label=f"{test.sample.name}")
+        plt.plot(
+            cycle_numbers,
+            discharge_capacities,
+            marker='o',
+            markersize=4,
+            linestyle='-',
+            label=f"{get_sample_name(test.sample)}",
+        )
 
         # Store for normalized plot
         cycle_nums.append(cycle_numbers)
         discharge_caps.append(discharge_capacities)
-        sample_names.append(test.sample.name)
+        sample_names.append(get_sample_name(test.sample))
 
     plt.title("Discharge Capacity Comparison", fontsize=12)
     plt.xlabel("Cycle Number")
@@ -501,7 +518,7 @@ def generate_comparison_report(test_results, filename=None):
     # Add data for each test
     for test in test_results:
         summary_data.append([
-            test.sample.name,
+            get_sample_name(test.sample),
             test.name,
             str(test.cycle_count),
             f"{test.initial_capacity:.3f}",

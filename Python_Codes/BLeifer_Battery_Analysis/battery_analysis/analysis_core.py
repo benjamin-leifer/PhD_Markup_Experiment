@@ -326,9 +326,11 @@ def get_cycle_data(test_id, include_raw=False):
         raise ValueError(f"Test with ID {test_id} not found")
 
     # Basic test info
+    from .utils import get_sample_name
+
     result = {
         'test_id': str(test.id),
-        'sample_name': test.sample.name,
+        'sample_name': get_sample_name(test.sample),
         'test_name': test.name,
         'tester': test.tester,
         'metrics': {

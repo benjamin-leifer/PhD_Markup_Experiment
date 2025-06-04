@@ -599,10 +599,13 @@ def compare_simulation_with_experiment(simulation_results, test_id):
     cycle_data = analysis.get_cycle_data(test_id)
 
     # Prepare comparison results
+    from .utils import get_sample_name
+    sample_name = get_sample_name(test.sample)
+
     comparison = {
         "test_name": test.name,
         "test_id": str(test.id),
-        "sample_name": test.sample.name,
+        "sample_name": sample_name,
         "model": simulation_results.get("model", "Unknown"),
         "metrics": {},
         "cycles": {}

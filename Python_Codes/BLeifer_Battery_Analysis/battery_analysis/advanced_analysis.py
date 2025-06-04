@@ -663,7 +663,7 @@ def analyze_rate_capability(sample_id):
     }
 
     return {
-        'sample_name': sample.name,
+        'sample_name': utils.get_sample_name(sample),
         'test_count': len(test_rates),
         'rate_data': rate_capability_data,
         'model': model,
@@ -864,7 +864,7 @@ def energy_analysis(test_id):
 
     # Calculate energy density if we have sample mass or volume
     energy_density = {}
-    sample = test.sample
+    sample = utils.fetch_document(test.sample)
 
     if hasattr(sample, 'mass') and sample.mass and sample.mass > 0:
         gravimetric_energy_density = initial_discharge_energy / (
@@ -1146,7 +1146,7 @@ def pca_analysis(test_ids, metrics=None):
         test_info.append({
             'test_id': str(test.id),
             'test_name': test.name,
-            'sample_name': test.sample.name
+            'sample_name': utils.get_sample_name(test.sample)
         })
 
     # Convert to numpy array
@@ -1252,7 +1252,7 @@ def find_similar_tests(test_id, metrics=None, max_results=5):
             similarities.append({
                 'test_id': str(test.id),
                 'test_name': test.name,
-                'sample_name': test.sample.name,
+                'sample_name': utils.get_sample_name(test.sample),
                 'similarity': float(similarity),
                 'cosine_similarity': float(cosine_sim),
                 'euclidean_similarity': float(euclidean_sim)

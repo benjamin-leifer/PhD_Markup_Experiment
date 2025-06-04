@@ -18,6 +18,7 @@ import re
 from scipy import interpolate
 import warnings
 from . import models
+from .utils import get_sample_name
 
 # Import impedance.py for EIS analysis
 try:
@@ -519,7 +520,7 @@ def get_eis_data(test_id):
         'Z_phase': np.arctan2(z_imag, z_real) * (180 / np.pi),
         'metadata': eis_metadata,
         'test_id': str(test.id),
-        'sample_name': test.sample.name
+        'sample_name': get_sample_name(test.sample)
     }
 
 
