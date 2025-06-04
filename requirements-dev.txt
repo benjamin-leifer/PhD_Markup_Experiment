@@ -1,0 +1,6 @@
+# Development dependencies for running the test suite
+# Install the package itself in editable mode with its dev extras
+-e ./Python_Codes/BLeifer_Battery_Analysis[dev]
+
+# Additional test utilities
+mongomock>=3.24.0
