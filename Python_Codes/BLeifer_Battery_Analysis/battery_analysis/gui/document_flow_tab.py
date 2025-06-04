@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from battery_analysis.utils import popout_figure
 import numpy as np
 import networkx as nx
 import logging
@@ -70,6 +71,14 @@ class DocumentFlowTab(ttk.Frame):
         # Add a navigation toolbar
         self.toolbar = NavigationToolbar2Tk(self.canvas, self.main_frame)
         self.toolbar.update()
+
+        # Button to open plot in a standalone window
+        self.popout_btn = ttk.Button(
+            self.main_frame,
+            text="Open in Window",
+            command=lambda: popout_figure(self.fig),
+        )
+        self.popout_btn.pack(anchor=tk.NE, padx=5, pady=5)
 
         # Info panel at the bottom
         info_frame = ttk.LabelFrame(self, text="Information")

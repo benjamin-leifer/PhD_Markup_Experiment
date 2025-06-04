@@ -2,6 +2,8 @@
 Utility functions for the battery analysis package.
 """
 import logging
+import pickle
+import matplotlib.pyplot as plt
 
 try:  # pragma: no cover - depends on environment
     from mongoengine import connect
@@ -88,3 +90,13 @@ def get_file_list(directory):
                 files.append(os.path.join(root, filename))
 
     return files
+
+# ---------------------------------------------------------------------------
+# Plotting helper
+# ---------------------------------------------------------------------------
+def popout_figure(fig):
+    """Open a copy of ``fig`` in a standalone matplotlib window."""
+
+    fig_copy = pickle.loads(pickle.dumps(fig))
+    fig_copy.show()
+
