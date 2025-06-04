@@ -22,3 +22,17 @@ pip install ".[all]"          # everything
 ```
 
 The package requires a running MongoDB instance for data storage.
+
+## Running Tests
+
+Install the development requirements first:
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+Then execute the test suite with:
+
+```bash
+pytest
+```
