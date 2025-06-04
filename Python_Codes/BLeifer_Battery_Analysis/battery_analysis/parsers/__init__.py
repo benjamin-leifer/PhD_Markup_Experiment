@@ -29,7 +29,11 @@ def parse_file(file_path):
             from .arbin_parser import parse_arbin_excel
             print(f"Using Arbin parser for {filename}")
             # Call the parser and unpack the detailed_cycles, but only return what's expected
-            cycles_summary, metadata, detailed_cycles = parse_arbin_excel(file_path)
+            cycles_summary, metadata, detailed_cycles = parse_arbin_excel(
+                file_path,
+                return_metadata=True,
+                return_detailed=True,
+            )
 
             # Store detailed_cycles in metadata for later use
             if metadata is None:
@@ -134,7 +138,11 @@ def test_arbin_parser(file_path):
     print(f"Testing Arbin parser with file: {os.path.basename(file_path)}")
 
     try:
-        cycles, metadata, detailed_cycles = parse_arbin_excel(file_path)
+        cycles, metadata, detailed_cycles = parse_arbin_excel(
+            file_path,
+            return_metadata=True,
+            return_detailed=True,
+        )
 
         print(f"Metadata extracted:")
         for key, value in metadata.items():
@@ -174,7 +182,11 @@ def test_parser(file_path):
         if extension in ['.xlsx', '.xls']:
             print("Detected Excel file - testing with Arbin parser")
             from .arbin_parser import parse_arbin_excel
-            cycles, metadata, detailed_cycles = parse_arbin_excel(file_path)
+            cycles, metadata, detailed_cycles = parse_arbin_excel(
+                file_path,
+                return_metadata=True,
+                return_detailed=True,
+            )
             detailed_data_available = True
         else:
             print(f"Using default parser for {extension} files")
