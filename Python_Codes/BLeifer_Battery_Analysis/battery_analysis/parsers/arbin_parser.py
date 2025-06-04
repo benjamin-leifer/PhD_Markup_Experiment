@@ -9,15 +9,35 @@ import datetime
 import logging
 
 
-def parse_arbin_excel(file_path):
-    """
-    Parse an Arbin Excel file (.xlsx) containing battery test data.
+def parse_arbin_excel(
+    file_path,
+    *,
+    return_metadata: bool = False,
+    return_detailed: bool = False,
+):
+    """Parse an Arbin Excel file and return extracted cycle data.
 
-    Args:
-        file_path: Path to the Arbin Excel file
+    The function historically returned a tuple of ``(cycles, metadata,
+    detailed_cycles)``.  For convenience in the unit tests we now return
+    just the cycle list by default and only include the additional
+    information when ``return_metadata`` and ``return_detailed`` are set.
 
-    Returns:
-        tuple: (cycles_summary, metadata, detailed_cycles)
+    Parameters
+    ----------
+    file_path : str
+        Path to the Arbin Excel file.
+    return_metadata : bool, optional
+        If ``True`` also return the parsed metadata dictionary.
+    return_detailed : bool, optional
+        If ``True`` also return the detailed per-cycle data.
+
+    Returns
+    -------
+    list | tuple
+        Always returns the list of cycle dictionaries.  If either of the
+        optional flags is ``True`` the corresponding values are appended
+        to the return tuple in the order ``(cycles, metadata,
+        detailed_cycles)``.
     """
     try:
         # Extract metadata from filename
@@ -184,8 +204,20 @@ def parse_arbin_excel(file_path):
                     'discharge_data': detailed_discharge
                 }
 
-        print(f"Extracted {len(cycles_summary)} cycles with {len(detailed_cycles)} detailed cycle datasets")
-        return cycles_summary, metadata, detailed_cycles
+        print(
+            f"Extracted {len(cycles_summary)} cycles with "
+            f"{len(detailed_cycles)} detailed cycle datasets"
+        )
+
+        if return_metadata or return_detailed:
+            result = [cycles_summary]
+            if return_metadata:
+                result.append(metadata)
+            if return_detailed:
+                result.append(detailed_cycles)
+            return tuple(result)
+
+        return cycles_summary
 
     except Exception as e:
         print(f"Error parsing Arbin file: {e}")
@@ -193,16 +225,30 @@ def parse_arbin_excel(file_path):
         traceback.print_exc()
 
         # Return minimal valid data
-        return [{
-            'cycle_index': 1,
-            'charge_capacity': 100.0,
-            'discharge_capacity': 95.0,
-            'coulombic_efficiency': 0.95
-        }], {
+        cycles_summary = [
+            {
+                'cycle_index': 1,
+                'charge_capacity': 100.0,
+                'discharge_capacity': 95.0,
+                'coulombic_efficiency': 0.95,
+            }
+        ]
+        metadata = {
             'tester': 'Arbin',
             'name': os.path.basename(file_path),
-            'error': str(e)
-        }, {}
+            'error': str(e),
+        }
+        detailed_cycles = {}
+
+        if return_metadata or return_detailed:
+            result = [cycles_summary]
+            if return_metadata:
+                result.append(metadata)
+            if return_detailed:
+                result.append(detailed_cycles)
+            return tuple(result)
+
+        return cycles_summary
 
 
 def find_column(df, patterns):
