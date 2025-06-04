@@ -3,11 +3,11 @@ import sys
 import os
 import importlib
 
-# Add parent directory to path
-package_dir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
-if package_dir not in sys.path:
-    sys.path.insert(0, package_dir)
-    print(f"Added to path: {package_dir}")
+# Add package root (one level above the battery_analysis directory) to the path
+package_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if package_root not in sys.path:
+    sys.path.insert(0, package_root)
+    print(f"Added to path: {package_root}")
 
 # First import cycle_summary since it has no dependencies
 print("Importing cycle_summary...")
@@ -48,8 +48,8 @@ import pandas as pd
 
 
 
-# Add parent directory to path to run the GUI directly
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Add parent directory to path to run the GUI directly (for manual execution)
+sys.path.insert(0, package_root)
 
 # Import package modules
 from battery_analysis import utils, models, analysis, report
