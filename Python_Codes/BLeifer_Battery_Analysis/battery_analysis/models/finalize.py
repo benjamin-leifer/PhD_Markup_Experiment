@@ -11,7 +11,7 @@ def add_delete_rules():
 
     # Import our models
     from .sample import Sample
-    from .test_result import TestResult
+    from .testresult import TestResult
 
     # Check registry again
     print("Models after import:", _document_registry.keys())
