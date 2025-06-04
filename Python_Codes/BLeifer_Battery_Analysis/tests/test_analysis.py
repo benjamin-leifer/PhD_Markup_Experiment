@@ -84,3 +84,75 @@ def test_inferred_property_propagation():
     # avg_capacity_retention = (0.8/1.0 + 1.0/1.2) / 2 = (0.8 + 0.8333)/2 ~ 0.8167
     expected_avg_ret = ((0.8) + (1.0/1.2)) / 2
     assert abs(sample.avg_capacity_retention - expected_avg_ret) < 1e-6
+
+
+def test_get_cycle_data_include_raw():
+    """Ensure raw cycle arrays are returned when include_raw=True."""
+    from battery_analysis import models
+
+    # Dummy cycle with detailed arrays
+    class DummyCycle:
+        def __init__(self):
+            self.cycle_index = 1
+            self.charge_capacity = 1.0
+            self.discharge_capacity = 0.9
+            self.coulombic_efficiency = 0.9
+            self.voltage_charge = [3.6, 3.7]
+            self.current_charge = [0.1, 0.1]
+            self.capacity_charge = [0.0, 0.5]
+            self.time_charge = [0.0, 1.0]
+            self.voltage_discharge = [3.7, 3.6]
+            self.current_discharge = [-0.1, -0.1]
+            self.capacity_discharge = [0.5, 0.0]
+            self.time_discharge = [1.0, 2.0]
+
+    class DummySample:
+        def __init__(self):
+            self.name = "S1"
+
+    class DummyTest:
+        def __init__(self):
+            self.id = "T1"
+            self.sample = DummySample()
+            self.name = "Test"
+            self.tester = "Arbin"
+            self.cycle_count = 1
+            self.initial_capacity = 1.0
+            self.final_capacity = 0.9
+            self.capacity_retention = 0.9
+            self.avg_coulombic_eff = 0.9
+            self.cycles = [DummyCycle()]
+
+    dummy_test = DummyTest()
+
+    # Patch the objects manager so get_cycle_data can find our dummy test
+    class DummyQuery:
+        def __init__(self, obj):
+            self.obj = obj
+
+        def first(self):
+            return self.obj
+
+    class DummyManager:
+        def __init__(self, obj):
+            self.obj = obj
+
+        def __call__(self, id):
+            return DummyQuery(self.obj)
+
+    original_manager = getattr(models.TestResult, "objects", None)
+    models.TestResult.objects = DummyManager(dummy_test)
+
+    try:
+        data = analysis.get_cycle_data("T1", include_raw=True)
+    finally:
+        # Restore manager
+        if original_manager is not None:
+            models.TestResult.objects = original_manager
+        else:
+            delattr(models.TestResult, "objects")
+
+    assert data["cycles"][0]["cycle_index"] == 1
+    assert "raw" in data["cycles"][0]
+    assert data["cycles"][0]["raw"]["charge"]["voltage"] == [3.6, 3.7]
+    assert data["cycles"][0]["raw"]["discharge"]["current"] == [-0.1, -0.1]
