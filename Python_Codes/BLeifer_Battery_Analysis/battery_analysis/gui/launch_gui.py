@@ -9,10 +9,10 @@ import os
 import sys
 import logging
 
-# Ensure that the package is in the Python path
-package_dir = os.path.abspath(os.path.dirname(__file__))
-if package_dir not in sys.path:
-    sys.path.insert(0, package_dir)
+# Ensure that the package root is in the Python path
+package_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if package_root not in sys.path:
+    sys.path.insert(0, package_root)
 
 # Import the GUI application
 try:
