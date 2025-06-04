@@ -104,6 +104,14 @@ class ComparisonTab(ttk.Frame):
                 options_frame, text=text, variable=self.plot_type_var, value=value
             ).grid(row=i + 1, column=0, sticky=tk.W, padx=20, pady=2)
 
+        # Option to overlay box/whisker plot of all samples binned by cycle
+        self.boxplot_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            options_frame,
+            text="Show Box Plot by Cycle",
+            variable=self.boxplot_var,
+        ).grid(row=len(plot_types) + 1, column=0, sticky=tk.W, padx=20, pady=2)
+
         # Create comparison button
         ttk.Button(
             self.left_panel, text="Generate Comparison", command=self.generate_comparison
@@ -325,9 +333,10 @@ class ComparisonTab(ttk.Frame):
 
                 # Plot data based on selected plot type
                 plot_type = self.plot_type_var.get()
+                show_box = self.boxplot_var.get()
 
                 if plot_type == "capacity_vs_cycle":
-                    self.plot_capacity_vs_cycle(cycles_data, test_info)
+                    self.plot_capacity_vs_cycle(cycles_data, test_info, show_box)
                 elif plot_type == "normalized_capacity":
                     self.plot_normalized_capacity(cycles_data, test_info)
                 elif plot_type == "coulombic_efficiency":
@@ -358,8 +367,12 @@ class ComparisonTab(ttk.Frame):
         # Start the thread
         threading.Thread(target=comparison_thread, daemon=True).start()
 
-    def plot_capacity_vs_cycle(self, cycles_data, test_info):
-        """Plot discharge capacity vs cycle number for all tests."""
+    def plot_capacity_vs_cycle(self, cycles_data, test_info, show_box=False):
+        """Plot discharge capacity vs cycle number for all tests.
+
+        If ``show_box`` is True, a box/whisker plot is overlaid for each cycle
+        using the discharge capacities from all tests.
+        """
         self.fig.clear()
         ax = self.fig.add_subplot(111)
 
@@ -373,6 +386,29 @@ class ComparisonTab(ttk.Frame):
 
             # Plot this test
             ax.plot(cycle_nums, discharge_caps, 'o-', label=f"{info['name']} ({info['sample_name']})")
+
+        if show_box:
+            # Gather discharge capacities by cycle index for all tests
+            max_cycle = max(len(data['cycles']) for data in cycles_data.values())
+            grouped = []
+            positions = []
+            for idx in range(max_cycle):
+                vals = [data['cycles'][idx]['discharge_capacity']
+                        for data in cycles_data.values()
+                        if idx < len(data['cycles'])]
+                if vals:
+                    grouped.append(vals)
+                    positions.append(idx + 1)
+
+            if grouped:
+                ax.boxplot(
+                    grouped,
+                    positions=positions,
+                    widths=0.5,
+                    patch_artist=True,
+                    boxprops=dict(facecolor='none', color='black'),
+                    medianprops=dict(color='red'),
+                )
 
         # Set plot properties
         ax.set_xlabel('Cycle Number')
