@@ -7,7 +7,7 @@ test results, and propagate properties across related samples.
 
 import numpy as np
 import logging
-from . import models
+from . import models, utils
 import pandas as pd
 
 def create_test_result(sample, cycles_summary, tester, metadata=None):
@@ -328,7 +328,7 @@ def get_cycle_data(test_id, include_raw=False):
     # Basic test info
     result = {
         'test_id': str(test.id),
-        'sample_name': test.sample.name,
+        'sample_name': utils.get_sample_name(test.sample),
         'test_name': test.name,
         'tester': test.tester,
         'metrics': {

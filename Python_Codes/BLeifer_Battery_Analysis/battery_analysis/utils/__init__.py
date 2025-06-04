@@ -66,6 +66,19 @@ def debug_connection_status():
         return False
 
 
+# ---------------------------------------------------------------------------
+# Generic helpers
+# ---------------------------------------------------------------------------
+def get_sample_name(sample):
+    """Return the name of ``sample`` regardless of lazy references."""
+    try:
+        if hasattr(sample, "fetch"):
+            sample = sample.fetch()
+        return sample.name
+    except Exception:
+        return getattr(sample, "name", "Unknown")
+
+
 # Create other utility functions as needed
 def get_file_list(directory):
     """
