@@ -133,11 +133,13 @@ def popout_figure(fig):
     import matplotlib._pylab_helpers as pylab_helpers
 
     pylab_helpers.Gcf.set_active(fig_copy.canvas.manager)
+    # ``Figure.show`` is sufficient to display the new window in the
+    # context of the running Tk mainloop. Calling ``plt.show`` here would
+    # trigger Matplotlib to attempt to manage *all* existing figures and
+    # recreate the Tk application after it has been closed, which caused
+    # the ``TclError`` when repeatedly popping out plots.  By avoiding
+    # ``plt.show`` we only display the requested figure and allow the
+    # function to be called multiple times.
     fig_copy.show()
-    # Ensure the window persists without blocking the Tk main loop
-    try:  # matplotlib >= 3.3
-        plt.show(block=False)
-    except TypeError:  # older matplotlib
-        plt.show()
 
     return fig_copy
