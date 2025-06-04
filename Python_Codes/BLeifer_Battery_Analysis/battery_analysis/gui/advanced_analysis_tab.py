@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from battery_analysis.utils import popout_figure
 import numpy as np
 import pandas as pd
 import threading
@@ -138,6 +139,14 @@ class AdvancedAnalysisTab(ttk.Frame):
         # Add a toolbar
         self.toolbar = NavigationToolbar2Tk(self.canvas, self.plot_frame)
         self.toolbar.update()
+
+        # Button to open plot in a standalone window
+        self.popout_btn = ttk.Button(
+            self.plot_frame,
+            text="Open in Window",
+            command=lambda: popout_figure(self.fig),
+        )
+        self.popout_btn.pack(anchor=tk.NE, padx=5, pady=5)
 
         # Results frame for text information
         self.results_frame = ttk.Frame(self.notebook)

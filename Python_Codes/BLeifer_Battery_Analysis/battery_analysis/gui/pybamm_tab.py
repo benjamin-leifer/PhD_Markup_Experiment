@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from battery_analysis.utils import popout_figure
 import numpy as np
 import pandas as pd
 import threading
@@ -254,6 +255,13 @@ class PyBAMMTab(ttk.Frame):
         self.toolbar = NavigationToolbar2Tk(self.canvas, self.plot_frame)
         self.toolbar.update()
 
+        self.popout_btn = ttk.Button(
+            self.plot_frame,
+            text="Open in Window",
+            command=lambda: popout_figure(self.fig),
+        )
+        self.popout_btn.pack(anchor=tk.NE, padx=5, pady=5)
+
         # Comparison tab
         self.comparison_frame = ttk.Frame(self.view_notebook)
         self.view_notebook.add(self.comparison_frame, text="Comparison")
@@ -267,6 +275,13 @@ class PyBAMMTab(ttk.Frame):
         # Add a toolbar
         self.comparison_toolbar = NavigationToolbar2Tk(self.comparison_canvas, self.comparison_frame)
         self.comparison_toolbar.update()
+
+        self.comparison_popout_btn = ttk.Button(
+            self.comparison_frame,
+            text="Open in Window",
+            command=lambda: popout_figure(self.comparison_fig),
+        )
+        self.comparison_popout_btn.pack(anchor=tk.NE, padx=5, pady=5)
 
         # Parameters tab
         self.fitted_params_frame = ttk.Frame(self.view_notebook)

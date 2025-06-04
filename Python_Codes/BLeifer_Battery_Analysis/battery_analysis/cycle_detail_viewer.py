@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from battery_analysis.utils import popout_figure
 import numpy as np
 import pandas as pd
 import logging
@@ -159,6 +160,12 @@ class CycleDetailViewer:
         # Add toolbar
         toolbar = NavigationToolbar2Tk(self.canvas, self.plot_tab)
         toolbar.update()
+
+        ttk.Button(
+            self.plot_tab,
+            text="Open in Window",
+            command=lambda: popout_figure(fig),
+        ).pack(pady=5, anchor=tk.NE)
 
         # Store figure for export
         self.figure = fig
@@ -379,6 +386,12 @@ class CycleDetailViewer:
             # Add toolbar
             toolbar = NavigationToolbar2Tk(canvas, self.dqdv_tab)
             toolbar.update()
+
+            ttk.Button(
+                self.dqdv_tab,
+                text="Open in Window",
+                command=lambda f=fig: popout_figure(f),
+            ).pack(pady=5, anchor=tk.NE)
 
             # Store figure for export
             self.dqdv_figure = fig
