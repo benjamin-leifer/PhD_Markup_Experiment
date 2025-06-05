@@ -10,6 +10,7 @@ import logging
 from . import models, utils
 import pandas as pd
 
+
 def create_test_result(sample, cycles_summary, tester, metadata=None):
     """
     Create a TestResult document from parsed cycle data and attach it to a Sample.
@@ -34,58 +35,64 @@ def create_test_result(sample, cycles_summary, tester, metadata=None):
     cycle_docs = []
     for cycle in cycles_summary:
         cycle_doc = models.CycleSummary(
-            cycle_index=cycle['cycle_index'],
-            charge_capacity=cycle['charge_capacity'],
-            discharge_capacity=cycle['discharge_capacity'],
-            coulombic_efficiency=cycle['coulombic_efficiency']
+            cycle_index=cycle["cycle_index"],
+            charge_capacity=cycle["charge_capacity"],
+            discharge_capacity=cycle["discharge_capacity"],
+            coulombic_efficiency=cycle["coulombic_efficiency"],
         )
 
         # Add optional fields if present
-        if 'charge_energy' in cycle and cycle['charge_energy'] is not None:
-            cycle_doc.charge_energy = cycle['charge_energy']
+        if "charge_energy" in cycle and cycle["charge_energy"] is not None:
+            cycle_doc.charge_energy = cycle["charge_energy"]
 
-        if 'discharge_energy' in cycle and cycle['discharge_energy'] is not None:
-            cycle_doc.discharge_energy = cycle['discharge_energy']
+        if "discharge_energy" in cycle and cycle["discharge_energy"] is not None:
+            cycle_doc.discharge_energy = cycle["discharge_energy"]
 
-        if 'energy_efficiency' in cycle and cycle['energy_efficiency'] is not None:
-            cycle_doc.energy_efficiency = cycle['energy_efficiency']
+        if "energy_efficiency" in cycle and cycle["energy_efficiency"] is not None:
+            cycle_doc.energy_efficiency = cycle["energy_efficiency"]
 
-        if 'internal_resistance' in cycle and cycle['internal_resistance'] is not None:
-            cycle_doc.internal_resistance = cycle['internal_resistance']
+        if "internal_resistance" in cycle and cycle["internal_resistance"] is not None:
+            cycle_doc.internal_resistance = cycle["internal_resistance"]
 
         # NEW: Add detailed cycle data if available
         # Charge data
-        if 'voltage_charge' in cycle and cycle['voltage_charge']:
-            cycle_doc.voltage_charge = cycle['voltage_charge']
+        if "voltage_charge" in cycle and cycle["voltage_charge"]:
+            cycle_doc.voltage_charge = cycle["voltage_charge"]
 
-        if 'current_charge' in cycle and cycle['current_charge']:
-            cycle_doc.current_charge = cycle['current_charge']
+        if "current_charge" in cycle and cycle["current_charge"]:
+            cycle_doc.current_charge = cycle["current_charge"]
 
-        if 'capacity_charge' in cycle and cycle['capacity_charge']:
-            cycle_doc.capacity_charge = cycle['capacity_charge']
+        if "capacity_charge" in cycle and cycle["capacity_charge"]:
+            cycle_doc.capacity_charge = cycle["capacity_charge"]
 
-        if 'time_charge' in cycle and cycle['time_charge']:
-            cycle_doc.time_charge = cycle['time_charge']
+        if "time_charge" in cycle and cycle["time_charge"]:
+            cycle_doc.time_charge = cycle["time_charge"]
 
         # Discharge data
-        if 'voltage_discharge' in cycle and cycle['voltage_discharge']:
-            cycle_doc.voltage_discharge = cycle['voltage_discharge']
+        if "voltage_discharge" in cycle and cycle["voltage_discharge"]:
+            cycle_doc.voltage_discharge = cycle["voltage_discharge"]
 
-        if 'current_discharge' in cycle and cycle['current_discharge']:
-            cycle_doc.current_discharge = cycle['current_discharge']
+        if "current_discharge" in cycle and cycle["current_discharge"]:
+            cycle_doc.current_discharge = cycle["current_discharge"]
 
-        if 'capacity_discharge' in cycle and cycle['capacity_discharge']:
-            cycle_doc.capacity_discharge = cycle['capacity_discharge']
+        if "capacity_discharge" in cycle and cycle["capacity_discharge"]:
+            cycle_doc.capacity_discharge = cycle["capacity_discharge"]
 
-        if 'time_discharge' in cycle and cycle['time_discharge']:
-            cycle_doc.time_discharge = cycle['time_discharge']
+        if "time_discharge" in cycle and cycle["time_discharge"]:
+            cycle_doc.time_discharge = cycle["time_discharge"]
 
         cycle_docs.append(cycle_doc)
 
     # Get name from metadata or generate a default one
-    name = metadata.get('name', metadata.get('file_name', f"{tester} test for {sample.name}"))
+    name = metadata.get(
+        "name", metadata.get("file_name", f"{tester} test for {sample.name}")
+    )
 
     # Instantiate a TestResult document
+    from battery_analysis import user_tracking
+
+    current_user = user_tracking.get_current_user()
+
     test_result = models.TestResult(
         sample=sample,
         tester=tester,
@@ -95,22 +102,37 @@ def create_test_result(sample, cycles_summary, tester, metadata=None):
         initial_capacity=metrics.get("initial_capacity"),
         final_capacity=metrics.get("final_capacity"),
         capacity_retention=metrics.get("capacity_retention"),
-        avg_coulombic_eff=metrics.get("avg_coulombic_eff")
+        avg_coulombic_eff=metrics.get("avg_coulombic_eff"),
+        created_by=current_user,
+        last_modified_by=current_user,
     )
+    if current_user:
+        test_result.notes_log.append(
+            {"timestamp": datetime.datetime.utcnow(), "note": "created"}
+        )
 
     # Add optional metrics if available
     if "avg_energy_efficiency" in metrics:
         test_result.avg_energy_efficiency = metrics["avg_energy_efficiency"]
 
     # Add metadata fields if available
-    for field in ['temperature', 'upper_cutoff_voltage', 'lower_cutoff_voltage',
-                  'charge_rate', 'discharge_rate', 'file_path']:
+    for field in [
+        "temperature",
+        "upper_cutoff_voltage",
+        "lower_cutoff_voltage",
+        "charge_rate",
+        "discharge_rate",
+        "file_path",
+    ]:
         if field in metadata:
             setattr(test_result, field, metadata[field])
 
     # Add test_type if available in metadata
-    if 'test_type' in metadata and metadata['test_type'] in models.TestResult.test_type.choices:
-        test_result.test_type = metadata['test_type']
+    if (
+        "test_type" in metadata
+        and metadata["test_type"] in models.TestResult.test_type.choices
+    ):
+        test_result.test_type = metadata["test_type"]
 
     # Save the TestResult to the database
     try:
@@ -151,7 +173,11 @@ def update_sample_properties(sample, save=True):
     # Ensure we have actual TestResult objects (dereference if needed)
     if hasattr(models.TestResult, "objects"):
         tests = [
-            t if isinstance(t, models.TestResult) else models.TestResult.objects(id=t.id).first()
+            (
+                t
+                if isinstance(t, models.TestResult)
+                else models.TestResult.objects(id=t.id).first()
+            )
             for t in tests
         ]
     else:  # dataclass fallback for tests
@@ -164,17 +190,25 @@ def update_sample_properties(sample, save=True):
     # Compute aggregated properties for this sample
     initial_caps = [t.initial_capacity for t in tests if t.initial_capacity is not None]
     final_caps = [t.final_capacity for t in tests if t.final_capacity is not None]
-    retentions = [t.capacity_retention for t in tests if t.capacity_retention is not None]
+    retentions = [
+        t.capacity_retention for t in tests if t.capacity_retention is not None
+    ]
     effs = [t.avg_coulombic_eff for t in tests if t.avg_coulombic_eff is not None]
 
     # Energy efficiency if available
-    energy_effs = [t.avg_energy_efficiency for t in tests
-                   if hasattr(t, 'avg_energy_efficiency') and t.avg_energy_efficiency is not None]
+    energy_effs = [
+        t.avg_energy_efficiency
+        for t in tests
+        if hasattr(t, "avg_energy_efficiency") and t.avg_energy_efficiency is not None
+    ]
 
     # Internal resistance if available
     internal_resistances = []
     for t in tests:
-        if hasattr(t, 'median_internal_resistance') and t.median_internal_resistance is not None:
+        if (
+            hasattr(t, "median_internal_resistance")
+            and t.median_internal_resistance is not None
+        ):
             internal_resistances.append(t.median_internal_resistance)
 
     # Update sample properties with aggregated values
@@ -209,17 +243,29 @@ def update_sample_properties(sample, save=True):
 
         if children:
             # Aggregate across all child samples
-            child_initial_caps = [child.avg_initial_capacity for child in children
-                                  if child.avg_initial_capacity is not None]
+            child_initial_caps = [
+                child.avg_initial_capacity
+                for child in children
+                if child.avg_initial_capacity is not None
+            ]
 
-            child_final_caps = [child.avg_final_capacity for child in children
-                                if child.avg_final_capacity is not None]
+            child_final_caps = [
+                child.avg_final_capacity
+                for child in children
+                if child.avg_final_capacity is not None
+            ]
 
-            child_retentions = [child.avg_capacity_retention for child in children
-                                if child.avg_capacity_retention is not None]
+            child_retentions = [
+                child.avg_capacity_retention
+                for child in children
+                if child.avg_capacity_retention is not None
+            ]
 
-            child_effs = [child.avg_coulombic_eff for child in children
-                          if child.avg_coulombic_eff is not None]
+            child_effs = [
+                child.avg_coulombic_eff
+                for child in children
+                if child.avg_coulombic_eff is not None
+            ]
 
             # Update parent properties
             if child_initial_caps:
@@ -235,20 +281,28 @@ def update_sample_properties(sample, save=True):
                 parent.avg_coulombic_eff = float(np.mean(child_effs))
 
             # Energy efficiency
-            child_energy_effs = [child.avg_energy_efficiency for child in children
-                                 if hasattr(child, 'avg_energy_efficiency') and
-                                 child.avg_energy_efficiency is not None]
+            child_energy_effs = [
+                child.avg_energy_efficiency
+                for child in children
+                if hasattr(child, "avg_energy_efficiency")
+                and child.avg_energy_efficiency is not None
+            ]
 
             if child_energy_effs:
                 parent.avg_energy_efficiency = float(np.mean(child_energy_effs))
 
             # Internal resistance
-            child_internal_resistances = [child.median_internal_resistance for child in children
-                                          if hasattr(child, 'median_internal_resistance') and
-                                          child.median_internal_resistance is not None]
+            child_internal_resistances = [
+                child.median_internal_resistance
+                for child in children
+                if hasattr(child, "median_internal_resistance")
+                and child.median_internal_resistance is not None
+            ]
 
             if child_internal_resistances:
-                parent.median_internal_resistance = float(np.median(child_internal_resistances))
+                parent.median_internal_resistance = float(
+                    np.median(child_internal_resistances)
+                )
 
             if save:
                 parent.save()
@@ -260,7 +314,7 @@ def update_sample_properties(sample, save=True):
     return sample
 
 
-def compare_samples(sample_ids, metric='capacity_retention'):
+def compare_samples(sample_ids, metric="capacity_retention"):
     """
     Compare multiple samples based on a selected metric.
 
@@ -273,16 +327,18 @@ def compare_samples(sample_ids, metric='capacity_retention'):
               sorted by metric value in descending order
     """
     valid_metrics = [
-        'avg_initial_capacity',
-        'avg_final_capacity',
-        'avg_capacity_retention',
-        'avg_coulombic_eff',
-        'avg_energy_efficiency',
-        'median_internal_resistance'
+        "avg_initial_capacity",
+        "avg_final_capacity",
+        "avg_capacity_retention",
+        "avg_coulombic_eff",
+        "avg_energy_efficiency",
+        "median_internal_resistance",
     ]
 
     if metric not in valid_metrics:
-        raise ValueError(f"Invalid metric: {metric}. Valid options are: {valid_metrics}")
+        raise ValueError(
+            f"Invalid metric: {metric}. Valid options are: {valid_metrics}"
+        )
 
     # Get samples
     samples = [models.Sample.objects(id=sid).first() for sid in sample_ids]
@@ -293,18 +349,19 @@ def compare_samples(sample_ids, metric='capacity_retention'):
     for sample in samples:
         value = getattr(sample, metric, None)
         if value is not None:
-            comparison[str(sample.id)] = {
-                'name': sample.name,
-                'value': float(value)
-            }
+            comparison[str(sample.id)] = {"name": sample.name, "value": float(value)}
 
     # Sort by metric value (descending, except for internal resistance which is ascending)
-    if metric == 'median_internal_resistance':
+    if metric == "median_internal_resistance":
         # Lower resistance is better
-        sorted_comparison = dict(sorted(comparison.items(), key=lambda x: x[1]['value']))
+        sorted_comparison = dict(
+            sorted(comparison.items(), key=lambda x: x[1]["value"])
+        )
     else:
         # Higher values are better
-        sorted_comparison = dict(sorted(comparison.items(), key=lambda x: x[1]['value'], reverse=True))
+        sorted_comparison = dict(
+            sorted(comparison.items(), key=lambda x: x[1]["value"], reverse=True)
+        )
 
     return sorted_comparison
 
@@ -327,64 +384,72 @@ def get_cycle_data(test_id, include_raw=False):
 
     # Basic test info
     result = {
-        'test_id': str(test.id),
-        'sample_name': utils.get_sample_name(test.sample),
-        'test_name': test.name,
-        'tester': test.tester,
-        'metrics': {
-            'cycle_count': test.cycle_count,
-            'initial_capacity': test.initial_capacity,
-            'final_capacity': test.final_capacity,
-            'capacity_retention': test.capacity_retention,
-            'avg_coulombic_eff': test.avg_coulombic_eff
+        "test_id": str(test.id),
+        "sample_name": utils.get_sample_name(test.sample),
+        "test_name": test.name,
+        "tester": test.tester,
+        "metrics": {
+            "cycle_count": test.cycle_count,
+            "initial_capacity": test.initial_capacity,
+            "final_capacity": test.final_capacity,
+            "capacity_retention": test.capacity_retention,
+            "avg_coulombic_eff": test.avg_coulombic_eff,
         },
-        'cycles': []
+        "cycles": [],
     }
 
     # Add optional metrics if available
-    if hasattr(test, 'avg_energy_efficiency') and test.avg_energy_efficiency is not None:
-        result['metrics']['avg_energy_efficiency'] = test.avg_energy_efficiency
+    if (
+        hasattr(test, "avg_energy_efficiency")
+        and test.avg_energy_efficiency is not None
+    ):
+        result["metrics"]["avg_energy_efficiency"] = test.avg_energy_efficiency
 
     # Add cycle data
     for cycle in test.cycles:
         cycle_data = {
-            'cycle_index': cycle.cycle_index,
-            'charge_capacity': cycle.charge_capacity,
-            'discharge_capacity': cycle.discharge_capacity,
-            'coulombic_efficiency': cycle.coulombic_efficiency
+            "cycle_index": cycle.cycle_index,
+            "charge_capacity": cycle.charge_capacity,
+            "discharge_capacity": cycle.discharge_capacity,
+            "coulombic_efficiency": cycle.coulombic_efficiency,
         }
 
         # Add optional fields if available
-        if hasattr(cycle, 'charge_energy') and cycle.charge_energy is not None:
-            cycle_data['charge_energy'] = cycle.charge_energy
+        if hasattr(cycle, "charge_energy") and cycle.charge_energy is not None:
+            cycle_data["charge_energy"] = cycle.charge_energy
 
-        if hasattr(cycle, 'discharge_energy') and cycle.discharge_energy is not None:
-            cycle_data['discharge_energy'] = cycle.discharge_energy
+        if hasattr(cycle, "discharge_energy") and cycle.discharge_energy is not None:
+            cycle_data["discharge_energy"] = cycle.discharge_energy
 
-        if hasattr(cycle, 'energy_efficiency') and cycle.energy_efficiency is not None:
-            cycle_data['energy_efficiency'] = cycle.energy_efficiency
+        if hasattr(cycle, "energy_efficiency") and cycle.energy_efficiency is not None:
+            cycle_data["energy_efficiency"] = cycle.energy_efficiency
 
-        if hasattr(cycle, 'internal_resistance') and cycle.internal_resistance is not None:
-            cycle_data['internal_resistance'] = cycle.internal_resistance
+        if (
+            hasattr(cycle, "internal_resistance")
+            and cycle.internal_resistance is not None
+        ):
+            cycle_data["internal_resistance"] = cycle.internal_resistance
 
         # If requested, gather raw data either from the document or GridFS
         if include_raw:
             raw = {}
 
-            if hasattr(cycle, 'voltage_charge') and getattr(cycle, 'voltage_charge'):
-                raw['charge'] = {
-                    'voltage': list(getattr(cycle, 'voltage_charge', [])),
-                    'current': list(getattr(cycle, 'current_charge', [])),
-                    'capacity': list(getattr(cycle, 'capacity_charge', [])),
-                    'time': list(getattr(cycle, 'time_charge', [])),
+            if hasattr(cycle, "voltage_charge") and getattr(cycle, "voltage_charge"):
+                raw["charge"] = {
+                    "voltage": list(getattr(cycle, "voltage_charge", [])),
+                    "current": list(getattr(cycle, "current_charge", [])),
+                    "capacity": list(getattr(cycle, "capacity_charge", [])),
+                    "time": list(getattr(cycle, "time_charge", [])),
                 }
 
-            if hasattr(cycle, 'voltage_discharge') and getattr(cycle, 'voltage_discharge'):
-                raw['discharge'] = {
-                    'voltage': list(getattr(cycle, 'voltage_discharge', [])),
-                    'current': list(getattr(cycle, 'current_discharge', [])),
-                    'capacity': list(getattr(cycle, 'capacity_discharge', [])),
-                    'time': list(getattr(cycle, 'time_discharge', [])),
+            if hasattr(cycle, "voltage_discharge") and getattr(
+                cycle, "voltage_discharge"
+            ):
+                raw["discharge"] = {
+                    "voltage": list(getattr(cycle, "voltage_discharge", [])),
+                    "current": list(getattr(cycle, "current_discharge", [])),
+                    "capacity": list(getattr(cycle, "capacity_discharge", [])),
+                    "time": list(getattr(cycle, "time_discharge", [])),
                 }
 
             if not raw:
@@ -402,9 +467,9 @@ def get_cycle_data(test_id, include_raw=False):
                     )
 
             if raw:
-                cycle_data['raw'] = raw
+                cycle_data["raw"] = raw
 
-        result['cycles'].append(cycle_data)
+        result["cycles"].append(cycle_data)
 
     # No further raw handling
 
@@ -430,15 +495,22 @@ def compute_metrics(cycles_summary):
     # Use the first cycle's discharge capacity as the baseline for
     # initial capacity and capacity retention calculations
     metrics = {
-        'cycle_count': len(df),
-        'initial_capacity': df['discharge_capacity'].iloc[0] if not df.empty else None,
-        'final_capacity': df['discharge_capacity'].iloc[-1] if not df.empty else None,
-        'capacity_retention': (
-            df['discharge_capacity'].iloc[-1] / df['discharge_capacity'].iloc[0]
-        )
-        if not df.empty and df['discharge_capacity'].iloc[0] > 0 else None,
-        'avg_coulombic_eff': np.mean(df['coulombic_efficiency']) if not df.empty else None,
-        'avg_energy_efficiency': np.mean(df['energy_efficiency']) if 'energy_efficiency' in df.columns else None
+        "cycle_count": len(df),
+        "initial_capacity": df["discharge_capacity"].iloc[0] if not df.empty else None,
+        "final_capacity": df["discharge_capacity"].iloc[-1] if not df.empty else None,
+        "capacity_retention": (
+            (df["discharge_capacity"].iloc[-1] / df["discharge_capacity"].iloc[0])
+            if not df.empty and df["discharge_capacity"].iloc[0] > 0
+            else None
+        ),
+        "avg_coulombic_eff": (
+            np.mean(df["coulombic_efficiency"]) if not df.empty else None
+        ),
+        "avg_energy_efficiency": (
+            np.mean(df["energy_efficiency"])
+            if "energy_efficiency" in df.columns
+            else None
+        ),
     }
 
     return metrics

@@ -62,6 +62,11 @@ try:
 except Exception:  # pragma: no cover - optional import
     eis = None
 
+try:
+    from . import outlier_analysis
+except Exception:  # pragma: no cover - optional import
+    outlier_analysis = None
+
 # Make parsers accessible
 from .parsers import parse_file
 
