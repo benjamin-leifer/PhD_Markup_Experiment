@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import List, Dict, Optional
 
+from . import saved_filters
+
 import dash
 from dash import dcc, html
 import dash_bootstrap_components as dbc
@@ -18,6 +20,7 @@ from dash import Input, Output, State
 CHEMISTRY_DROPDOWN = "trait-chemistry"
 MANUFACTURER_DROPDOWN = "trait-manufacturer"
 FILTER_BUTTON = "trait-filter-btn"
+SAVED_FILTER_DROPDOWN = "trait-saved-filter"
 RESULTS_DIV = "trait-results"
 PLOT_DIV = "trait-plot-area"
 
@@ -99,9 +102,24 @@ def layout() -> html.Div:
     """Return the layout for the trait filter tab."""
     chem_opts = [{"label": c, "value": c} for c in get_distinct_values("chemistry")]
     manu_opts = [{"label": m, "value": m} for m in get_distinct_values("manufacturer")]
+    saved_opts = [{"label": f["name"], "value": f["name"]} for f in saved_filters.list_filters()]
 
     return html.Div(
         [
+            dbc.Row(
+                [
+                    dbc.Col(
+                        dcc.Dropdown(
+                            options=saved_opts,
+                            id=SAVED_FILTER_DROPDOWN,
+                            placeholder="Saved Filters",
+                            clearable=True,
+                        ),
+                        width=4,
+                    ),
+                ],
+                className="mb-3",
+            ),
             dbc.Row(
                 [
                     dbc.Col(
@@ -148,14 +166,30 @@ def register_callbacks(app: dash.Dash) -> None:
     """Register Dash callbacks for the tab."""
 
     @app.callback(
+        Output(CHEMISTRY_DROPDOWN, "value"),
+        Output(MANUFACTURER_DROPDOWN, "value"),
+        Input(SAVED_FILTER_DROPDOWN, "value"),
+        prevent_initial_call=True,
+    )
+    def _apply_saved_filter(name):
+        if not name:
+            raise dash.exceptions.PreventUpdate
+        try:
+            filt = saved_filters.load_filter(name)
+        except KeyError:
+            return dash.no_update, dash.no_update
+        return filt.get("chemistry"), filt.get("manufacturer")
+
+    @app.callback(
         Output(RESULTS_DIV, "children"),
         Output(PLOT_DIV, "children"),
         Input(FILTER_BUTTON, "n_clicks"),
+        Input(SAVED_FILTER_DROPDOWN, "value"),
         State(CHEMISTRY_DROPDOWN, "value"),
         State(MANUFACTURER_DROPDOWN, "value"),
         prevent_initial_call=True,
     )
-    def _update_results(n_clicks, chemistry, manufacturer):
+    def _update_results(n_clicks, _saved_name, chemistry, manufacturer):
         rows = filter_samples(chemistry, manufacturer)
         table = _build_table(rows) if rows else dbc.Alert("No results", color="warning")
         # Plot placeholder. In the future this could be a dcc.Graph figure.
