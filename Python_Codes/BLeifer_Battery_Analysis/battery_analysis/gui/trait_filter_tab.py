@@ -12,6 +12,8 @@ from tkinter import ttk, messagebox
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from typing import List, Dict, Optional
 
+from .doe_matrix import DOEHeatmap, demo_matrix
+
 from .. import models
 
 
@@ -91,10 +93,13 @@ class TraitFilterTab(ttk.Frame):
         )
         self.refresh_btn.grid(row=0, column=5, padx=5, pady=5)
 
+        self.doe_btn = ttk.Button(control, text="DOE View", command=self.open_doe_view)
+        self.doe_btn.grid(row=0, column=6, padx=5, pady=5)
         self.outlier_btn = ttk.Button(
             control, text="Detect Outliers", command=self.run_outlier_detection
         )
         self.outlier_btn.grid(row=0, column=6, padx=5, pady=5)
+
 
         result_frame = ttk.Frame(self)
         result_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
@@ -138,6 +143,15 @@ class TraitFilterTab(ttk.Frame):
             )
         self.main_app.update_status(f"Found {len(rows)} sample(s)")
 
+
+    def open_doe_view(self):
+        """Open a window displaying the DOE heatmap."""
+        rows, cols, matrix = demo_matrix()
+        top = tk.Toplevel(self)
+        top.title("DOE Matrix")
+        heatmap = DOEHeatmap(top, matrix, rows, cols)
+        heatmap.pack(fill=tk.BOTH, expand=True)
+
     def run_outlier_detection(self):
         """Detect outliers among the currently listed samples."""
         try:
@@ -173,3 +187,4 @@ class TraitFilterTab(ttk.Frame):
         self.main_app.update_status(
             f"Outliers: {', '.join(outliers) if outliers else 'None'}"
         )
+
