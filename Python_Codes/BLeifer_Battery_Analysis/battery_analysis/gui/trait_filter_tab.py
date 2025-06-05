@@ -11,6 +11,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from typing import List, Dict, Optional
 
+from .doe_matrix import DOEHeatmap, demo_matrix
+
 from .. import models
 
 
@@ -84,6 +86,9 @@ class TraitFilterTab(ttk.Frame):
         self.refresh_btn = ttk.Button(control, text="Refresh", command=self.refresh_options)
         self.refresh_btn.grid(row=0, column=5, padx=5, pady=5)
 
+        self.doe_btn = ttk.Button(control, text="DOE View", command=self.open_doe_view)
+        self.doe_btn.grid(row=0, column=6, padx=5, pady=5)
+
         result_frame = ttk.Frame(self)
         result_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
@@ -119,3 +124,11 @@ class TraitFilterTab(ttk.Frame):
         for r in rows:
             self.tree.insert("", tk.END, values=(r["name"], r["chemistry"], r["manufacturer"]))
         self.main_app.update_status(f"Found {len(rows)} sample(s)")
+
+    def open_doe_view(self):
+        """Open a window displaying the DOE heatmap."""
+        rows, cols, matrix = demo_matrix()
+        top = tk.Toplevel(self)
+        top.title("DOE Matrix")
+        heatmap = DOEHeatmap(top, matrix, rows, cols)
+        heatmap.pack(fill=tk.BOTH, expand=True)
