@@ -11,6 +11,12 @@ _FLAGS: Dict[str, str] = {}
 def flag_sample(sample_id: str, reason: str) -> None:
     """Flag a sample for the given reason."""
     _FLAGS[sample_id] = reason
+    try:
+        from battery_analysis import user_tracking
+
+        user_tracking.log_flag(sample_id, reason)
+    except Exception:
+        pass
 
 
 def get_flags() -> List[Dict[str, str]]:
@@ -21,3 +27,9 @@ def get_flags() -> List[Dict[str, str]]:
 def clear_flag(sample_id: str) -> None:
     """Remove the flag for ``sample_id`` if present."""
     _FLAGS.pop(sample_id, None)
+    try:
+        from battery_analysis import user_tracking
+
+        user_tracking.log_flag(sample_id, "cleared")
+    except Exception:
+        pass

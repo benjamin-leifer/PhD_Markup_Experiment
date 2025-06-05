@@ -25,6 +25,15 @@ def create_app() -> dash.Dash:
         return dbc.Container(
             [
                 html.H2("Battery Test Dashboard", className="mt-2"),
+                dcc.Dropdown(
+                    id="current-user",
+                    options=[
+                        {"label": "User 1", "value": "user1"},
+                        {"label": "User 2", "value": "user2"},
+                    ],
+                    placeholder="Select User",
+                ),
+                html.Div(id="user-set-out", style={"display": "none"}),
                 dcc.Tabs(
                     [
                         dcc.Tab(
@@ -172,6 +181,17 @@ def create_app() -> dash.Dash:
         elif comp_id["type"] == "clear-flag":
             cell_flagger.clear_flag(sample_id)
         return layout_components.flagged_table(cell_flagger.get_flags())
+
+    @app.callback(Output("user-set-out", "children"), Input("current-user", "value"))
+    def set_user(user):
+        if user:
+            try:
+                from battery_analysis import user_tracking
+
+                user_tracking.set_current_user(user)
+            except Exception:
+                pass
+        return ""
 
     trait_filter_tab.register_callbacks(app)
 

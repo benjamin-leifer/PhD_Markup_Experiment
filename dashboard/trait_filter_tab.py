@@ -62,6 +62,12 @@ def filter_samples(
     """
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis.models import Sample  # type: ignore
+        from battery_analysis import user_tracking
+
+        user_tracking.log_filter_run(
+            "trait_filter",
+            {"chemistry": chemistry, "manufacturer": manufacturer},
+        )
 
         qs = Sample.objects  # type: ignore[attr-defined]
         if chemistry:
@@ -88,9 +94,13 @@ def filter_samples(
 
 
 def _build_table(rows: List[Dict[str, str]]) -> dbc.Table:
-    header = html.Thead(html.Tr([html.Th("Name"), html.Th("Chemistry"), html.Th("Manufacturer")]))
+    header = html.Thead(
+        html.Tr([html.Th("Name"), html.Th("Chemistry"), html.Th("Manufacturer")])
+    )
     body_rows = [
-        html.Tr([html.Td(r["name"]), html.Td(r["chemistry"]), html.Td(r["manufacturer"])])
+        html.Tr(
+            [html.Td(r["name"]), html.Td(r["chemistry"]), html.Td(r["manufacturer"])]
+        )
         for r in rows
     ]
     body = html.Tbody(body_rows)
@@ -192,7 +202,8 @@ def register_callbacks(app: dash.Dash) -> None:
         plt_data = base64.b64encode(buf.getvalue()).decode()
         buf.close()
         plt.close(fig)
-        img = html.Img(src="data:image/png;base64," + plt_data, style={"max-width": "100%"})
+        img = html.Img(
+            src="data:image/png;base64," + plt_data, style={"max-width": "100%"}
+        )
 
         return table, img
-
