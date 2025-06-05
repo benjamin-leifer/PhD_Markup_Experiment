@@ -58,6 +58,9 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         avg_energy_efficiency: float | None = None
         median_internal_resistance: float | None = None
         parent: "Sample | None" = None
+        created_by: str | None = None
+        last_modified_by: str | None = None
+        notes_log: list = dc_field(default_factory=list)
 
     class RawDataFile:  # type: ignore
         pass
