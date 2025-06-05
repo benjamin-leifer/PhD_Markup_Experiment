@@ -83,6 +83,7 @@ from battery_analysis.gui.document_flow_tab import DocumentFlowTab
 from battery_analysis.gui.dashboard_tab import DashboardTab
 from battery_analysis.gui.pybamm_tab import PyBAMMTab
 from battery_analysis.gui.scrollable_frame import ScrollableFrame
+from battery_analysis.gui.trait_filter_tab import TraitFilterTab
 
 from mongoengine.base.common import _document_registry
 print(_document_registry.keys())
@@ -187,6 +188,9 @@ class BatteryAnalysisApp(tk.Tk):
 
         # Document Flow tab
         add_tab(DocumentFlowTab, "Document Flow", "doc_flow_tab")
+
+        # Trait filter tab for browsing samples by traits
+        add_tab(TraitFilterTab, "Trait Filter", "trait_filter_tab")
 
         add_tab(SettingsTab, "Settings", "settings_tab")
 
