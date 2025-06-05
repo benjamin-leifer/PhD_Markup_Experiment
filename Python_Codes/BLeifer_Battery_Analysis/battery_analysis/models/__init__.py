@@ -43,6 +43,9 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         final_capacity: float = 0.0
         capacity_retention: float = 0.0
         avg_coulombic_eff: float = 0.0
+        created_by: str | None = None
+        last_modified_by: str | None = None
+        notes_log: list = dc_field(default_factory=list)
 
     @dataclass
     class Sample:  # type: ignore
