@@ -4,6 +4,9 @@ import dash
 from dash import html, dcc
 import dash_bootstrap_components as dbc
 from dash import Input, Output, State
+import json
+
+from . import cell_flagger
 
 from . import data_access
 from . import layout as layout_components
@@ -18,6 +21,7 @@ def create_app() -> dash.Dash:
         running = data_access.get_running_tests()
         upcoming = data_access.get_upcoming_tests()
         stats = data_access.get_summary_stats()
+        flags = cell_flagger.get_flags()
         return dbc.Container(
             [
                 html.H2("Battery Test Dashboard", className="mt-2"),
@@ -29,9 +33,7 @@ def create_app() -> dash.Dash:
                                 html.H4("Running Tests"),
                                 layout_components.running_tests_table(running),
                                 html.H4("Upcoming Tests"),
-                                layout_components.upcoming_tests_table(
-                                    upcoming
-                                ),
+                                layout_components.upcoming_tests_table(upcoming),
                             ],
                             label="Overview",
                         ),
@@ -46,6 +48,13 @@ def create_app() -> dash.Dash:
                         dcc.Tab(
                             trait_filter_tab.layout(),
                             label="Trait Filter",
+                        ),
+                        dcc.Tab(
+                            html.Div(
+                                layout_components.flagged_table(flags),
+                                id="flagged-container",
+                            ),
+                            label="Flags",
                         ),
                     ]
                 ),
@@ -74,12 +83,8 @@ def create_app() -> dash.Dash:
                 meta = data_access.get_test_metadata(cell_id)
                 body = html.Div(
                     [
-                        html.P(
-                            f"Cell ID: {meta['cell_id']}", className="mb-1"
-                        ),
-                        html.P(
-                            f"Chemistry: {meta['chemistry']}", className="mb-1"
-                        ),
+                        html.P(f"Cell ID: {meta['cell_id']}", className="mb-1"),
+                        html.P(f"Chemistry: {meta['chemistry']}", className="mb-1"),
                         html.P(
                             f"Formation Date: {meta['formation_date']}",
                             className="mb-1",
@@ -102,9 +107,7 @@ def create_app() -> dash.Dash:
     )
     def submit_material(n_clicks, name, chemistry, notes):
         data_access.add_new_material(name or "", chemistry or "", notes or "")
-        return dbc.Alert(
-            "Material submitted", color="success", dismissable=True
-        )
+        return dbc.Alert("Material submitted", color="success", dismissable=True)
 
     @app.callback(
         Output("export-modal", "is_open"),
@@ -147,6 +150,28 @@ def create_app() -> dash.Dash:
             pdf_bytes = data_access.get_upcoming_tests_pdf()
             filename = "upcoming_tests.pdf"
         return dcc.send_bytes(pdf_bytes, filename)
+
+    @app.callback(
+        Output("flagged-container", "children"),
+        Input({"type": "flag-review", "index": dash.ALL}, "n_clicks"),
+        Input({"type": "flag-retest", "index": dash.ALL}, "n_clicks"),
+        Input({"type": "clear-flag", "index": dash.ALL}, "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def update_flags(review_clicks, retest_clicks, clear_clicks):
+        ctx = dash.callback_context
+        if not ctx.triggered:
+            raise dash.exceptions.PreventUpdate
+        prop_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        comp_id = json.loads(prop_id)
+        sample_id = comp_id["index"]
+        if comp_id["type"] == "flag-review":
+            cell_flagger.flag_sample(sample_id, "manual review")
+        elif comp_id["type"] == "flag-retest":
+            cell_flagger.flag_sample(sample_id, "retest")
+        elif comp_id["type"] == "clear-flag":
+            cell_flagger.clear_flag(sample_id)
+        return layout_components.flagged_table(cell_flagger.get_flags())
 
     trait_filter_tab.register_callbacks(app)
 

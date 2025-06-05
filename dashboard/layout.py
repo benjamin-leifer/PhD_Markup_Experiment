@@ -5,6 +5,41 @@ from dash import html, dcc
 from typing import List, Dict
 
 
+def flagged_table(flags: List[Dict[str, str]]) -> dbc.Table:
+    """Return a table of flagged samples."""
+
+    header = html.Thead(
+        html.Tr([html.Th("Sample ID"), html.Th("Reason"), html.Th("Actions")])
+    )
+    rows = []
+    for f in flags:
+        rows.append(
+            html.Tr(
+                [
+                    html.Td(f["sample_id"]),
+                    html.Td(f["reason"]),
+                    html.Td(
+                        dbc.Button(
+                            "Clear",
+                            id={"type": "clear-flag", "index": f["sample_id"]},
+                            color="secondary",
+                            size="sm",
+                        )
+                    ),
+                ]
+            )
+        )
+    body = html.Tbody(rows)
+    return dbc.Table(
+        [header, body],
+        id="flagged-table",
+        bordered=True,
+        hover=True,
+        responsive=True,
+        striped=True,
+    )
+
+
 def summary_layout(stats: Dict) -> dbc.Row:
     """Summary statistics section."""
     cards = [
@@ -66,6 +101,7 @@ def running_tests_table(tests: List[Dict]) -> dbc.Table:
                 html.Th("Last Timestamp"),
                 html.Th("Schedule"),
                 html.Th("Status"),
+                html.Th("Actions"),
             ]
         )
     )
@@ -81,6 +117,29 @@ def running_tests_table(tests: List[Dict]) -> dbc.Table:
                     html.Td(t["last_timestamp"].strftime("%Y-%m-%d %H:%M")),
                     html.Td(t["test_schedule"]),
                     html.Td(t["status"]),
+                    html.Td(
+                        dbc.DropdownMenu(
+                            [
+                                dbc.DropdownMenuItem(
+                                    "Flag for Review",
+                                    id={
+                                        "type": "flag-review",
+                                        "index": t["cell_id"],
+                                    },
+                                ),
+                                dbc.DropdownMenuItem(
+                                    "Flag for Retest",
+                                    id={
+                                        "type": "flag-retest",
+                                        "index": t["cell_id"],
+                                    },
+                                ),
+                            ],
+                            label="Flag",
+                            color="secondary",
+                            size="sm",
+                        )
+                    ),
                 ]
             )
         )
@@ -104,6 +163,7 @@ def upcoming_tests_table(tests: List[Dict]) -> dbc.Table:
                 html.Th("Start Time"),
                 html.Th("Hardware"),
                 html.Th("Notes"),
+                html.Th("Actions"),
             ]
         )
     )
@@ -116,6 +176,29 @@ def upcoming_tests_table(tests: List[Dict]) -> dbc.Table:
                     html.Td(t["start_time"].strftime("%Y-%m-%d %H:%M")),
                     html.Td(t["hardware"]),
                     html.Td(t["notes"]),
+                    html.Td(
+                        dbc.DropdownMenu(
+                            [
+                                dbc.DropdownMenuItem(
+                                    "Flag for Review",
+                                    id={
+                                        "type": "flag-review",
+                                        "index": t["cell_id"],
+                                    },
+                                ),
+                                dbc.DropdownMenuItem(
+                                    "Flag for Retest",
+                                    id={
+                                        "type": "flag-retest",
+                                        "index": t["cell_id"],
+                                    },
+                                ),
+                            ],
+                            label="Flag",
+                            color="secondary",
+                            size="sm",
+                        )
+                    ),
                 ]
             )
         )
@@ -208,9 +291,7 @@ def export_modal() -> dbc.Modal:
     """Modal dialog for exporting test data."""
     return dbc.Modal(
         [
-            dbc.ModalHeader(
-                dbc.ModalTitle("Export")
-            ),
+            dbc.ModalHeader(dbc.ModalTitle("Export")),
             dbc.ModalBody(
                 dbc.Stack(
                     [
