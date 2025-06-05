@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import tkinter as tk
 from tkinter import ttk, messagebox
+
+from typing import List, Optional
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from typing import List, Dict, Optional
 
 from .doe_matrix import DOEHeatmap, demo_matrix
 
 from .. import models
+from .multi_metric_analysis import MultiMetricAnalysis
 
 
 def get_distinct_values(field: str) -> List[str]:
@@ -31,7 +34,7 @@ def get_distinct_values(field: str) -> List[str]:
 
 def filter_samples(
     chemistry: Optional[str], manufacturer: Optional[str]
-) -> List[Dict[str, str]]:
+) -> List[models.Sample]:
     """Query samples matching the provided traits."""
     try:  # pragma: no cover - depends on MongoDB
         qs = models.Sample.objects
@@ -39,22 +42,18 @@ def filter_samples(
             qs = qs.filter(chemistry=chemistry)
         if manufacturer:
             qs = qs.filter(manufacturer=manufacturer)
-        return [
-            {
-                "name": s.name,
-                "chemistry": getattr(s, "chemistry", ""),
-                "manufacturer": getattr(s, "manufacturer", ""),
-            }
-            for s in qs
-        ]
+        return list(qs)
     except Exception:
-        return [
-            {
-                "name": "Sample_001",
-                "chemistry": chemistry or "NMC",
-                "manufacturer": manufacturer or "ABC Batteries",
-            }
-        ]
+        dummy = models.Sample(name="Sample_001")
+        dummy.chemistry = chemistry or "NMC"
+        dummy.manufacturer = manufacturer or "ABC Batteries"
+        dummy.avg_initial_capacity = 1.0
+        dummy.avg_final_capacity = 0.9
+        dummy.avg_capacity_retention = 0.9
+        dummy.avg_coulombic_eff = 0.99
+        dummy.avg_energy_efficiency = 0.98
+        dummy.median_internal_resistance = 0.1
+        return [dummy]
 
 
 class TraitFilterTab(ttk.Frame):
@@ -117,9 +116,10 @@ class TraitFilterTab(ttk.Frame):
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.tree.config(yscrollcommand=scrollbar.set)
 
-        plot_frame = ttk.LabelFrame(self, text="Plot")
-        plot_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-        ttk.Label(plot_frame, text="Plot placeholder").pack(pady=20)
+        analysis_frame = ttk.LabelFrame(self, text="Metric Analysis")
+        analysis_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        self.metric_analysis = MultiMetricAnalysis(analysis_frame)
+        self.metric_analysis.pack(fill=tk.BOTH, expand=True)
 
         self.plot_area = plot_frame
 
@@ -134,9 +134,22 @@ class TraitFilterTab(ttk.Frame):
         """Filter samples based on the selected traits."""
         chemistry = self.chem_var.get() or None
         manufacturer = self.man_var.get() or None
-        rows = filter_samples(chemistry, manufacturer)
+        samples = filter_samples(chemistry, manufacturer)
         for r in self.tree.get_children():
             self.tree.delete(r)
+
+        for s in samples:
+            self.tree.insert(
+                "",
+                tk.END,
+                values=(
+                    getattr(s, "name", ""),
+                    getattr(s, "chemistry", ""),
+                    getattr(s, "manufacturer", ""),
+                ),
+            )
+        self.metric_analysis.update_samples(samples)
+        self.main_app.update_status(f"Found {len(samples)} sample(s)")
         for r in rows:
             self.tree.insert(
                 "", tk.END, values=(r["name"], r["chemistry"], r["manufacturer"])
