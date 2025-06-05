@@ -1,5 +1,10 @@
 import datetime
+import io
 from typing import List, Dict
+
+import pandas as pd
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
 
 # Placeholder functions for database access.
 # These would normally interface with MongoDB via pymongo or mongoengine.
@@ -35,13 +40,15 @@ def get_upcoming_tests() -> List[Dict]:
     return [
         {
             "cell_id": "Cell_010",
-            "start_time": datetime.datetime.now() + datetime.timedelta(hours=2),
+            "start_time": datetime.datetime.now()
+            + datetime.timedelta(hours=2),
             "hardware": "Arbin_1",
             "notes": "Preconditioned",
         },
         {
             "cell_id": "Cell_011",
-            "start_time": datetime.datetime.now() + datetime.timedelta(hours=4),
+            "start_time": datetime.datetime.now()
+            + datetime.timedelta(hours=4),
             "hardware": "Arbin_2",
             "notes": "High temperature",
         },
@@ -70,3 +77,48 @@ def get_test_metadata(cell_id: str) -> Dict:
 def add_new_material(name: str, chemistry: str, notes: str) -> None:
     """Placeholder for storing a new material entry."""
     print(f"New material added: {name}, {chemistry}, {notes}")
+
+
+def get_running_tests_csv() -> str:
+    """Return running tests data formatted as CSV."""
+    df = pd.DataFrame(get_running_tests())
+    return df.to_csv(index=False)
+
+
+def get_upcoming_tests_csv() -> str:
+    """Return upcoming tests data formatted as CSV."""
+    df = pd.DataFrame(get_upcoming_tests())
+    return df.to_csv(index=False)
+
+
+def _tests_to_pdf(rows: List[Dict]) -> bytes:
+    """Helper to render test rows into a simple PDF."""
+    buffer = io.BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+    y = height - 40
+    for row in rows:
+        parts = []
+        for key, val in row.items():
+            if isinstance(val, datetime.datetime):
+                parts.append(f"{key}: {val.strftime('%Y-%m-%d %H:%M')}")
+            else:
+                parts.append(f"{key}: {val}")
+        pdf.drawString(40, y, " | ".join(parts))
+        y -= 20
+        if y < 40:
+            pdf.showPage()
+            y = height - 40
+    pdf.save()
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def get_running_tests_pdf() -> bytes:
+    """Return running tests data formatted as PDF bytes."""
+    return _tests_to_pdf(get_running_tests())
+
+
+def get_upcoming_tests_pdf() -> bytes:
+    """Return upcoming tests data formatted as PDF bytes."""
+    return _tests_to_pdf(get_upcoming_tests())

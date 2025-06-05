@@ -28,7 +28,9 @@ def create_app() -> dash.Dash:
                                 html.H4("Running Tests"),
                                 layout_components.running_tests_table(running),
                                 html.H4("Upcoming Tests"),
-                                layout_components.upcoming_tests_table(upcoming),
+                                layout_components.upcoming_tests_table(
+                                    upcoming
+                                ),
                             ],
                             label="Overview",
                         ),
@@ -36,9 +38,14 @@ def create_app() -> dash.Dash:
                             layout_components.new_material_form(),
                             label="New Material",
                         ),
+                        dcc.Tab(
+                            layout_components.export_button(),
+                            label="Export",
+                        ),
                     ]
                 ),
                 layout_components.metadata_modal(),
+                layout_components.export_modal(),
             ],
             fluid=True,
         )
@@ -60,12 +67,21 @@ def create_app() -> dash.Dash:
             if row < len(tests):
                 cell_id = tests[row]["cell_id"]
                 meta = data_access.get_test_metadata(cell_id)
-                body = html.Div([
-                    html.P(f"Cell ID: {meta['cell_id']}", className="mb-1"),
-                    html.P(f"Chemistry: {meta['chemistry']}", className="mb-1"),
-                    html.P(f"Formation Date: {meta['formation_date']}", className="mb-1"),
-                    html.P(meta['notes']),
-                ])
+                body = html.Div(
+                    [
+                        html.P(
+                            f"Cell ID: {meta['cell_id']}", className="mb-1"
+                        ),
+                        html.P(
+                            f"Chemistry: {meta['chemistry']}", className="mb-1"
+                        ),
+                        html.P(
+                            f"Formation Date: {meta['formation_date']}",
+                            className="mb-1",
+                        ),
+                        html.P(meta["notes"]),
+                    ]
+                )
                 return True, body
         if close_clicks and is_open:
             return False, dash.no_update
@@ -81,7 +97,51 @@ def create_app() -> dash.Dash:
     )
     def submit_material(n_clicks, name, chemistry, notes):
         data_access.add_new_material(name or "", chemistry or "", notes or "")
-        return dbc.Alert("Material submitted", color="success", dismissable=True)
+        return dbc.Alert(
+            "Material submitted", color="success", dismissable=True
+        )
+
+    @app.callback(
+        Output("export-modal", "is_open"),
+        Input("open-export", "n_clicks"),
+        Input("close-export", "n_clicks"),
+        State("export-modal", "is_open"),
+        prevent_initial_call=True,
+    )
+    def toggle_export(open_clicks, close_clicks, is_open):
+        if open_clicks or close_clicks:
+            return not is_open
+        return is_open
+
+    @app.callback(
+        Output("download-data", "data"),
+        Input("download-csv", "n_clicks"),
+        State("export-choice", "value"),
+        prevent_initial_call=True,
+    )
+    def export_csv(n_clicks, choice):
+        if choice == "running":
+            csv_str = data_access.get_running_tests_csv()
+            filename = "running_tests.csv"
+        else:
+            csv_str = data_access.get_upcoming_tests_csv()
+            filename = "upcoming_tests.csv"
+        return dcc.send_string(csv_str, filename)
+
+    @app.callback(
+        Output("download-pdf-file", "data"),
+        Input("download-pdf", "n_clicks"),
+        State("export-choice", "value"),
+        prevent_initial_call=True,
+    )
+    def export_pdf(n_clicks, choice):
+        if choice == "running":
+            pdf_bytes = data_access.get_running_tests_pdf()
+            filename = "running_tests.pdf"
+        else:
+            pdf_bytes = data_access.get_upcoming_tests_pdf()
+            filename = "upcoming_tests.pdf"
+        return dcc.send_bytes(pdf_bytes, filename)
 
     return app
 
