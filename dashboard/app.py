@@ -7,6 +7,7 @@ from dash import Input, Output, State
 
 from . import data_access
 from . import layout as layout_components
+from . import trait_filter_tab
 
 
 def create_app() -> dash.Dash:
@@ -41,6 +42,10 @@ def create_app() -> dash.Dash:
                         dcc.Tab(
                             layout_components.export_button(),
                             label="Export",
+                        ),
+                        dcc.Tab(
+                            trait_filter_tab.layout(),
+                            label="Trait Filter",
                         ),
                     ]
                 ),
@@ -142,6 +147,8 @@ def create_app() -> dash.Dash:
             pdf_bytes = data_access.get_upcoming_tests_pdf()
             filename = "upcoming_tests.pdf"
         return dcc.send_bytes(pdf_bytes, filename)
+
+    trait_filter_tab.register_callbacks(app)
 
     return app
 
