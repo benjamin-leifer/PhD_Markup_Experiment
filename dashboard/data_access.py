@@ -2,6 +2,8 @@ import datetime
 import io
 from typing import List, Dict
 
+from battery_analysis import user_tracking
+
 import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -40,15 +42,13 @@ def get_upcoming_tests() -> List[Dict]:
     return [
         {
             "cell_id": "Cell_010",
-            "start_time": datetime.datetime.now()
-            + datetime.timedelta(hours=2),
+            "start_time": datetime.datetime.now() + datetime.timedelta(hours=2),
             "hardware": "Arbin_1",
             "notes": "Preconditioned",
         },
         {
             "cell_id": "Cell_011",
-            "start_time": datetime.datetime.now()
-            + datetime.timedelta(hours=4),
+            "start_time": datetime.datetime.now() + datetime.timedelta(hours=4),
             "hardware": "Arbin_2",
             "notes": "High temperature",
         },
@@ -82,12 +82,14 @@ def add_new_material(name: str, chemistry: str, notes: str) -> None:
 def get_running_tests_csv() -> str:
     """Return running tests data formatted as CSV."""
     df = pd.DataFrame(get_running_tests())
+    user_tracking.log_export("running_csv")
     return df.to_csv(index=False)
 
 
 def get_upcoming_tests_csv() -> str:
     """Return upcoming tests data formatted as CSV."""
     df = pd.DataFrame(get_upcoming_tests())
+    user_tracking.log_export("upcoming_csv")
     return df.to_csv(index=False)
 
 
@@ -116,9 +118,11 @@ def _tests_to_pdf(rows: List[Dict]) -> bytes:
 
 def get_running_tests_pdf() -> bytes:
     """Return running tests data formatted as PDF bytes."""
+    user_tracking.log_export("running_pdf")
     return _tests_to_pdf(get_running_tests())
 
 
 def get_upcoming_tests_pdf() -> bytes:
     """Return upcoming tests data formatted as PDF bytes."""
+    user_tracking.log_export("upcoming_pdf")
     return _tests_to_pdf(get_upcoming_tests())
