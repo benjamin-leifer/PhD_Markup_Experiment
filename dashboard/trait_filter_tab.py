@@ -12,6 +12,7 @@ import dash
 from dash import dcc, html
 import dash_bootstrap_components as dbc
 from dash import Input, Output, State
+from . import plot_overlay
 
 
 # Component IDs used in callbacks
@@ -20,6 +21,7 @@ MANUFACTURER_DROPDOWN = "trait-manufacturer"
 FILTER_BUTTON = "trait-filter-btn"
 RESULTS_DIV = "trait-results"
 PLOT_DIV = "trait-plot-area"
+METRIC_RADIO = "overlay-metric"
 
 
 def get_distinct_values(field: str) -> List[str]:
@@ -129,16 +131,37 @@ def layout() -> html.Div:
                 ],
                 className="mb-3",
             ),
-            dbc.Row(
+            dcc.Tabs(
                 [
-                    dbc.Col(html.Div(id=RESULTS_DIV)),
+                    dcc.Tab(html.Div(id=RESULTS_DIV), label="Results"),
+                    dcc.Tab(
+                        html.Div(
+                            [
+                                dcc.RadioItems(
+                                    id=METRIC_RADIO,
+                                    options=[
+                                        {
+                                            "label": "Voltage vs Capacity",
+                                            "value": "voltage_vs_capacity",
+                                        },
+                                        {
+                                            "label": "CE vs Cycle",
+                                            "value": "ce_vs_cycle",
+                                        },
+                                        {
+                                            "label": "Impedance vs Cycle",
+                                            "value": "impedance_vs_cycle",
+                                        },
+                                    ],
+                                    value="voltage_vs_capacity",
+                                    inline=True,
+                                ),
+                                html.Div(id=PLOT_DIV, className="mt-3"),
+                            ]
+                        ),
+                        label="Overlay Plots",
+                    ),
                 ]
-            ),
-            dbc.Row(
-                [
-                    dbc.Col(html.Div("Plot placeholder", id=PLOT_DIV)),
-                ],
-                className="mt-3",
             ),
         ]
     )
@@ -153,12 +176,23 @@ def register_callbacks(app: dash.Dash) -> None:
         Input(FILTER_BUTTON, "n_clicks"),
         State(CHEMISTRY_DROPDOWN, "value"),
         State(MANUFACTURER_DROPDOWN, "value"),
+        State(METRIC_RADIO, "value"),
         prevent_initial_call=True,
     )
-    def _update_results(n_clicks, chemistry, manufacturer):
+    def _update_results(n_clicks, chemistry, manufacturer, metric):
         rows = filter_samples(chemistry, manufacturer)
         table = _build_table(rows) if rows else dbc.Alert("No results", color="warning")
-        # Plot placeholder. In the future this could be a dcc.Graph figure.
-        plot_placeholder = html.Div("Plot placeholder")
-        return table, plot_placeholder
+
+        fig = plot_overlay.plot_overlay(rows, metric=metric)
+        import io, base64
+        import matplotlib.pyplot as plt
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight")
+        plt_data = base64.b64encode(buf.getvalue()).decode()
+        buf.close()
+        plt.close(fig)
+        img = html.Img(src="data:image/png;base64," + plt_data, style={"max-width": "100%"})
+
+        return table, img
 
