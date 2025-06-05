@@ -56,6 +56,11 @@ def export_filtered_results(samples: Sequence[Any], format: str = "csv", include
     if format == "csv":
         return df.to_csv(index=False)
     if format == "excel":
+        try:  # Ensure optional dependency is present
+            import openpyxl  # type: ignore  # noqa: F401
+        except Exception as exc:  # pragma: no cover - environment specific
+            raise RuntimeError("Excel export requires openpyxl") from exc
+
         buffer = BytesIO()
         df.to_excel(buffer, index=False)
         buffer.seek(0)
