@@ -8,7 +8,8 @@ that is stored in GridFS.
 import tkinter as tk
 from tkinter import ttk, messagebox
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from battery_analysis.gui.custom_toolbar import CustomToolbar
 from battery_analysis.utils import popout_figure
 import numpy as np
 import pandas as pd
@@ -157,8 +158,8 @@ class CycleDetailViewer:
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-        # Add toolbar
-        toolbar = NavigationToolbar2Tk(self.canvas, self.plot_tab)
+        # Add toolbar with editing support
+        toolbar = CustomToolbar(self.canvas, self.plot_tab)
         toolbar.update()
 
         ttk.Button(
@@ -383,8 +384,8 @@ class CycleDetailViewer:
             canvas.draw()
             canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-            # Add toolbar
-            toolbar = NavigationToolbar2Tk(canvas, self.dqdv_tab)
+            # Add toolbar with editing support
+            toolbar = CustomToolbar(canvas, self.dqdv_tab)
             toolbar.update()
 
             ttk.Button(

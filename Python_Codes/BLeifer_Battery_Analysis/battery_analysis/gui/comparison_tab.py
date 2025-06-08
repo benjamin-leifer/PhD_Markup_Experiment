@@ -8,7 +8,8 @@ plots, and performing statistical analysis of battery test data.
 import tkinter as tk
 from tkinter import ttk, messagebox
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from battery_analysis.gui.custom_toolbar import CustomToolbar
 from battery_analysis.utils import popout_figure
 import numpy as np
 import pandas as pd
@@ -150,8 +151,8 @@ class ComparisonTab(ttk.Frame):
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-        # Add a toolbar
-        self.toolbar = NavigationToolbar2Tk(self.canvas, self.plot_frame)
+        # Add a toolbar with editing support
+        self.toolbar = CustomToolbar(self.canvas, self.plot_frame)
         self.toolbar.update()
 
         # Button to open plot in a standalone window

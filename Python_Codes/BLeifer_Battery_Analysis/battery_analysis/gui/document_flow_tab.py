@@ -8,7 +8,8 @@ and flow of data between different documents in the MongoDB backend.
 import tkinter as tk
 from tkinter import ttk, messagebox
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from battery_analysis.gui.custom_toolbar import CustomToolbar
 from battery_analysis.utils import popout_figure
 import numpy as np
 import networkx as nx
@@ -68,8 +69,8 @@ class DocumentFlowTab(ttk.Frame):
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-        # Add a navigation toolbar
-        self.toolbar = NavigationToolbar2Tk(self.canvas, self.main_frame)
+        # Add a navigation toolbar with editing support
+        self.toolbar = CustomToolbar(self.canvas, self.main_frame)
         self.toolbar.update()
 
         # Button to open plot in a standalone window
