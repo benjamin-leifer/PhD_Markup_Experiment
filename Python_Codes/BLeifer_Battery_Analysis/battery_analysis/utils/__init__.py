@@ -4,7 +4,12 @@ Utility functions for the battery analysis package.
 
 import logging
 import pickle
+import matplotlib
+matplotlib.use("Qt5Agg")
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5 import NavigationToolbar2QT
+import matplotlib.backends.qt_editor.figureoptions as figureoptions
 
 try:  # pragma: no cover - depends on environment
     from mongoengine import connect
@@ -141,5 +146,13 @@ def popout_figure(fig):
     # ``plt.show`` we only display the requested figure and allow the
     # function to be called multiple times.
     fig_copy.show()
+
+    # Add full figure options dialog to the toolbar if available
+    try:
+        toolbar = fig_copy.canvas.manager.toolbar
+        configure_action = figureoptions.figure_edit(fig_copy)
+        toolbar.addAction(configure_action)
+    except Exception:
+        pass
 
     return fig_copy
