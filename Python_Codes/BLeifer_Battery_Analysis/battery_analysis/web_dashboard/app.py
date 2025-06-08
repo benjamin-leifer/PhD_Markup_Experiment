@@ -8,7 +8,9 @@ if __name__ == "__main__" and __package__ is None:  # pragma: no cover - manual 
     import pathlib
     import sys
 
-    sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
+    # Add the package root directory so that "battery_analysis" can be
+    # imported when this file is executed as a script.
+    sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
     __package__ = "battery_analysis.web_dashboard"
 
 from . import layout as layout_components
