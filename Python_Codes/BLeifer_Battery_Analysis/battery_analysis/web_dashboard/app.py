@@ -3,6 +3,14 @@
 import dash
 import dash_bootstrap_components as dbc
 
+# Allow running as a standalone script by fixing the package context
+if __name__ == "__main__" and __package__ is None:  # pragma: no cover - manual run
+    import pathlib
+    import sys
+
+    sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
+    __package__ = "battery_analysis.web_dashboard"
+
 from . import layout as layout_components
 from . import data_access
 
