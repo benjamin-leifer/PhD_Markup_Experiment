@@ -4,8 +4,13 @@ Utility functions for the battery analysis package.
 
 import logging
 import pickle
+import os
 import matplotlib
-matplotlib.use("Qt5Agg")
+
+# Use Qt backend only if no backend is preconfigured. This allows tests to
+# override the backend (e.g. to "Agg" for headless environments).
+if os.environ.get("MPLBACKEND") is None and matplotlib.get_backend().lower() != "agg":
+    matplotlib.use("Qt5Agg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5 import NavigationToolbar2QT

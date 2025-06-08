@@ -1,5 +1,8 @@
 import sys
 import os
+import matplotlib
+
+matplotlib.use("Agg")
 
 TESTS_DIR = os.path.dirname(__file__)
 PACKAGE_ROOT = os.path.abspath(os.path.join(TESTS_DIR, ".."))
