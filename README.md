@@ -27,6 +27,7 @@ Install the dependencies needed for running the tests and style checks:
 
 ```bash
 pip install -r requirements-dev.txt
+pip install -e Python_Codes/BLeifer_Battery_Analysis
 ```
 
 The package requires a running MongoDB instance for data storage.
