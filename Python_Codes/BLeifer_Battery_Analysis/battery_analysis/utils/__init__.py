@@ -7,14 +7,25 @@ import pickle
 import os
 import matplotlib
 
-# Use Qt backend only if no backend is preconfigured. This allows tests to
-# override the backend (e.g. to "Agg" for headless environments).
+# Use the Qt backend only if a backend hasn't been configured already and
+# the Qt dependencies are available.  This prevents import errors during
+# headless test runs where PyQt/PySide are not installed.
 if os.environ.get("MPLBACKEND") is None and matplotlib.get_backend().lower() != "agg":
-    matplotlib.use("Qt5Agg")
+    try:  # pragma: no cover - depends on environment
+        matplotlib.use("Qt5Agg")
+    except Exception:  # fallback when Qt bindings are missing
+        matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qt5 import NavigationToolbar2QT
-import matplotlib.backends.qt_editor.figureoptions as figureoptions
+
+try:  # pragma: no cover - optional Qt dependencies
+    from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+    from matplotlib.backends.backend_qt5 import NavigationToolbar2QT
+    import matplotlib.backends.qt_editor.figureoptions as figureoptions
+except Exception:  # pragma: no cover - Qt not available
+    FigureCanvas = None
+    NavigationToolbar2QT = None
+    figureoptions = None
 
 try:  # pragma: no cover - depends on environment
     from mongoengine import connect
