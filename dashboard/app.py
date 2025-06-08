@@ -199,4 +199,4 @@ def create_app() -> dash.Dash:
 
 
 if __name__ == "__main__":  # pragma: no cover - manual execution
-    create_app().run_server(debug=True)
+    create_app().run(debug=True)
