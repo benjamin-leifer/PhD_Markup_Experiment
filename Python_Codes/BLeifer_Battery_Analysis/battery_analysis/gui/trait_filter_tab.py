@@ -121,6 +121,8 @@ class TraitFilterTab(ttk.Frame):
         self.metric_analysis = MultiMetricAnalysis(analysis_frame)
         self.metric_analysis.pack(fill=tk.BOTH, expand=True)
 
+        plot_frame = ttk.LabelFrame(self, text="Outlier Analysis")
+        plot_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         self.plot_area = plot_frame
 
     def refresh_options(self):
@@ -150,11 +152,6 @@ class TraitFilterTab(ttk.Frame):
             )
         self.metric_analysis.update_samples(samples)
         self.main_app.update_status(f"Found {len(samples)} sample(s)")
-        for r in rows:
-            self.tree.insert(
-                "", tk.END, values=(r["name"], r["chemistry"], r["manufacturer"])
-            )
-        self.main_app.update_status(f"Found {len(rows)} sample(s)")
 
 
     def open_doe_view(self):
