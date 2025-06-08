@@ -3,6 +3,11 @@ import sys
 import os
 import importlib
 
+# Use the Qt backend so popped out plots include Matplotlib's
+# native customization tools.
+import matplotlib
+matplotlib.use("Qt5Agg")
+
 # Add package root (one level above the battery_analysis directory) to the path
 package_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if package_root not in sys.path:
