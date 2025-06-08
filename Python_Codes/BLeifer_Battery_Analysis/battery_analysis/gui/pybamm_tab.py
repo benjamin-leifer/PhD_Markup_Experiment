@@ -8,7 +8,8 @@ including model setup, simulation, parameter fitting, and comparison with experi
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from battery_analysis.gui.custom_toolbar import CustomToolbar
 from battery_analysis.utils import popout_figure
 import numpy as np
 import pandas as pd
@@ -251,8 +252,8 @@ class PyBAMMTab(ttk.Frame):
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-        # Add a toolbar
-        self.toolbar = NavigationToolbar2Tk(self.canvas, self.plot_frame)
+        # Add a toolbar with editing support
+        self.toolbar = CustomToolbar(self.canvas, self.plot_frame)
         self.toolbar.update()
 
         self.popout_btn = ttk.Button(
@@ -272,8 +273,8 @@ class PyBAMMTab(ttk.Frame):
         self.comparison_canvas.draw()
         self.comparison_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-        # Add a toolbar
-        self.comparison_toolbar = NavigationToolbar2Tk(self.comparison_canvas, self.comparison_frame)
+        # Add a toolbar with editing support
+        self.comparison_toolbar = CustomToolbar(self.comparison_canvas, self.comparison_frame)
         self.comparison_toolbar.update()
 
         self.comparison_popout_btn = ttk.Button(
