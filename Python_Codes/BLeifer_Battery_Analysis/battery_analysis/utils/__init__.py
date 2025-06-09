@@ -20,11 +20,33 @@ import matplotlib.pyplot as plt
 
 try:  # pragma: no cover - optional Qt dependencies
     from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-    from matplotlib.backends.backend_qt5 import NavigationToolbar2QT
+    from matplotlib.backends.backend_qt5 import NavigationToolbar2QT, FigureManagerQT
     import matplotlib.backends.qt_editor.figureoptions as figureoptions
+
+    class FullToolbar(NavigationToolbar2QT):
+        """NavigationToolbar2QT with a Configure button."""
+
+        toolitems = NavigationToolbar2QT.toolitems + (
+            (
+                "Configure",
+                "Edit axis/curve/image properties",
+                "qt4_editor_options",
+                "configure",
+            ),
+        )
+
+        def configure(self):
+            if figureoptions is not None:
+                try:
+                    figureoptions.figure_edit(self.canvas.figure)
+                except Exception:
+                    pass
+
+    FigureManagerQT._toolbar2_class = FullToolbar
 except Exception:  # pragma: no cover - Qt not available
     FigureCanvas = None
     NavigationToolbar2QT = None
+    FullToolbar = None
     figureoptions = None
 
 try:  # pragma: no cover - depends on environment
@@ -163,11 +185,14 @@ def popout_figure(fig):
     # function to be called multiple times.
     fig_copy.show()
 
-    # Add full figure options dialog to the toolbar if available
+    # Ensure popped out window uses the full toolbar with a Configure button
     try:
-        toolbar = fig_copy.canvas.manager.toolbar
-        configure_action = figureoptions.figure_edit(fig_copy)
-        toolbar.addAction(configure_action)
+        if FullToolbar is not None:
+            fig_manager = fig_copy.canvas.manager
+            if not isinstance(fig_manager.toolbar, FullToolbar):
+                fig_manager.window.removeToolBar(fig_manager.toolbar)
+                fig_manager.toolbar = FullToolbar(fig_copy.canvas, fig_manager.window)
+                fig_manager.window.addToolBar(fig_manager.toolbar)
     except Exception:
         pass
 
