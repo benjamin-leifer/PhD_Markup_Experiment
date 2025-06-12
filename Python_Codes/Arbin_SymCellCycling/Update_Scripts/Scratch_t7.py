@@ -181,6 +181,12 @@ def add_snowflake_to_plot(ax, image_path, x, y, zoom=0.1):
 
 # Add a snowflake image to the plot
 snowflake_image_path = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Snowflake.png'  # Replace with the path to your snowflake image
+def extract_temperature_from_filename(filename):
+    match = re.search(r'-(\d{2})C', filename)
+    if match:
+        return f"-{match.group(1)}°C"
+    else:
+        return "RT"
 
 def format_key(key):
     """
@@ -215,6 +221,7 @@ def plot_last_cells_discharge_curves(file_tuples, normalized=False, color_dict=N
         print(color)
         try:
             cycles_data, norm_factor = process_all_cycles_for_voltage_vs_capacity(file_path, key, normalized)
+
         except Exception as e:
             print(f"Error processing {file_path}: {e}")
             continue
@@ -232,6 +239,12 @@ def plot_last_cells_discharge_curves(file_tuples, normalized=False, color_dict=N
                     elif 'DTFV' in key:
                         plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor*1.6, discharge['Voltage (V)'],
                          label=f'{format_key(key)}', linestyle='-', color=color, lw = 2)
+                    elif 'MF91' in key:
+                        filename = os.path.basename(file_path)
+                        temperature = extract_temperature_from_filename(filename)
+                        label_text = f"{format_key(key)} ({temperature})"
+                        plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor*1.6, discharge['Voltage (V)'],
+                         label=label_text, linestyle='-', color=color, lw = 2)
                 else:
                     if 'DT14' in key:
                         plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor, discharge['Voltage (V)'],
@@ -243,13 +256,16 @@ def plot_last_cells_discharge_curves(file_tuples, normalized=False, color_dict=N
                         plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor, discharge['Voltage (V)'],
                                  label=f'{format_key(key)}', linestyle='-', color=color, lw=2)
                     elif 'MF91' in key:
+                        filename = os.path.basename(file_path)
+                        temperature = extract_temperature_from_filename(filename)
+                        label_text = f"{format_key(key)} ({temperature})"
                         plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor, discharge['Voltage (V)'],
-                         label=f'{format_key(key)}', linestyle='-', color=color, lw = 2)
+                         label=label_text, linestyle='-', color=color, lw = 2)
     plt.xlabel('Capacity (mAh/g)')
     plt.ylabel('Voltage (V)')
-    plt.title('Discharge Curves for DT Cells at -51°C')
+    plt.title('Discharge Curves for MF91 Cells at Low Temp')
     plt.gca().set_ylim(0, 4.5)
-    plt.gca().set_xlim(-4, 90)
+    plt.gca().set_xlim(-4, 160)
     # Only show legend if there are labeled artists
     handles, labels = plt.gca().get_legend_handles_labels()
     if handles:
@@ -328,6 +344,7 @@ target_codes = [ 'FA01','EN04','DU06','EO05','EJ05',
                  'FG05',
                  'ES05',
                  'EC06',]
+target_codes = ['EC06','FO02', 'FO03','FO04','FO05','FO07',]#'EC01']#'FC04']
 #holder_codes = ['holder1','holder2']
 #holder_codes.extend(target_codes)
 cell_codes= [cell_code for cell_code in target_codes]

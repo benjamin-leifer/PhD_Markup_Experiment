@@ -1042,12 +1042,16 @@ form_set_DTFV = [get_tuples_by_cell_code(file_paths_keys, r'FF02')[0],
 form_set_mf91 = [get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],
                  get_tuples_by_cell_code(file_paths_keys, r'FK02')[0],
                  get_tuples_by_cell_code(file_paths_keys, r'FK05')[0],
+                 get_tuples_by_cell_code(file_paths_keys, r'FM01')[0],
+                 get_tuples_by_cell_code(file_paths_keys, r'FM06')[0],
                  ]
-
+Real_comp = [get_tuples_by_cell_code(file_paths_keys, r'EU03')[0],
+             get_tuples_by_cell_code(file_paths_keys, r'FF02')[0],
+             get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],]
 cycle_str = 'CycleLife_JoshColors'
 rate_str = 'Rate_JoshColors'
-rate_bounds = (0, 50)
-cycle_life_bounds = (19.5, 100)
+rate_bounds = (0, 19.5)
+cycle_life_bounds = (19.5, 125)
 Full_set = []
 Full_set.extend(form_set_DTF2)
 Full_set.extend(form_set_DTV)
@@ -1056,10 +1060,12 @@ Full_set.extend(form_set_mf91)
 cell_codes= [cell_code for _, _, cell_code in Full_set]
 custom_colors = assign_tol_colors(cell_codes)
 
-compare_cells_on_same_plot(form_set_DTF2, normalized=False, x_bounds=rate_bounds, save_str=rate_str+'DTF2', color_scheme=None)
-compare_cells_on_same_plot(form_set_DTV, normalized=False, x_bounds=rate_bounds, save_str=rate_str+'DTV', color_scheme=None)
-compare_cells_on_same_plot(form_set_DTFV, normalized=False, x_bounds=rate_bounds, save_str=rate_str+'DTFV', color_scheme=None)
-compare_cells_on_same_plot(form_set_mf91, normalized=False, x_bounds=rate_bounds, save_str=rate_str+'MF91', color_scheme=None)
+#compare_cells_on_same_plot(form_set_DTF2, normalized=False, x_bounds=rate_bounds, save_str=rate_str+'DTF2', color_scheme=None)
+#compare_cells_on_same_plot(form_set_DTV, normalized=False, x_bounds=rate_bounds, save_str=rate_str+'DTV', color_scheme=None)
+#compare_cells_on_same_plot(form_set_DTFV, normalized=False, x_bounds=rate_bounds, save_str=rate_str+'DTFV', color_scheme=None)
+#compare_cells_on_same_plot(form_set_mf91, normalized=False, x_bounds=cycle_life_bounds, save_str=rate_str+'MF91_life', color_scheme=None)
+compare_cells_on_same_plot(Real_comp, normalized=False, x_bounds=cycle_life_bounds, save_str=rate_str+'comp_life', color_scheme=None)
+compare_cells_on_same_plot(Real_comp, normalized=False, x_bounds=rate_bounds, save_str=rate_str+'comp_rate', color_scheme=None)
 
 DT_Set = []
 DT_Set.extend(DT14_control)
