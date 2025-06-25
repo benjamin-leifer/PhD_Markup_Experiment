@@ -3,8 +3,9 @@ import re
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib
-matplotlib.use('TkAgg')  # Or try 'QtAgg' if 'TkAgg' doesn't work
-
+matplotlib.use('Qt5Agg')  # Or try 'QtAgg' if 'TkAgg' doesn't work
+import matplotlib.pyplot as plt
+plt.rcParams['toolbar'] = 'toolbar2'  # Enable the toolbar for interactive plots
 # Provide the path to your lookup table Excel file.
 lookup_table_path = r'C:\Users\benja\OneDrive - Northeastern University\Spring 2025 Cell List.xlsx'
 search_directory = r'C:\Users\benja\OneDrive - Northeastern University\Gallaway Group\Gallaway Extreme SSD Drive\Equipment Data\Lab Arbin\Li-Ion\Low Temp Li Ion\2025\-51C_discharges'
@@ -228,7 +229,7 @@ def plot_last_cells_discharge_curves(file_tuples, normalized=False, color_dict=N
         for cycle, charge, discharge in cycles_data:
             if not discharge.empty:
                 #cut off Voltage below 2V
-                discharge = discharge[discharge['Voltage (V)'] > 2]
+                discharge = discharge[discharge['Voltage (V)'] > 2.5]
                 if norm_factor > 4e-5:
                     if 'DT14' in key:
                         plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor*1.6, discharge['Voltage (V)'],
@@ -237,8 +238,11 @@ def plot_last_cells_discharge_curves(file_tuples, normalized=False, color_dict=N
                         plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor*1.6, discharge['Voltage (V)'],
                          label=f'{format_key(key)}', linestyle='-', color=color, lw = 1)
                     elif 'DTFV' in key:
+                        filename = os.path.basename(file_path)
+                        temperature = extract_temperature_from_filename(filename)
+                        label_text = f'{format_key(key)} ({temperature})'
                         plt.plot(discharge['Discharge Capacity (Ah)'] / norm_factor*1.6, discharge['Voltage (V)'],
-                         label=f'{format_key(key)}', linestyle='-', color=color, lw = 2)
+                         label=label_text, linestyle='-', color=color, lw = 2)
                     elif 'MF91' in key:
                         filename = os.path.basename(file_path)
                         temperature = extract_temperature_from_filename(filename)
@@ -263,17 +267,20 @@ def plot_last_cells_discharge_curves(file_tuples, normalized=False, color_dict=N
                          label=label_text, linestyle='-', color=color, lw = 2)
     plt.xlabel('Capacity (mAh/g)')
     plt.ylabel('Voltage (V)')
-    plt.title('Discharge Curves for MF91 Cells at Low Temp')
+    plt.title('Discharge Curves for MF91 and DTFV1422 Cells at Low Temp')
     plt.gca().set_ylim(0, 4.5)
     plt.gca().set_xlim(-4, 160)
     # Only show legend if there are labeled artists
+    # Updated legend placement
     handles, labels = plt.gca().get_legend_handles_labels()
     if handles:
-        plt.legend(fontsize='xx-small', ncol=2)
+        plt.legend(fontsize='xx-small', ncol=2, loc='lower center', bbox_to_anchor=(0.5, 0.05))
     add_snowflake_to_plot(ax, snowflake_image_path, x=80, y=4, zoom=0.01)
     plt.grid(False)
     plt.tick_params(which='both', axis= 'both', direction='in', bottom=True, left=True, labelbottom=True, labelleft=True)
     plt.tight_layout()
+    # Enable toolbar
+
     plt.show()
 
 def assign_tol_colors(cell_codes):
@@ -344,7 +351,9 @@ target_codes = [ 'FA01','EN04','DU06','EO05','EJ05',
                  'FG05',
                  'ES05',
                  'EC06',]
-target_codes = ['EC06','FO02', 'FO03','FO04','FO05','FO07',]#'EC01']#'FC04']
+target_codes = ['EM01','EC06','FO02','FO05',]#'EC01']#'FC04']
+target_codes = ['FQ08', 'FQ01', 'FQ03', 'FF05']
+target_codes = ['EM01','EC06','FO02','FO05','FQ08', 'FQ01', 'FQ03', 'FF05']
 #holder_codes = ['holder1','holder2']
 #holder_codes.extend(target_codes)
 cell_codes= [cell_code for cell_code in target_codes]

@@ -11,8 +11,8 @@ lookup_table_path = r'C:\Users\benja\OneDrive - Northeastern University\Spring 2
 
 search_directory = r'C:\Users\benja\OneDrive - Northeastern University\Gallaway Group\Gallaway Extreme SSD Drive\Equipment Data\Lab Arbin\Li-Ion\Low Temp Li Ion\2025\03\Cycle Life Best Survivors'
 
-search_directory = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Cycle Life Best Survivors'
-search_directory = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Cycle Life Best Survivors\Form Experiment'
+#search_directory = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Cycle Life Best Survivors'
+#search_directory = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Cycle Life Best Survivors\Form Experiment'
 # ==========================
 # 1. Set the working directory
 # ==========================
@@ -577,16 +577,16 @@ def compare_cells_on_same_plot(file_tuples, normalized=False, x_bounds=(0, 100),
         #color = 'blue' if is_lfp else 'black'
         # === Plotting ===
         # Replace 'auto' with a valid color or 'none'
-        ax1.scatter(cycles, charge_caps, marker=base_marker,
-                    facecolors=facecolor, edgecolors=color,
-                    label=f'{format_key(key)}')
-        # ax1.scatter(cycles, discharge_caps, marker=base_marker,
-        #             facecolors=color, edgecolors=color,
-        #             label=f'{key} (Discharge)', linestyle='--')
-
-        ax2.scatter(cycles, ce, marker=ce_marker,
-                    facecolors=facecolor, edgecolors=color,
-                    label=f'{format_key(key)} (CE)')
+        # ax1.scatter(cycles, charge_caps, marker=base_marker,
+        #             facecolors=facecolor, edgecolors=color,
+        #             label=f'{format_key(key)}')
+        # # ax1.scatter(cycles, discharge_caps, marker=base_marker,
+        # #             facecolors=color, edgecolors=color,
+        # #             label=f'{key} (Discharge)', linestyle='--')
+        #
+        # ax2.scatter(cycles, ce, marker=ce_marker,
+        #             facecolors=facecolor, edgecolors=color,
+        #             label=f'{format_key(key)} (CE)')
         if color_scheme == None:
             ax1.scatter(cycles, charge_caps, marker=base_marker,
                         label=f'{format_key(key)}')
@@ -626,10 +626,24 @@ def compare_cells_on_same_plot(file_tuples, normalized=False, x_bounds=(0, 100),
                ncol=2)
 
     plt.title('Capacity and Coulombic Efficiency vs. Cycle Number')
+    # 1) Force specific integer ticks on the bottom x‐axis
+    ax1.set_xticks([ 25, 30, 35, 40, 45])
+
+    # 2) Mirror those ticks on the top, and move all tick‐marks inward
+    ax1.tick_params(
+        which='both',  # apply to both major and minor ticks
+        axis='both',  # apply on both axes
+        direction='in',  # point ticks inward
+        bottom=True, top=True,
+        left=True, right=True
+    )
+    ax2.set_yticks([])  # no ticks
+    ax2.set_yticklabels([])  # no tick labels
+    #plt.tick_params(which='both', axis='both', direction='in', bottom=True, left=True, top=True, right=True)
     plt.tight_layout()
     if save_str:
         plt.savefig(f'{save_str}_Capacity_and_Coulombic_Efficiency_vs_Cycle_v5.png', dpi=300)
-    #plt.show()
+    plt.show()
 
 
 def get_tuples_by_cell_code(file_paths_keys, target_cell_code):
@@ -1026,44 +1040,47 @@ else:
 # MF_set = [get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],]
 # import pprint as pp
 # #pp.pprint(DT14_control)
-form_set_DTF2 = [get_tuples_by_cell_code(file_paths_keys, r'DU02')[0],
-                 get_tuples_by_cell_code(file_paths_keys, r'FH02')[0],
-                 get_tuples_by_cell_code(file_paths_keys, r'FH05')[0],
-                 ]
-form_set_DTV = [get_tuples_by_cell_code(file_paths_keys, r'DY01')[0],
-                get_tuples_by_cell_code(file_paths_keys, r'FI03')[0],
-                 get_tuples_by_cell_code(file_paths_keys, r'FI05')[0],
-
-                 ]
-form_set_DTFV = [get_tuples_by_cell_code(file_paths_keys, r'FF02')[0],
-                 get_tuples_by_cell_code(file_paths_keys, r'FJ02')[0],
-                 get_tuples_by_cell_code(file_paths_keys, r'FJ04')[0],
-                 ]
-form_set_mf91 = [get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],
-                 get_tuples_by_cell_code(file_paths_keys, r'FK02')[0],
-                 get_tuples_by_cell_code(file_paths_keys, r'FK05')[0],
-                 get_tuples_by_cell_code(file_paths_keys, r'FM01')[0],
-                 get_tuples_by_cell_code(file_paths_keys, r'FM06')[0],
-                 ]
-Real_comp = [get_tuples_by_cell_code(file_paths_keys, r'EU03')[0],
-             get_tuples_by_cell_code(file_paths_keys, r'FF02')[0],
-             get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],]
+#form_set_DTF2 = [get_tuples_by_cell_code(file_paths_keys, r'DU02')[0],
+#                get_tuples_by_cell_code(file_paths_keys, r'FH02')[0],
+#                get_tuples_by_cell_code(file_paths_keys, r'FH05')[0],
+#                ]
+#form_set_DTV = [get_tuples_by_cell_code(file_paths_keys, r'DY01')[0],
+#               get_tuples_by_cell_code(file_paths_keys, r'FI03')[0],
+#                get_tuples_by_cell_code(file_paths_keys, r'FI05')[0],
+#                ]
+# form_set_DTFV = [get_tuples_by_cell_code(file_paths_keys, r'FF02')[0],
+#                  get_tuples_by_cell_code(file_paths_keys, r'FJ02')[0],
+#                  get_tuples_by_cell_code(file_paths_keys, r'FJ04')[0],
+#                  ]
+# form_set_mf91 = [get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],
+#                  get_tuples_by_cell_code(file_paths_keys, r'FK02')[0],
+#                  get_tuples_by_cell_code(file_paths_keys, r'FK05')[0],
+#                  get_tuples_by_cell_code(file_paths_keys, r'FM01')[0],
+#                  get_tuples_by_cell_code(file_paths_keys, r'FM06')[0],
+#                  ]
+# Real_comp = [get_tuples_by_cell_code(file_paths_keys, r'EU03')[0],
+#              get_tuples_by_cell_code(file_paths_keys, r'FF02')[0],
+#              get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],]
+josh_ask = [get_tuples_by_cell_code(file_paths_keys, r'EU03')[0],
+            get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],
+            get_tuples_by_cell_code(file_paths_keys, r'FF02')[0],]
 cycle_str = 'CycleLife_JoshColors'
 rate_str = 'Rate_JoshColors'
 rate_bounds = (0, 19.5)
-cycle_life_bounds = (19.5, 125)
-Full_set = []
-Full_set.extend(form_set_DTF2)
-Full_set.extend(form_set_DTV)
-Full_set.extend(form_set_DTFV)
-Full_set.extend(form_set_mf91)
-cell_codes= [cell_code for _, _, cell_code in Full_set]
-custom_colors = assign_tol_colors(cell_codes)
-
+cycle_life_bounds = (21.5, 45)
+# Full_set = []
+# Full_set.extend(form_set_DTF2)
+# Full_set.extend(form_set_DTV)
+# Full_set.extend(form_set_DTFV)
+# Full_set.extend(form_set_mf91)
+# cell_codes= [cell_code for _, _, cell_code in Full_set]
+# custom_colors = assign_tol_colors(cell_codes)
+# compare_cells_on_same_plot()
 #compare_cells_on_same_plot(form_set_DTF2, normalized=False, x_bounds=rate_bounds, save_str=rate_str+'DTF2', color_scheme=None)
 #compare_cells_on_same_plot(form_set_DTV, normalized=False, x_bounds=rate_bounds, save_str=rate_str+'DTV', color_scheme=None)
 #compare_cells_on_same_plot(form_set_DTFV, normalized=False, x_bounds=rate_bounds, save_str=rate_str+'DTFV', color_scheme=None)
 #compare_cells_on_same_plot(form_set_mf91, normalized=False, x_bounds=cycle_life_bounds, save_str=rate_str+'MF91_life', color_scheme=None)
+compare_cells_on_same_plot(josh_ask, normalized=False, x_bounds=cycle_life_bounds, save_str=rate_str+'JoshAsk_life', color_scheme=None)
 compare_cells_on_same_plot(Real_comp, normalized=False, x_bounds=cycle_life_bounds, save_str=rate_str+'comp_life', color_scheme=None)
 compare_cells_on_same_plot(Real_comp, normalized=False, x_bounds=rate_bounds, save_str=rate_str+'comp_rate', color_scheme=None)
 
