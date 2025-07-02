@@ -52,10 +52,42 @@ from . import models
 from . import analysis
 from . import report
 from . import utils
+
+import warnings
+
+MISSING_ADVANCED_PACKAGES = []
+
+
+def _check_missing_advanced_packages():
+    """Return a list of optional packages required for advanced analysis that
+    are not installed."""
+
+    missing = []
+    try:  # pragma: no cover - runtime check
+        import scipy  # noqa: F401
+    except Exception:  # pragma: no cover - dependency may be absent
+        missing.append("scipy")
+
+    try:  # pragma: no cover - runtime check
+        import sklearn  # noqa: F401
+    except Exception:  # pragma: no cover - dependency may be absent
+        missing.append("scikit-learn")
+
+    return missing
+
+
 try:  # Some optional dependencies like scipy may be missing
     from . import advanced_analysis
-except Exception:  # pragma: no cover - optional import
+except Exception as exc:  # pragma: no cover - optional import
     advanced_analysis = None
+    MISSING_ADVANCED_PACKAGES = _check_missing_advanced_packages()
+    if MISSING_ADVANCED_PACKAGES:
+        warnings.warn(
+            "Advanced analysis disabled. Missing packages: "
+            + ", ".join(MISSING_ADVANCED_PACKAGES)
+        )
+    else:
+        warnings.warn(f"Advanced analysis disabled due to error: {exc}")
 
 try:
     from . import plots

@@ -62,11 +62,19 @@ from battery_analysis import utils, models, analysis, report
 from battery_analysis.parsers import parse_file
 from battery_analysis.utils import data_update
 try:
-    from battery_analysis import advanced_analysis
+    from battery_analysis import advanced_analysis, MISSING_ADVANCED_PACKAGES
     HAS_ADVANCED = advanced_analysis is not None
-except Exception:  # catches ImportError and dependency issues
+except Exception:
     advanced_analysis = None
+    MISSING_ADVANCED_PACKAGES = []
     HAS_ADVANCED = False
+if not HAS_ADVANCED and MISSING_ADVANCED_PACKAGES:
+    import warnings
+
+    warnings.warn(
+        "Advanced analysis tab disabled. Missing packages: "
+        + ", ".join(MISSING_ADVANCED_PACKAGES)
+    )
 
 try:
     from battery_analysis import eis
