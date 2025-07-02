@@ -20,6 +20,15 @@ pip install ".[eis]"          # EIS tools
 pip install ".[pybamm]"       # PyBAMM modeling
 pip install ".[all]"          # everything
 ```
+Advanced analysis functions depend on `scipy` and `scikit-learn`.
+Install them with:
+
+```bash
+pip install scipy scikit-learn
+# or
+pip install .[advanced]
+```
+You can also create an `advanced` extra in `Python_Codes/BLeifer_Battery_Analysis/setup.py` to bundle these packages.
 
 ### Development setup
 
