@@ -76,6 +76,15 @@ pip install ".[all]"
 - Python 3.7+
 - MongoDB (running locally or on a remote server)
 - Dependencies: mongoengine, pandas, numpy, matplotlib, reportlab
+- Advanced analysis features depend on `scipy` and `scikit-learn`.
+Install them with:
+
+```bash
+pip install scipy scikit-learn
+# or
+pip install .[advanced]
+```
+You can also create an `advanced` extra in `setup.py` to bundle these packages.
 
 ## Usage
 
