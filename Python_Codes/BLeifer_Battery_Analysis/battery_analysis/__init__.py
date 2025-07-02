@@ -58,6 +58,11 @@ except Exception:  # pragma: no cover - optional import
     advanced_analysis = None
 
 try:
+    from . import plots
+except Exception:  # pragma: no cover - optional import
+    plots = None
+
+try:
     from . import eis
 except Exception:  # pragma: no cover - optional import
     eis = None
