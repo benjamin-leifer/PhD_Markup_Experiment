@@ -63,8 +63,9 @@ from battery_analysis.parsers import parse_file
 from battery_analysis.utils import data_update
 try:
     from battery_analysis import advanced_analysis
-    HAS_ADVANCED = True
-except ImportError:
+    HAS_ADVANCED = advanced_analysis is not None
+except Exception:  # catches ImportError and dependency issues
+    advanced_analysis = None
     HAS_ADVANCED = False
 
 try:
