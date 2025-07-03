@@ -40,6 +40,7 @@ import os
 import sys
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from tkinter import font
 import logging
 import threading
 import queue
@@ -115,6 +116,8 @@ class BatteryAnalysisApp(tk.Tk):
         self.title("Battery Test Data Analysis")
         self._set_initial_geometry()
         self.zoom_level = 1.0
+        self._base_widget_fonts = {}
+        self._base_text_tag_fonts = {}
 
         # Create the menubar with zoom controls
         self.create_menu()
@@ -137,6 +140,9 @@ class BatteryAnalysisApp(tk.Tk):
         self.style.configure("TFrame", background="#f0f0f0")
         self.style.configure("TButton", padding=6)
         self.style.configure("TLabel", background="#f0f0f0")
+
+        # Record base font sizes for zooming
+        self._collect_base_fonts(self)
 
         # Start queue processing
         self.process_queue()
@@ -166,6 +172,58 @@ class BatteryAnalysisApp(tk.Tk):
         self.menubar.add_cascade(label="View", menu=view_menu)
         self.config(menu=self.menubar)
 
+    def _collect_base_fonts(self, widget):
+        """Record the original font sizes for a widget tree."""
+        if "font" in widget.keys():
+            try:
+                f = font.nametofont(widget.cget("font"))
+            except tk.TclError:
+                f = font.Font(widget, font=widget.cget("font"))
+                widget._custom_font = f
+            if widget not in self._base_widget_fonts:
+                self._base_widget_fonts[widget] = f.cget("size")
+        if isinstance(widget, tk.Text):
+            for tag in widget.tag_names():
+                tag_font = widget.tag_cget(tag, "font")
+                if tag_font:
+                    try:
+                        tf = font.nametofont(tag_font)
+                    except tk.TclError:
+                        tf = font.Font(widget, font=tag_font)
+                        widget.tag_configure(tag, font=tf)
+                    key = (widget, tag)
+                    if key not in self._base_text_tag_fonts:
+                        self._base_text_tag_fonts[key] = tf.cget("size")
+        for child in widget.winfo_children():
+            self._collect_base_fonts(child)
+
+    def _apply_zoom(self, widget):
+        """Apply zoom to all recorded widget fonts."""
+        if widget in self._base_widget_fonts:
+            base_size = self._base_widget_fonts[widget]
+            try:
+                f = font.nametofont(widget.cget("font"))
+            except tk.TclError:
+                f = getattr(widget, "_custom_font", font.Font(widget, font=widget.cget("font")))
+                widget._custom_font = f
+            f.configure(size=max(1, int(base_size * self.zoom_level)))
+            widget.configure(font=f)
+        if isinstance(widget, tk.Text):
+            for tag in widget.tag_names():
+                key = (widget, tag)
+                if key in self._base_text_tag_fonts:
+                    base_size = self._base_text_tag_fonts[key]
+                    tag_font = widget.tag_cget(tag, "font")
+                    try:
+                        tf = font.nametofont(tag_font)
+                    except tk.TclError:
+                        tf = font.Font(widget, font=tag_font)
+                        widget.tag_configure(tag, font=tf)
+                    tf.configure(size=max(1, int(base_size * self.zoom_level)))
+                    widget.tag_configure(tag, font=tf)
+        for child in widget.winfo_children():
+            self._apply_zoom(child)
+
     def set_zoom(self, factor):
         """Set UI zoom level."""
         self.zoom_level = factor
@@ -175,6 +233,8 @@ class BatteryAnalysisApp(tk.Tk):
         width = min(width, self.winfo_screenwidth())
         height = min(height, self.winfo_screenheight())
         self.geometry(f"{width}x{height}")
+        self._collect_base_fonts(self)
+        self._apply_zoom(self)
 
     def zoom_in(self):
         """Increase zoom level."""
