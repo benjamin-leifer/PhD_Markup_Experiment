@@ -478,29 +478,38 @@ class AdvancedAnalysisTab(ttk.Frame):
 
         # Get voltage and capacity data
         try:
-            voltage, capacity = advanced_analysis.get_voltage_capacity_data(test_id, cycle_number)
-
-            from battery_analysis.advanced_analysis import compute_dqdv  # NEW import
-
-            v_mid, dqdv = compute_dqdv(
-                capacity,
-                voltage,
-                smooth=True,  # or expose GUI checkbox
-                window_size=11,  # or GUI spin-box
-                polyorder=3,
+            voltage, capacity = advanced_analysis.get_voltage_capacity_data(
+                test_id, cycle_number
             )
 
-            # Store the results
-            self.current_dqdv_data = {
-                'voltage': voltage,
-                'capacity': capacity,
-                'v_centers': v_mid,
-                'dq_dv': dqdv,
-                'cycle': cycle_number
-            }
+            if smooth:
+                self.plot_smoothed_dqdv(
+                    voltage,
+                    capacity,
+                    cycle_number,
+                    window_size=window_size,
+                    polyorder=3,
+                )
+            else:
+                from battery_analysis.advanced_analysis import compute_dqdv
 
-            # Plot the results
-            self.plot_dqdv_results()
+                v_mid, dqdv = compute_dqdv(
+                    capacity,
+                    voltage,
+                    smooth=False,
+                    window_size=window_size,
+                    polyorder=3,
+                )
+
+                self.current_dqdv_data = {
+                    "voltage": voltage,
+                    "capacity": capacity,
+                    "v_centers": v_mid,
+                    "dq_dv": dqdv,
+                    "cycle": cycle_number,
+                }
+
+                self.plot_dqdv_results()
 
             # Update the results text
             self.update_dqdv_results_text()
@@ -560,6 +569,28 @@ class AdvancedAnalysisTab(ttk.Frame):
         # Adjust layout
         self.fig.tight_layout()
         self.canvas.draw()
+
+    def plot_smoothed_dqdv(self, voltage, capacity, cycle, *, window_size=11, polyorder=3):
+        """Compute and plot a smoothed differential capacity curve."""
+        from battery_analysis.advanced_analysis import compute_dqdv
+
+        v_mid, dqdv = compute_dqdv(
+            capacity,
+            voltage,
+            smooth=True,
+            window_size=window_size,
+            polyorder=polyorder,
+        )
+
+        self.current_dqdv_data = {
+            "voltage": voltage,
+            "capacity": capacity,
+            "v_centers": v_mid,
+            "dq_dv": dqdv,
+            "cycle": cycle,
+        }
+
+        self.plot_dqdv_results()
 
     def update_dqdv_results_text(self):
         """Update the results text with dQ/dV analysis information."""
