@@ -1535,3 +1535,45 @@ def compute_dqdv(capacity, voltage, *, smooth=True, window_size=11, polyorder=3)
             dqdv = savgol_filter(dqdv, window_size, polyorder)
 
     return v_mid, dqdv
+
+
+# Append new function for Josh_request_Dq_dv
+
+def josh_request_dq_dv(file_path: str, sheet_name: str = "Channel51_1", mass_g: float = 0.0015) -> pd.DataFrame:
+    """Return smoothed dQ/dV DataFrame for the first cycle of *sheet_name*.
+
+    Parameters
+    ----------
+    file_path : str
+        Path to the Excel file containing the data.
+    sheet_name : str, default "Channel51_1"
+        Name of the sheet to parse.
+    mass_g : float, default 0.0015
+        Active material mass in grams used to normalise the capacity.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with columns ``"V"`` and ``"dQdV_sm"`` containing the
+        voltage and smoothed differential capacity.
+    """
+    raw = pd.read_excel(file_path, sheet_name=sheet_name, header=None, nrows=20)
+    hdr = next(
+        i for i, row in raw.iterrows() if row.astype(str).str.contains("Cycle Index").any()
+    )
+    df = pd.read_excel(file_path, sheet_name=sheet_name, header=hdr)
+    df.columns = df.columns.str.strip()
+    df1 = df[df["Cycle Index"] == 1].copy()
+
+    q = df1["Charge Capacity (Ah)"].fillna(0).to_numpy() * 1e3 / mass_g
+    v = df1["Voltage (V)"].to_numpy()
+
+    mask = np.concatenate(([True], np.diff(q) > 0))
+    v_charge, q_charge = v[mask], q[mask]
+
+    dq_dv = np.gradient(q_charge, v_charge)
+    dfdq = pd.DataFrame({"V": v_charge, "dQdV": dq_dv})
+    dfdq["dQdV_sm"] = dfdq["dQdV"].rolling(51, center=True, min_periods=1).mean()
+    dfdq["dQdV_sm"] = np.clip(dfdq["dQdV_sm"], 0, None)
+    return dfdq[["V", "dQdV_sm"]]
+

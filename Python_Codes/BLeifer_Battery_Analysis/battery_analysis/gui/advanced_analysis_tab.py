@@ -77,7 +77,8 @@ class AdvancedAnalysisTab(ttk.Frame):
             ("Capacity Fade Modeling", "fade"),
             ("Anomaly Detection", "anomalies"),
             ("Energy Analysis", "energy"),
-            ("Test Clustering", "clustering")
+            ("Test Clustering", "clustering"),
+            ("Josh_request_Dq_dv", "Josh_request_Dq_dv"),
         ]
 
         for i, (text, value) in enumerate(analyses):
@@ -391,6 +392,25 @@ class AdvancedAnalysisTab(ttk.Frame):
                 row=6, column=0, columnspan=2, padx=5, pady=5
             )
 
+        elif analysis_type == "Josh_request_Dq_dv":
+            frame = ttk.Frame(self.options_frame)
+            frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+            ttk.Label(frame, text="Excel File:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+            self.josh_file_entry = ttk.Entry(frame, width=30)
+            self.josh_file_entry.grid(row=0, column=1, padx=5, pady=5)
+            ttk.Button(frame, text="Browse", command=self.browse_josh_file).grid(row=0, column=2, padx=5, pady=5)
+
+            ttk.Label(frame, text="Sheet Name:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+            self.josh_sheet_entry = ttk.Entry(frame, width=20)
+            self.josh_sheet_entry.insert(0, "Channel51_1")
+            self.josh_sheet_entry.grid(row=1, column=1, padx=5, pady=5)
+
+            ttk.Label(frame, text="Mass (g):").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
+            self.josh_mass_entry = ttk.Entry(frame, width=10)
+            self.josh_mass_entry.insert(0, "0.0015")
+            self.josh_mass_entry.grid(row=2, column=1, padx=5, pady=5)
+
     def clear_results(self):
         """Clear current results."""
         # Clear the figure
@@ -408,12 +428,10 @@ class AdvancedAnalysisTab(ttk.Frame):
 
     def run_analysis(self):
         """Run the selected analysis type."""
-        if not self.current_test:
+        analysis_type = self.analysis_type_var.get()
+        if analysis_type != "Josh_request_Dq_dv" and not self.current_test:
             messagebox.showinfo("No Test Selected", "Please select a test to analyze.")
             return
-
-        # Get the analysis type
-        analysis_type = self.analysis_type_var.get()
 
         # Update the status
         self.main_app.update_status(f"Running {analysis_type} analysis...")
@@ -442,6 +460,8 @@ class AdvancedAnalysisTab(ttk.Frame):
                 self._run_energy_analysis()
             elif analysis_type == "clustering":
                 self._run_clustering_analysis()
+            elif analysis_type == "Josh_request_Dq_dv":
+                self._run_josh_request_dqdv()
 
             self.main_app.update_status(f"{analysis_type.capitalize()} analysis completed")
 
@@ -1620,6 +1640,47 @@ class AdvancedAnalysisTab(ttk.Frame):
         except Exception as e:
             self.main_app.log_message(f"Error viewing cycle details: {str(e)}", logging.ERROR)
             messagebox.showerror("Error", f"Error viewing cycle details: {str(e)}")
+
+    def browse_josh_file(self):
+        """Prompt user to select an Excel file for the Josh_request_Dq_dv analysis."""
+        file_path = filedialog.askopenfilename(
+            title="Select Excel File",
+            filetypes=[("Excel files", "*.xlsx *.xls"), ("All files", "*.*")],
+        )
+        if file_path:
+            self.josh_file_entry.delete(0, tk.END)
+            self.josh_file_entry.insert(0, file_path)
+
+    def _run_josh_request_dqdv(self):
+        """Run the custom dQ/dV analysis requested by Josh."""
+        file_path = self.josh_file_entry.get()
+        sheet = self.josh_sheet_entry.get() or "Channel51_1"
+        try:
+            mass = float(self.josh_mass_entry.get())
+        except ValueError:
+            mass = 0.0015
+
+        if not file_path:
+            messagebox.showerror("Error", "Please select an Excel file")
+            return
+
+        try:
+            df = advanced_analysis.josh_request_dq_dv(file_path, sheet, mass)
+
+            self.fig.clear()
+            ax = self.fig.add_subplot(111)
+            ax.plot(df["V"], df["dQdV_sm"], linewidth=1)
+            ax.set_xlim(2.0, 3.7)
+            ax.set_xlabel("Voltage (V)")
+            ax.set_ylabel("dQ/dV (mAh g$^{-1}$ V$^{-1}$)")
+            ax.set_title("Smoothed Differential Capacity (Cycle 1 Charge)")
+            ax.grid(True)
+
+            self.canvas.draw()
+            self.notebook.select(0)
+        except Exception as e:
+            self.main_app.log_message(f"Error running Josh_request_Dq_dv: {str(e)}", logging.ERROR)
+            messagebox.showerror("Error", f"Failed to run analysis: {e}")
 
 
 
