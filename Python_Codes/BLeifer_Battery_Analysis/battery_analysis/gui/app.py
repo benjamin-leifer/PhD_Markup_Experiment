@@ -114,6 +114,10 @@ class BatteryAnalysisApp(tk.Tk):
         # Set up the main window
         self.title("Battery Test Data Analysis")
         self._set_initial_geometry()
+        self.zoom_level = 1.0
+
+        # Create the menubar with zoom controls
+        self.create_menu()
 
         # Create a message queue for thread-safe communication
         self.queue = queue.Queue()
@@ -149,6 +153,40 @@ class BatteryAnalysisApp(tk.Tk):
         height = max(int(screen_h * 0.8), 700)
         self.geometry(f"{width}x{height}")
         self.minsize(1000, 700)
+        self.base_width = width
+        self.base_height = height
+
+    def create_menu(self):
+        """Create the application menubar with zoom controls."""
+        self.menubar = tk.Menu(self)
+        view_menu = tk.Menu(self.menubar, tearoff=0)
+        view_menu.add_command(label="Zoom In", command=self.zoom_in)
+        view_menu.add_command(label="Zoom Out", command=self.zoom_out)
+        view_menu.add_command(label="Reset Zoom", command=self.reset_zoom)
+        self.menubar.add_cascade(label="View", menu=view_menu)
+        self.config(menu=self.menubar)
+
+    def set_zoom(self, factor):
+        """Set UI zoom level."""
+        self.zoom_level = factor
+        self.tk.call("tk", "scaling", factor)
+        width = int(self.base_width * factor)
+        height = int(self.base_height * factor)
+        width = min(width, self.winfo_screenwidth())
+        height = min(height, self.winfo_screenheight())
+        self.geometry(f"{width}x{height}")
+
+    def zoom_in(self):
+        """Increase zoom level."""
+        self.set_zoom(self.zoom_level + 0.1)
+
+    def zoom_out(self):
+        """Decrease zoom level."""
+        self.set_zoom(max(0.5, self.zoom_level - 0.1))
+
+    def reset_zoom(self):
+        """Reset zoom level to default."""
+        self.set_zoom(1.0)
 
 
     def setup_logging(self):
