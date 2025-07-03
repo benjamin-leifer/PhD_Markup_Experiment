@@ -190,7 +190,7 @@ class BatteryAnalysisApp(tk.Tk):
                 width = int(widget.cget("width"))
             except Exception:
                 width = None
-            if width:
+            if width and not isinstance(widget, tk.Canvas):
                 self._base_widget_widths.setdefault(widget, width)
         if isinstance(widget, tk.Text):
             for tag in widget.tag_names():
