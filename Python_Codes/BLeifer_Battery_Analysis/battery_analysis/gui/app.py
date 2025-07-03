@@ -113,8 +113,7 @@ class BatteryAnalysisApp(tk.Tk):
 
         # Set up the main window
         self.title("Battery Test Data Analysis")
-        self.geometry("1200x800")
-        self.minsize(1000, 700)
+        self._set_initial_geometry()
 
         # Create a message queue for thread-safe communication
         self.queue = queue.Queue()
@@ -140,6 +139,16 @@ class BatteryAnalysisApp(tk.Tk):
 
         # Attempt to auto-connect to the database
         self.after(500, self.auto_connect_to_db)
+
+    def _set_initial_geometry(self):
+        """Set the window size relative to the screen."""
+        self.update_idletasks()
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        width = max(int(screen_w * 0.8), 1000)
+        height = max(int(screen_h * 0.8), 700)
+        self.geometry(f"{width}x{height}")
+        self.minsize(1000, 700)
 
 
     def setup_logging(self):
@@ -904,7 +913,9 @@ class DataUploadTab(ttk.Frame):
         # Ask user about update behavior
         update_dialog = tk.Toplevel(self)
         update_dialog.title("Update Configuration")
-        update_dialog.geometry("400x200")
+        dialog_w = int(self.winfo_width() * 0.35)
+        dialog_h = int(self.winfo_height() * 0.25)
+        update_dialog.geometry(f"{dialog_w}x{dialog_h}")
         update_dialog.transient(self)
         update_dialog.grab_set()
 
@@ -1003,7 +1014,9 @@ class DataUploadTab(ttk.Frame):
         # Create preview dialog
         preview_dialog = tk.Toplevel(self)
         preview_dialog.title("Sample Matching Preview")
-        preview_dialog.geometry("600x400")
+        dialog_w = int(self.winfo_width() * 0.5)
+        dialog_h = int(self.winfo_height() * 0.5)
+        preview_dialog.geometry(f"{dialog_w}x{dialog_h}")
         preview_dialog.transient(self)
 
         # Create a Treeview widget
@@ -1710,7 +1723,9 @@ class AnalysisTab(ttk.Frame):
             # Create a new window for the results
             analysis_window = tk.Toplevel(self)
             analysis_window.title(f"Analysis Results - {test.name}")
-            analysis_window.geometry("800x600")
+            win_w = int(self.winfo_width() * 0.8)
+            win_h = int(self.winfo_height() * 0.8)
+            analysis_window.geometry(f"{win_w}x{win_h}")
 
             # Create a notebook for different analysis views
             notebook = ttk.Notebook(analysis_window)
@@ -1883,7 +1898,9 @@ class AnalysisTab(ttk.Frame):
         # Ask which cycle to view
         cycle_dialog = tk.Toplevel(self)
         cycle_dialog.title("Select Cycle")
-        cycle_dialog.geometry("300x150")
+        dialog_w = int(self.winfo_width() * 0.3)
+        dialog_h = int(self.winfo_height() * 0.2)
+        cycle_dialog.geometry(f"{dialog_w}x{dialog_h}")
         cycle_dialog.transient(self.main_app)
         cycle_dialog.grab_set()
 
