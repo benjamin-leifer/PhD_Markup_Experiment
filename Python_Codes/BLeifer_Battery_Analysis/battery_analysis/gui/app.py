@@ -39,7 +39,7 @@ import battery_analysis.models
 import os
 import sys
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, simpledialog
 from tkinter import font
 import logging
 import threading
@@ -118,6 +118,10 @@ class BatteryAnalysisApp(tk.Tk):
         self.zoom_level = 1.0
         self._base_widget_fonts = {}
         self._base_text_tag_fonts = {}
+        self._base_widget_widths = {}
+
+        # Record default combobox font size for zooming the dropdown list
+        self.default_combo_font_size = font.nametofont("TkDefaultFont").cget("size")
 
         # Create the menubar with zoom controls
         self.create_menu()
@@ -166,8 +170,7 @@ class BatteryAnalysisApp(tk.Tk):
         """Create the application menubar with zoom controls."""
         self.menubar = tk.Menu(self)
         view_menu = tk.Menu(self.menubar, tearoff=0)
-        view_menu.add_command(label="Zoom In", command=self.zoom_in)
-        view_menu.add_command(label="Zoom Out", command=self.zoom_out)
+        view_menu.add_command(label="Set Zoom…", command=self.prompt_zoom)
         view_menu.add_command(label="Reset Zoom", command=self.reset_zoom)
         self.menubar.add_cascade(label="View", menu=view_menu)
         self.config(menu=self.menubar)
@@ -182,6 +185,13 @@ class BatteryAnalysisApp(tk.Tk):
                 widget._custom_font = f
             if widget not in self._base_widget_fonts:
                 self._base_widget_fonts[widget] = f.cget("size")
+        if "width" in widget.keys():
+            try:
+                width = int(widget.cget("width"))
+            except Exception:
+                width = None
+            if width:
+                self._base_widget_widths.setdefault(widget, width)
         if isinstance(widget, tk.Text):
             for tag in widget.tag_names():
                 tag_font = widget.tag_cget(tag, "font")
@@ -208,6 +218,12 @@ class BatteryAnalysisApp(tk.Tk):
                 widget._custom_font = f
             f.configure(size=max(1, int(base_size * self.zoom_level)))
             widget.configure(font=f)
+        if widget in self._base_widget_widths:
+            base_w = self._base_widget_widths[widget]
+            try:
+                widget.configure(width=max(1, int(base_w * self.zoom_level)))
+            except Exception:
+                pass
         if isinstance(widget, tk.Text):
             for tag in widget.tag_names():
                 key = (widget, tag)
@@ -233,8 +249,13 @@ class BatteryAnalysisApp(tk.Tk):
         width = min(width, self.winfo_screenwidth())
         height = min(height, self.winfo_screenheight())
         self.geometry(f"{width}x{height}")
-        self._collect_base_fonts(self)
+        self.minsize(int(1000 * factor), int(700 * factor))
         self._apply_zoom(self)
+        # Adjust combobox dropdown fonts
+        new_size = max(1, int(self.default_combo_font_size * factor))
+        self.style.configure("TCombobox", font=("TkDefaultFont", new_size))
+        self.option_add("*TCombobox*Listbox.font", ("TkDefaultFont", new_size))
+        self.update_idletasks()
 
     def zoom_in(self):
         """Increase zoom level."""
@@ -247,6 +268,18 @@ class BatteryAnalysisApp(tk.Tk):
     def reset_zoom(self):
         """Reset zoom level to default."""
         self.set_zoom(1.0)
+
+    def prompt_zoom(self):
+        """Prompt the user for a zoom percentage."""
+        percent = simpledialog.askinteger(
+            "Set Zoom",
+            "Zoom percentage:",
+            initialvalue=int(self.zoom_level * 100),
+            minvalue=50,
+            maxvalue=300,
+        )
+        if percent:
+            self.set_zoom(percent / 100)
 
 
     def setup_logging(self):
