@@ -171,7 +171,7 @@ def layout() -> html.Div:
                     dbc.Col(dbc.Button("Export Results", id=EXPORT_BUTTON, color="secondary"), width="auto"),
                     dcc.Download(id=EXPORT_DOWNLOAD),
                     dbc.Col(
-                        dcc.Checklist(
+                        dbc.Checklist(
                             options=[{"label": "Normalize metrics", "value": "norm"}],
                             value=[],
                             id=NORMALIZE_CHECKBOX,
