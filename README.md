@@ -39,6 +39,23 @@ pip install -r requirements-dev.txt
 pip install -e Python_Codes/BLeifer_Battery_Analysis
 ```
 
+### Running tests
+
+Make sure the runtime dependencies are installed before executing the test
+suite. You can install them using the provided requirements files:
+
+```bash
+pip install -r requirements.txt        # core package requirements
+pip install -r requirements-dev.txt    # testing and style tools
+pip install -e Python_Codes/BLeifer_Battery_Analysis
+```
+
+Once the dependencies are available, run the tests from the repository root:
+
+```bash
+pytest -q
+```
+
 The package requires a running MongoDB instance for data storage.
 
 ## License
