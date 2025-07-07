@@ -13,9 +13,12 @@ except Exception:  # pragma: no cover - optional dependency
 class CustomToolbar(NavigationToolbar2Tk):
     """Navigation toolbar that exposes Matplotlib's figure options."""
 
-    toolitems = NavigationToolbar2Tk.toolitems + (
-        ("Edit", "Edit axis/curve/image properties", "subplots", "edit_figure"),
-    )
+    if QT_AVAILABLE:
+        toolitems = NavigationToolbar2Tk.toolitems + (
+            ("Edit", "Edit axis/curve/image properties", "subplots", "edit_figure"),
+        )
+    else:  # pragma: no cover - GUI button hidden when Qt missing
+        toolitems = NavigationToolbar2Tk.toolitems
 
     def edit_figure(self):
         """Open the Qt figure options dialog if available."""

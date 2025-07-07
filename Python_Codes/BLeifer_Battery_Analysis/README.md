@@ -71,6 +71,10 @@ pip install ".[pybamm]"
 pip install ".[all]"
 ```
 
+The optional figure editing tools used in the GUI require a Qt binding
+(`PyQt5` or `PySide2`). If these libraries are not installed the "Edit" button
+on embedded plots will be hidden.
+
 ## Requirements
 
 - Python 3.7+
