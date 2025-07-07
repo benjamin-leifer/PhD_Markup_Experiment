@@ -18,7 +18,7 @@ import logging
 import os
 import traceback
 
-from battery_analysis import models, analysis, report
+from battery_analysis import models, analysis, report, advanced_analysis
 
 
 class ComparisonTab(ttk.Frame):
@@ -87,28 +87,29 @@ class ComparisonTab(ttk.Frame):
         ttk.Button(btn_frame, text="Clear All", command=self.clear_selected_tests).pack(side=tk.RIGHT, padx=5)
 
         # Comparison options
-        options_frame = ttk.LabelFrame(self.left_panel, text="Comparison Options")
-        options_frame.pack(fill=tk.X, padx=5, pady=5)
+        self.options_frame = ttk.LabelFrame(self.left_panel, text="Comparison Options")
+        self.options_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        ttk.Label(options_frame, text="Plot Type:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(self.options_frame, text="Plot Type:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
         self.plot_type_var = tk.StringVar(value="capacity_vs_cycle")
         plot_types = [
             ("Capacity vs Cycle", "capacity_vs_cycle"),
             ("Normalized Capacity", "normalized_capacity"),
             ("Coulombic Efficiency", "coulombic_efficiency"),
             ("First/Last 10 Cycles", "first_last_cycles"),
-            ("Statistical Comparison", "statistical_comparison")
+            ("Statistical Comparison", "statistical_comparison"),
+            ("dQ/dV Analysis", "dqdv")
         ]
 
         for i, (text, value) in enumerate(plot_types):
             ttk.Radiobutton(
-                options_frame, text=text, variable=self.plot_type_var, value=value
+                self.options_frame, text=text, variable=self.plot_type_var, value=value
             ).grid(row=i + 1, column=0, sticky=tk.W, padx=20, pady=2)
 
         # Option to overlay box/whisker plot of all samples binned by cycle
         self.boxplot_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
-            options_frame,
+            self.options_frame,
             text="Show Box Plot by Cycle",
             variable=self.boxplot_var,
         ).grid(row=len(plot_types) + 1, column=0, sticky=tk.W, padx=20, pady=2)
@@ -116,10 +117,21 @@ class ComparisonTab(ttk.Frame):
         # Option to hide individual curves when showing box plot
         self.boxplot_only_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
-            options_frame,
+            self.options_frame,
             text="Hide Individual Curves",
             variable=self.boxplot_only_var,
         ).grid(row=len(plot_types) + 2, column=0, sticky=tk.W, padx=20, pady=2)
+
+        # Cycle selection for dQ/dV analysis
+        self.dqdv_cycle_var = tk.IntVar(value=1)
+        self.cycle_label = ttk.Label(self.options_frame, text="dQ/dV Cycle:")
+        self.cycle_entry = ttk.Entry(self.options_frame, width=10, textvariable=self.dqdv_cycle_var)
+        row_idx = len(plot_types) + 3
+        self.cycle_label.grid(row=row_idx, column=0, sticky=tk.W, padx=20, pady=2)
+        self.cycle_entry.grid(row=row_idx, column=1, sticky=tk.W, padx=5, pady=2)
+
+        self.plot_type_var.trace_add('write', self.on_plot_type_changed)
+        self.on_plot_type_changed()
 
         # Create comparison button
         ttk.Button(
@@ -188,6 +200,15 @@ class ComparisonTab(ttk.Frame):
         self.stats_text = tk.Text(self.stats_frame, wrap=tk.WORD)
         self.stats_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         self.stats_text.config(state=tk.DISABLED)
+
+    def on_plot_type_changed(self, *args):
+        """Show or hide dQ/dV cycle controls based on selected plot type."""
+        if self.plot_type_var.get() == "dqdv":
+            self.cycle_label.grid()
+            self.cycle_entry.grid()
+        else:
+            self.cycle_label.grid_remove()
+            self.cycle_entry.grid_remove()
 
     def refresh_samples(self):
         """Refresh the sample list from the database."""
@@ -355,6 +376,9 @@ class ComparisonTab(ttk.Frame):
                     self.plot_first_last_cycles(cycles_data, test_info)
                 elif plot_type == "statistical_comparison":
                     self.plot_statistical_comparison(cycles_data, test_info)
+                elif plot_type == "dqdv":
+                    cycle_num = self.dqdv_cycle_var.get()
+                    self.plot_dqdv_comparison(cycles_data, test_info, cycle_num)
 
                 # Update the data table
                 self.update_data_table(cycles_data, test_info)
@@ -603,6 +627,33 @@ class ComparisonTab(ttk.Frame):
         ax4.set_xticklabels(labels, rotation=45, ha='right')
 
         # Update the canvas
+        self.fig.tight_layout()
+        self.canvas.draw()
+
+    def plot_dqdv_comparison(self, cycles_data, test_info, cycle_number):
+        """Plot dQ/dV curves for a specific cycle across all tests."""
+        self.fig.clear()
+        ax = self.fig.add_subplot(111)
+
+        for test_id in cycles_data.keys():
+            info = test_info[test_id]
+            try:
+                voltage, capacity = advanced_analysis.get_voltage_capacity_data(test_id, cycle_number)
+                v_mid, dqdv = advanced_analysis.compute_dqdv(capacity, voltage)
+                ax.plot(v_mid, dqdv, label=f"{info['name']} ({info['sample_name']})")
+            except Exception as exc:
+                self.main_app.log_message(
+                    f"Error computing dQ/dV for {info['name']} cycle {cycle_number}: {exc}",
+                    logging.ERROR,
+                )
+
+        ax.set_xlabel('Voltage (V)')
+        ax.set_ylabel('dQ/dV (mAh/V)')
+        ax.set_title(f'dQ/dV Comparison - Cycle {cycle_number}')
+        ax.grid(True, linestyle='--', alpha=0.7)
+        if ax.lines:
+            ax.legend(loc='best')
+
         self.fig.tight_layout()
         self.canvas.draw()
 
