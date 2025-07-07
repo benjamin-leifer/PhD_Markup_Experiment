@@ -100,6 +100,7 @@ from battery_analysis.gui.dashboard_tab import DashboardTab
 from battery_analysis.gui.pybamm_tab import PyBAMMTab
 from battery_analysis.gui.scrollable_frame import ScrollableFrame
 from battery_analysis.gui.trait_filter_tab import TraitFilterTab
+from battery_analysis.gui.missing_data_tab import MissingDataTab
 
 from mongoengine.base.common import _document_registry
 print(_document_registry.keys())
@@ -128,6 +129,7 @@ class BatteryAnalysisApp(tk.Tk):
 
         # Create a message queue for thread-safe communication
         self.queue = queue.Queue()
+        self.missing_data: list[dict] = []
 
         # Setup logging
         self.setup_logging()
@@ -346,6 +348,8 @@ class BatteryAnalysisApp(tk.Tk):
 
         # Document Flow tab
         add_tab(DocumentFlowTab, "Document Flow", "doc_flow_tab")
+
+        add_tab(MissingDataTab, "Missing Data", "missing_tab")
 
         # Trait filter tab for browsing samples by traits
         add_tab(TraitFilterTab, "Trait Filter", "trait_filter_tab")
@@ -1132,6 +1136,19 @@ class DataUploadTab(ttk.Frame):
 
         self.main_app.update_status("Processing cancelled")
 
+    def _record_missing_components(self, sample, test_result):
+        missing = []
+        for field in ("anode", "cathode", "separator", "electrolyte"):
+            if getattr(sample, field, None) is None:
+                missing.append(field)
+        if missing:
+            record = {
+                "test_id": getattr(test_result, "id", getattr(test_result, "name", "")),
+                "sample_id": getattr(sample, "id", getattr(sample, "name", "")),
+                "missing": missing,
+            }
+            self.main_app.missing_data.append(record)
+
     def preview_sample_matching(self):
         """Preview which samples will be matched with each file."""
         if not self.main_app.db_connected:
@@ -1422,6 +1439,7 @@ class DataUploadTab(ttk.Frame):
                             self.main_app.log_message(
                                 f"Created new test: {test_result.name} with {test_result.cycle_count} cycles"
                             )
+                        self._record_missing_components(sample, test_result)
                     else:
                         # Create a new test
                         self.main_app.log_message(f"Creating new test with tester: {metadata.get('tester')}")
@@ -1436,6 +1454,7 @@ class DataUploadTab(ttk.Frame):
                         self.main_app.log_message(
                             f"Created new test: {test_result.name} with {test_result.cycle_count} cycles"
                         )
+                        self._record_missing_components(sample, test_result)
 
                     # Store the raw file if the storage function is available
                     if store_raw_data_file:
