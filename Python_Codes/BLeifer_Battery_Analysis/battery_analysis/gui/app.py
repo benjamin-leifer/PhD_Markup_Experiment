@@ -148,6 +148,9 @@ class BatteryAnalysisApp(tk.Tk):
         # Record base font sizes for zooming
         self._collect_base_fonts(self)
 
+        # Set default zoom level to 200%
+        self.set_zoom(2.0)
+
         # Start queue processing
         self.process_queue()
 
