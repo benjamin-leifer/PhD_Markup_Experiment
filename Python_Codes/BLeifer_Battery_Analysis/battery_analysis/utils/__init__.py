@@ -151,6 +151,10 @@ def get_file_list(directory):
 # ---------------------------------------------------------------------------
 # Plotting helper
 # ---------------------------------------------------------------------------
+
+# Keep references to popped out figures so their windows stay open
+_active_popouts = []
+
 def popout_figure(fig):
     """Open a copy of ``fig`` in a standalone matplotlib window.
 
@@ -184,6 +188,17 @@ def popout_figure(fig):
     # ``plt.show`` we only display the requested figure and allow the
     # function to be called multiple times.
     fig_copy.show()
+
+    # Track the figure so it doesn't get garbage collected
+    _active_popouts.append(fig_copy)
+
+    def _cleanup(event):  # pragma: no cover - UI behaviour
+        try:
+            _active_popouts.remove(fig_copy)
+        except ValueError:
+            pass
+
+    fig_copy.canvas.mpl_connect("close_event", _cleanup)
 
     # Ensure popped out window uses the full toolbar with a Configure button
     try:
