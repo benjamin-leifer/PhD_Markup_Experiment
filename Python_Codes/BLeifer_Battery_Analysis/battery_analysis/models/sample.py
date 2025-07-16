@@ -13,6 +13,10 @@ class Sample(Document):
         required=False, help_text="Nominal capacity in mAh"
     )
     parent = fields.ReferenceField("self", required=False)
+    anode = fields.LazyReferenceField("self", required=False)
+    cathode = fields.LazyReferenceField("self", required=False)
+    separator = fields.LazyReferenceField("self", required=False)
+    electrolyte = fields.LazyReferenceField("self", required=False)
     # Remove CASCADE to break circular dependency
     tests = fields.ListField(fields.LazyReferenceField("TestResult"))
 
