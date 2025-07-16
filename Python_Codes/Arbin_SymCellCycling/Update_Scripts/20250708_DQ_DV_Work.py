@@ -7,6 +7,7 @@ import matplotlib
 import numpy as np
 from scipy.signal import savgol_filter      # pip install scipy if needed
 
+#from Python_Codes.Arbin_SymCellCycling.Update_Scripts.Scratch_t6 import files_to_compare
 
 # Provide the path to your lookup table Excel file.
 lookup_table_path = r'C:\Users\benja\OneDrive - Northeastern University\Spring 2025 Cell List.xlsx'
@@ -15,7 +16,8 @@ lookup_table_path = r'C:\Users\benja\OneDrive - Northeastern University\Spring 2
 search_directory = r'C:\Users\benja\OneDrive - Northeastern University\Gallaway Group\Gallaway Extreme SSD Drive\Equipment Data\Lab Arbin\Li-Ion\Low Temp Li Ion\2025\03\Cycle Life Best Survivors'
 
 #search_directory = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Cycle Life Best Survivors'
-#search_directory = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Cycle Life Best Survivors\Form Experiment'
+search_directory = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Cycle Life Best Survivors\Form Experiment'
+search_directory = r'C:\Users\benja\OneDrive - Northeastern University\Gallaway Group\Gallaway Extreme SSD Drive\Equipment Data\KRI Arbin\Low Temp Li Ion\2025\07'
 # ==========================
 # 1. Set the working directory
 # ==========================
@@ -257,7 +259,7 @@ def generate_file_paths_keys(directory, lookup_table_path):
     lookup_df = pd.read_excel(lookup_table_path)
     for root, dirs, files in os.walk(directory):
         for file in files:
-            if file.endswith('.xlsx') and ('Rate_Test' in file or 'RateTest' in file):
+            if file.endswith('.xlsx'):
                 full_path = os.path.join(root, file)
                 cell_identifier = extract_cell_identifier(file)
                 if cell_identifier is None:
@@ -916,29 +918,100 @@ def format_key(key):
 # ---------------------------------------------------------------------------
 # DQ / DV TOOLKIT
 # ---------------------------------------------------------------------------
-def smooth_series(y, mode, window=11, poly=3):
-    """Return a smoothed copy of *y*."""
+# ---------------------------------------------------------------------------
+# Pre‑processing helpers
+# ---------------------------------------------------------------------------
+
+def preprocess_df(df, v_col='Voltage (V)', q_col='Charge Capacity (Ah)',
+                  dedup_thresh=1e-4,  # volts
+                  bin_width=0.002):   # volts
+    """Return a cleaned & binned copy of *df* ready for dQ/dV calculation.
+
+    1. Drops consecutive rows whose voltage change is below *dedup_thresh*.
+    2. Optionally bins the remaining data into fixed‑width voltage bins and
+       averages the capacities inside each bin to suppress quantisation noise.
+    """
+    if df.empty:
+        return df
+
+    # Step 1 – cull near‑duplicate voltages
+    mask = df[v_col].diff().abs().fillna(1) >= dedup_thresh
+    df = df.loc[mask]
+
+    # Step 2 – fixed‑width voltage bins
+    if bin_width is not None and bin_width > 0:
+        bins = np.arange(df[v_col].min(), df[v_col].max() + bin_width, bin_width)
+        # digitize returns 1‑based bin indices; use them to group
+        grouped = df.groupby(np.digitize(df[v_col], bins))
+        df = grouped[[v_col, q_col]].mean().dropna()
+
+    return df
+
+# ---------------------------------------------------------------------------
+# Smoothing helper
+# ---------------------------------------------------------------------------
+
+def smooth_series(y, mode=None, window=11, poly=3):
+    """Return a smoothed copy of *y*.
+
+    Parameters
+    ----------
+    y : 1‑D array‑like
+    mode : None | 'rolling' | 'savgol'
+    window : int
+        Window length for rolling average or Savitzky‑Golay filter.
+    poly : int
+        Polynomial order for Savitzky‑Golay.
+    """
     if mode is None:
         return y
     if mode == "rolling":
         return pd.Series(y).rolling(window, center=True, min_periods=1).mean().to_numpy()
     if mode == "savgol":
-        if window % 2 == 0:                   # window must be odd for Savitzky-Golay
-            window += 1
+        if window % 2 == 0:
+            window += 1  # Savitzky‑Golay requires odd window length
         return savgol_filter(y, window, poly, mode='interp')
     raise ValueError("smooth must be None, 'rolling', or 'savgol'")
 
-def compute_dq_dv(df, q_col, v_col, smooth=None):
+# ---------------------------------------------------------------------------
+# Main derivative routine
+# ---------------------------------------------------------------------------
+
+def compute_dq_dv(df, q_col='Charge Capacity (Ah)', v_col='Voltage (V)',
+                  smooth=None, preprocess=True, **pre_kw):
+    """Compute dQ/dV from a raw cc/voltage dataframe.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Must contain *v_col* and *q_col* columns.
+    q_col, v_col : str
+        Column names for capacity and voltage.
+    smooth : None | 'rolling' | 'savgol'
+        Optional pre‑smoothing of capacity trace.
+    preprocess : bool
+        If True (default) run :func:`preprocess_df` before differentiating.
+    **pre_kw :
+        Extra keyword arguments forwarded to :func:`preprocess_df`
+        (e.g. dedup_thresh=5e-5, bin_width=0.001).
+
+    Returns
+    -------
+    v_mid : np.ndarray
+        Mid‑point voltage grid.
+    dq_dv : np.ndarray
+        Incremental capacity values (same length as *v_mid*).
     """
-    Compute dQ/dV given a DataFrame containing *v_col* and *q_col* columns.
-    The derivative is returned on the **mid-point** voltage grid.
-    """
+    if preprocess:
+        df = preprocess_df(df, v_col=v_col, q_col=q_col, **pre_kw)
+
     if df.empty:
         return np.array([]), np.array([])
+
     v = df[v_col].to_numpy()
     q = df[q_col].to_numpy()
 
-    # Optional smoothing before differentiation
+    # Optional smoothing BEFORE differentiation
     q = smooth_series(q, smooth)
 
     # Central difference
@@ -946,11 +1019,56 @@ def compute_dq_dv(df, q_col, v_col, smooth=None):
     dv = np.diff(v)
     with np.errstate(divide='ignore', invalid='ignore'):
         dq_dv = dq / dv
-    v_mid = (v[:-1] + v[1:]) / 2.0
+    v_mid = 0.5 * (v[:-1] + v[1:])
 
-    # Drop any NaNs or infs introduced by division by zero
+    # Filter invalid points
     mask = np.isfinite(dq_dv)
     return v_mid[mask], dq_dv[mask]
+
+def compute_dq_dv_2(
+        df,
+        q_col='Charge Capacity (Ah)',
+        v_col='Voltage (V)',
+        *,
+        # ── new pre-smoothing options
+        smooth=None,
+        smooth_kw=None,          # dict passed to smooth_series
+        # ── new post-smoothing (optional)
+        post_smooth=None,
+        post_kw=None,
+        # ── preprocessing forwarded to preprocess_df
+        bin_width=0.002,         # V
+        dedup_thresh=1e-4,       # V
+        preprocess=True,
+):
+    """Return (voltage_midpoints, dQ/dV) for one half-cycle."""
+    smooth_kw = smooth_kw or {}
+    post_kw = post_kw or {}
+
+    # 1.  basic cleaning / binning
+    if preprocess:
+        df = preprocess_df(df, v_col=v_col, q_col=q_col,
+                           bin_width=bin_width,
+                           dedup_thresh=dedup_thresh)
+
+    v = df[v_col].to_numpy()
+    q = df[q_col].to_numpy()
+
+    # 2.  optional pre-smoothing on capacity
+    q = smooth_series(q, mode=smooth, **smooth_kw)
+
+    # 3.  derivative
+    dq = np.diff(q)
+    dv = np.diff(v)
+    v_mid = 0.5 * (v[:-1] + v[1:])
+    with np.errstate(divide='ignore', invalid='ignore'):
+        y = dq / dv
+    y[~np.isfinite(y)] = np.nan   # clean inf / nan
+
+    # 4.  optional post-smoothing on dQ/dV itself
+    y = smooth_series(y, mode=post_smooth, **post_kw)
+
+    return v_mid, y
 
 def interpolate_to_grid(v, y, grid):
     """Interpolate *y(v)* onto a common *grid* (outside range → nan)."""
@@ -1015,6 +1133,222 @@ def plot_dq_dv_difference(cell_tuple, cycle_a, cycle_b, segment='charge',
     plt.xlabel('Voltage (V)'); plt.ylabel('Δ(dQ/dV) (Ah V⁻¹)')
     plt.title(f'{key}: Δ[{segment}, Cy {cycle_a} → {cycle_b}]')
     plt.grid(True); plt.tight_layout(); plt.show()
+import numpy as np
+import matplotlib.pyplot as plt
+
+# ------------------------------------------------------------------
+# 1. Multi-cell overlay: discharge capacity (left-y) + CE (right-y)
+# ------------------------------------------------------------------
+def plot_discharge_and_ce_vs_cycle(
+        file_tuples,
+        normalized=False,
+        x_bounds=None,
+        save_str='',
+        color_scheme=None,
+        marker_cycle_labels=(2, 4, 7, 10, 13, 16, 19)
+):
+    """
+    Overlay *discharge* capacity and Coulombic efficiency (CE) for several cells.
+
+    Parameters
+    ----------
+    file_tuples : list[(path, key, cell_code)]
+        Output of ``get_tuples_by_cell_code(...)`` or similar.
+    normalized : bool, default False
+        Pass-through to ``process_cycle_data`` (affects capacity units).
+    x_bounds : tuple(float, float) | None
+        X-axis limits.  ``None`` → auto-scale to max common cycle.
+    save_str : str
+        If non-empty, figure is saved as ``{save_str}_Discharge_CE.png``.
+    color_scheme : dict[str -> str] | None
+        Optional mapping *cell_code* → hex colour.
+    marker_cycle_labels : iterable[int]
+        Cycle numbers where “C-rate” annotations are drawn (left axis only).
+    """
+    if not file_tuples:
+        raise ValueError("file_tuples is empty")
+
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+    ax2 = ax1.twinx()
+
+    # Cycle-rate annotations (adjust as needed)
+    c_rate = {2: "Form", 4: "C/10", 7: "C/8", 10: "C/4",
+              13: "C/2", 16: "1C", 19: "2C"}
+    annotated = set()
+
+    cmap = plt.cm.get_cmap("tab10").resampled(len(file_tuples))
+
+    for i, (fp, key, code) in enumerate(file_tuples):
+        try:
+            cycles, _, dcap, ce = process_cycle_data(fp, key, normalized)
+        except Exception as e:
+            print(f"[WARN] {fp} → {e}")
+            continue
+
+        color = (color_scheme.get(code)
+                 if color_scheme and code in color_scheme else cmap(i))
+
+        # left-axis: discharge capacity
+        ax1.scatter(
+            cycles, dcap,
+            marker='o', s=40,
+            facecolors='none', edgecolors=color,
+            label=f"{format_key(key)} – Discharge"
+        )
+
+        # right-axis: CE
+        ax2.scatter(
+            cycles, ce,
+            marker='D', s=35,
+            facecolors=color, edgecolors=color,
+            label=f"{format_key(key)} – CE"
+        )
+
+        # # annotate chosen cycles once
+        # for cy in marker_cycle_labels:
+        #     if cy in cycles and cy not in annotated and cy in c_rate:
+        #         ax1.text(cy, dcap[cycles.index(cy)]*1.05, c_rate[cy],
+        #                 ha='center', va='bottom', fontsize=9)
+        #         annotated.add(cy)
+
+    # Aesthetics ----------------------------------------------------
+    ax1.set_xlabel("Cycle number")
+    ax1.set_ylabel("Discharge capacity"
+                   + (" (%)" if normalized else " (mAh g$^{-1}$)"))
+    ax2.set_ylabel("Coulombic efficiency (%)")
+
+    ax1.set_ylim(bottom=0)
+    ax2.set_ylim(75, 120)
+    if x_bounds:
+        ax1.set_xlim(*x_bounds)
+
+    # inward ticks all around
+    for ax in (ax1, ax2):
+        ax.tick_params(which="both", direction="in", top=True, right=True)
+
+    # combine legends
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1+lines2, labels1+labels2,
+               loc="upper center", bbox_to_anchor=(0.5, -0.12),
+               ncol=2, fontsize='small')
+
+    #ax1.grid(alpha=0.3)
+    plt.title("Discharge capacity & CE vs. cycle")
+    plt.tight_layout()
+
+    if save_str:
+        plt.savefig(f"{save_str}_Discharge_CE.png", dpi=300)
+    plt.show()
+
+# ------------------------------------------------------------------
+# 2. Mean ± 1 σ across cells
+# ------------------------------------------------------------------
+def plot_mean_discharge_and_ce(
+        file_tuples,
+        normalized=False,
+        x_bounds=None,
+        min_cells=2,
+        n_cycles=None,
+        save_str=''
+):
+    """
+    Plot mean ± 1 σ discharge capacity *and* CE across *file_tuples*.
+
+    Notes
+    -----
+    * Cycles present in < *min_cells* cells are ignored.
+    * If ``n_cycles`` is None, use the smallest max-cycle among cells.
+    """
+    if not file_tuples:
+        raise ValueError("file_tuples is empty")
+
+    # ----------------------------------------------------------------
+    # Gather per-cell vectors – pad with NaN to equal length
+    # ----------------------------------------------------------------
+    cap_stack, ce_stack = [], []
+    common_cycles = None
+
+    for fp, key, _ in file_tuples:
+        cycles, _, dcap, ce = process_cycle_data(fp, key, normalized)
+
+        if n_cycles is None:
+            n_cycles = len(cycles) if n_cycles is None else min(n_cycles, len(cycles))
+
+        # truncate / pad
+        idx = np.arange(1, n_cycles+1)
+        cap_vec = np.full_like(idx, np.nan, dtype=float)
+        ce_vec  = np.full_like(idx, np.nan, dtype=float)
+
+        for c, cap, eff in zip(cycles, dcap, ce):
+            if 1 <= c <= n_cycles:
+                cap_vec[c-1] = cap
+                ce_vec[c-1]  = eff
+
+        cap_stack.append(cap_vec)
+        ce_stack.append(ce_vec)
+
+    cap_stack = np.vstack(cap_stack)
+    ce_stack  = np.vstack(ce_stack)
+
+    # keep only cycles with ≥ min_cells non-NaN
+    valid = (np.isfinite(cap_stack).sum(axis=0) >= min_cells)
+    if not valid.any():
+        raise RuntimeError("No cycle has data from the required minimum number of cells.")
+
+    cycles = np.arange(1, n_cycles+1)[valid]
+
+    cap_mean = np.nanmean(cap_stack[:, valid], axis=0)
+    cap_std  = np.nanstd(cap_stack[:, valid], axis=0)
+
+    ce_mean  = np.nanmean(ce_stack[:, valid], axis=0)
+    ce_std   = np.nanstd(ce_stack[:, valid], axis=0)
+
+    # ----------------------------------------------------------------
+    # Plot
+    # ----------------------------------------------------------------
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+    ax2 = ax1.twinx()
+
+    # mean ± σ shading – left axis
+    ax1.fill_between(cycles, cap_mean-cap_std, cap_mean+cap_std,
+                     color='tab:blue', alpha=0.25, label='Capacity ±1σ')
+    ax1.plot(cycles, cap_mean, 'o-', color='tab:blue', lw=2,
+             label='Mean discharge capacity')
+
+    # CE on right axis
+    ax2.fill_between(cycles, ce_mean-ce_std, ce_mean+ce_std,
+                     color='tab:red', alpha=0.25, label='CE ±1σ')
+    ax2.plot(cycles, ce_mean, 'D--', color='tab:red', lw=2,
+             label='Mean CE')
+
+    # labels / limits / ticks
+    ax1.set_xlabel("Cycle number")
+    if x_bounds:
+        ax1.set_xlim(*x_bounds)
+    ax1.set_ylabel("Discharge capacity"
+                   + (" (%)" if normalized else " (mAh g$^{-1}$)"))
+    ax2.set_ylabel("Coulombic efficiency (%)")
+    ax1.set_ylim(bottom=0)
+    ax2.set_ylim(75, 120)
+
+    ax1.tick_params(which="both", direction="in", top=True, right=True)
+    #ax2.tick_params(which="both", direction="in", top=True, right=True)
+
+    # combined legend
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2,
+               loc="upper center", bbox_to_anchor=(0.5, -0.12),
+               ncol=2, fontsize='small')
+
+    #ax1.grid(alpha=0.3)
+    plt.title(f"Mean ± 1 σ over {len(file_tuples)} cells")
+    plt.tight_layout()
+
+    if save_str:
+        plt.savefig(f"{save_str}_Mean_Discharge_CE.png", dpi=300)
+    plt.show()
 
 # ---------------------------------------------------------------------------
 # Multi-cell aggregation
@@ -1028,7 +1362,7 @@ def plot_mean_dq_dv(cell_tuples, segment='charge', smooth=None,
     v_min = 10; v_max = 0
     for fp, key, _ in cell_tuples:
         cds, _ = process_all_cycles_for_voltage_vs_capacity(fp, key, normalized)
-        df = _extract_cycle_segment(cds, 1, segment)       # use cycle 1 for range
+        df = _extract_cycle_segment(cds, 2, segment)       # use cycle 1 for range
         v_min = min(v_min, df['Voltage (V)'].min())
         v_max = max(v_max, df['Voltage (V)'].max())
 
@@ -1038,7 +1372,7 @@ def plot_mean_dq_dv(cell_tuples, segment='charge', smooth=None,
     for fp, key, _ in cell_tuples:
         cds, _ = process_all_cycles_for_voltage_vs_capacity(fp, key, normalized)
         # choose a representative cycle – here 2 (adjust as needed)
-        df = _extract_cycle_segment(cds, 2, segment)
+        df = _extract_cycle_segment(cds, 1, segment)
         v, y = compute_dq_dv(df, 'Charge Capacity (Ah)' if segment=='charge'
                                   else 'Discharge Capacity (Ah)', 'Voltage (V)', smooth)
         stack.append(interpolate_to_grid(v, y, grid))
@@ -1054,6 +1388,173 @@ def plot_mean_dq_dv(cell_tuples, segment='charge', smooth=None,
     plt.title(f'Mean ± 1 σ – {len(cell_tuples)} cells ({segment})')
     plt.legend(); plt.grid(True); plt.tight_layout(); plt.show()
 
+# ---------------------------------------------------------------------------
+# Multi-cell comparison: same cycle, one panel
+# ---------------------------------------------------------------------------
+def plot_dq_dv_cells_same_cycle(cell_tuples, cycle=1, segment='charge',
+                                smooth=None, normalized=False,
+                                labels=None, alpha=0.85):
+    """
+    Overlay dQ/dV for the *same* cycle of several cells on one plot.
+
+    Parameters
+    ----------
+    cell_tuples : list[(file_path, key, extra)]
+        The same list you pass to plot_mean_dq_dv().
+    cycle : int
+        Cycle index to plot (default = 1).
+    segment : {'charge', 'discharge'}
+        Which half-cycle to use.
+    smooth : None | 'rolling' | 'savgol'
+        Pre-smoothing option (passed to compute_dq_dv).
+    normalized : bool
+        If True, capacity normalisation inside
+        process_all_cycles_for_voltage_vs_capacity() is used.
+    labels : list[str] | None
+        Legend labels (must match len(cell_tuples)) – defaults to each cell’s key.
+    alpha : float
+        Line transparency.
+    """
+    if not cell_tuples:
+        raise ValueError("cell_tuples is empty")
+
+    if labels is None:
+        labels = [t[1] for t in cell_tuples]
+    elif len(labels) != len(cell_tuples):
+        raise ValueError("labels must be same length as cell_tuples")
+
+    plt.figure(figsize=(6, 4))
+    for (file_path, key, _), label in zip(cell_tuples, labels):
+        cycles_data, _ = process_all_cycles_for_voltage_vs_capacity(
+            file_path, key, normalized
+        )
+        df_seg = _extract_cycle_segment(cycles_data, cycle, segment)
+        v, y = compute_dq_dv(
+            df_seg,
+            'Charge Capacity (Ah)' if segment == 'charge'
+            else 'Discharge Capacity (Ah)',
+            'Voltage (V)',
+            smooth,
+        )
+        plt.plot(v, y, lw=1.2, alpha=alpha, label=label)
+
+    plt.xlabel('Voltage (V)')
+    plt.ylabel('dQ/dV (Ah V⁻¹)')
+    plt.title(f'dQ/dV – {segment.capitalize()} Cycle {cycle}')
+    plt.legend(fontsize='x-small', ncol=3)
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_dq_dv_cells_same_cycle_2(
+        cell_tuples,
+        cycle: int = 1,
+        segment: str = "charge",
+        *,
+        # ───────────── preprocessing ──────────────
+        normalized: bool = False,
+        bin_width: float = 0.005,     # V   (pre-derivative voltage binning)
+        dedup_thresh: float = 5e-4,   # V   (drop ∆V < thresh before binning)
+        monotonic: bool = True,       # enforce non-decreasing capacity
+
+        # ───────────── smoothing options ──────────
+        smooth: str | None = "savgol",
+        smooth_kw: dict | None = None,          # e.g. {"window": 31, "poly": 3}
+        post_smooth: str | None = None,         # optional 2nd pass on dQ/dV
+        post_kw: dict | None = None,            # e.g. {"window": 7}
+
+        # ───────────── outlier handling ──────────
+        clip_sigma: float | None = None,        # e.g. 3 → mask |y| > 3·σ
+
+        # ───────────── plotting tweaks ───────────
+        labels: list[str] | None = None,
+        alpha: float = 0.9,
+        figsize: tuple[int, int] = (6, 4),
+        lw: float = 1.2,
+):
+    """
+    Overlay dQ/dV for the same cycle of several cells on one plot, with
+    extensive noise-mitigation controls.
+
+    Parameters
+    ----------
+    cell_tuples : list[(file_path, key, extra)]
+        Same format you pass to your other plotting utilities.
+    cycle, segment, normalized
+        As in the original function.
+    bin_width, dedup_thresh
+        Passed through to `preprocess_df` via `compute_dq_dv`.
+    monotonic : bool
+        If True, drops any points that break Q-monotonicity *before*
+        the derivative (helps when the logger records out-of-order rows).
+    smooth, smooth_kw
+        Pre-derivative smoothing (Savitzky–Golay, rolling, …).
+    post_smooth, post_kw
+        Optional second smoothing on the *dQ/dV* trace itself.
+    clip_sigma : float | None
+        Masks any dQ/dV points with |y| > clip_sigma × σ(y) (σ from current
+        curve).  Set to 3–5 to catch spikes without hurting real peaks.
+    labels, alpha, figsize, lw
+        Plot cosmetics.
+    """
+    if not cell_tuples:
+        raise ValueError("cell_tuples is empty")
+
+    if labels is None:
+        labels = [t[1] for t in cell_tuples]
+    elif len(labels) != len(cell_tuples):
+        raise ValueError("labels length must match cell_tuples")
+
+    smooth_kw = smooth_kw or {}
+    post_kw = post_kw or {}
+
+    plt.figure(figsize=figsize)
+
+    for (file_path, key, _), label in zip(cell_tuples, labels):
+        # 1.  load & slice the requested half-cycle
+        cycles_data, _ = process_all_cycles_for_voltage_vs_capacity(
+            file_path, key, normalized
+        )
+        df_seg = _extract_cycle_segment(cycles_data, cycle, segment)
+
+        # 2.  optional monotonic filter (rare corrupted rows)
+        if monotonic:
+            q_col = ("Charge Capacity (Ah)" if segment == "charge"
+                     else "Discharge Capacity (Ah)")
+            df_seg = df_seg.sort_values("Voltage (V)")
+            df_seg = df_seg[df_seg[q_col].diff().fillna(0) >= 0]
+
+        # 3.  derivative
+        v, y = compute_dq_dv_2(
+            df_seg,
+            q_col=("Charge Capacity (Ah)" if segment == "charge"
+                   else "Discharge Capacity (Ah)"),
+            v_col="Voltage (V)",
+            smooth=smooth,
+            smooth_kw=smooth_kw,
+            post_smooth=post_smooth,
+            post_kw=post_kw,
+            bin_width=bin_width,
+            dedup_thresh=dedup_thresh,
+        )
+
+        # 4.  optional spike clipping
+        if clip_sigma is not None and y.size:
+            σ = np.nanstd(y)
+            bad = np.abs(y) > clip_sigma * σ
+            y = y.copy()
+            y[bad] = np.nan
+
+        plt.plot(v, y, lw=lw, alpha=alpha, label=label)
+
+    plt.xlabel("Voltage (V)")
+    plt.ylabel("dQ/dV (Ah V$^{-1}$)")
+    plt.title(f"dQ/dV – {segment.capitalize()} Cycle {cycle}")
+    plt.grid(True)
+    plt.legend(fontsize="x-small", ncol=3)
+    plt.tight_layout()
+    plt.show()
 
 
 # ==========================
@@ -1204,19 +1705,93 @@ else:
 # Real_comp = [get_tuples_by_cell_code(file_paths_keys, r'EU03')[0],
 #              get_tuples_by_cell_code(file_paths_keys, r'FF02')[0],
 #              get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],]
-josh_ask = [get_tuples_by_cell_code(file_paths_keys, r'EU03')[0],
-            get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],
-            get_tuples_by_cell_code(file_paths_keys, r'FF02')[0],]
-
-
+# josh_ask = [get_tuples_by_cell_code(file_paths_keys, r'EU03')[0],
+#             get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],
+#             get_tuples_by_cell_code(file_paths_keys, r'FF02')[0],]
+#
+# selected_cell = get_tuples_by_cell_code(file_paths_keys, r'EC01')[0]
+#selected_cell = get_tuples_by_cell_code(file_paths_keys, r'DU02')[0]
 # One cell → all discharge curves smoothed with Savitzky–Golay
 #plot_dq_dv_all_cycles(selected_cell, segment='discharge', smooth='savgol')
 
 # One cell → compare cycle-1 vs cycle-3
 #plot_dq_dv_difference(selected_cell, 1, 3, segment='charge', smooth='rolling')
+FU_list = [
+    get_tuples_by_cell_code(file_paths_keys, r'FU01')[0],
+get_tuples_by_cell_code(file_paths_keys, r'FU02')[0],
+get_tuples_by_cell_code(file_paths_keys, r'FU03')[0],
+get_tuples_by_cell_code(file_paths_keys, r'FU04')[0],
+get_tuples_by_cell_code(file_paths_keys, r'FU05')[0],
+]
 
+# LPV_List = [
+#     get_tuples_by_cell_code(file_paths_keys, r'EU01')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'EU02')[0],
+#     get_tuples_by_cell_code(file_paths_keys, r'EU03')[0],
+# ]
+
+FT_List = [
+    get_tuples_by_cell_code(file_paths_keys, r'FT01')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'FT02')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'FT03')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'FT04')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'FT05')[0],
+]
+FR_C10 = [
+    get_tuples_by_cell_code(file_paths_keys, r'FR01')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'FR02')[0],
+]
+FS_C10 = [
+    #get_tuples_by_cell_code(file_paths_keys, r'FS01')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'FS02')[0],
+]
+
+DTFV_C10 = FT_List + FR_C10
+MF91_C10 = FU_list + FS_C10
+
+HighFi_set = [
+    get_tuples_by_cell_code(file_paths_keys, r'FW02')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'FX02')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'FY02')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'FZ02')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'GA02')[0],
+]
+# Example: all tuples for cell-code pattern 'FU'
+
+# 1. Overlay individual cells
+# plot_discharge_and_ce_vs_cycle(
+#     MF91_C10,
+#     normalized=False,
+#     x_bounds=(0, 11.5),          # optional
+#     #save_str='FU_overlay'      # optional
+# )
+#
+# # 2. Mean ± 1 σ across the same set
+# plot_mean_discharge_and_ce(
+#     MF91_C10,
+#     normalized=False,
+#     x_bounds=(0, 11.5),          # optional
+#     n_cycles=45,               # cap at 45 cycles (optional)
+#     #save_str='FU_mean'         # optional
+# )
+
+# Compare first-cycle charge dQ/dV of four cells
+plot_dq_dv_cells_same_cycle(
+    HighFi_set,           # your list of (path, key, extra)
+    cycle=1,
+    segment='charge',
+    smooth='savgol',
+    labels=['FW02', 'FX02', 'FY02', 'FZ02', 'GA02'],
+)
+
+plot_dq_dv_cells_same_cycle_2(
+    HighFi_set,
+    smooth="savgol",  smooth_kw={"window": 31},
+    post_smooth="rolling", post_kw={"window": 7},
+    clip_sigma=4
+)
 # Many cells → mean trace (+1 σ) of first-cycle charge dQ/dV
-#plot_mean_dq_dv(files_to_compare, segment='charge', smooth='savgol')
+plot_mean_dq_dv(FU_list, segment='charge', smooth='savgol')
 
 
 cycle_str = 'CycleLife_JoshColors'

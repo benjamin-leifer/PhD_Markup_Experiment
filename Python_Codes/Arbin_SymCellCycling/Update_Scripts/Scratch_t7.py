@@ -267,7 +267,7 @@ def plot_last_cells_discharge_curves(file_tuples, normalized=False, color_dict=N
                          label=label_text, linestyle='-', color=color, lw = 2)
     plt.xlabel('Capacity (mAh/g)')
     plt.ylabel('Voltage (V)')
-    plt.title('Discharge Curves for MF91 and DTFV1422 Cells at Low Temp')
+    plt.title('Discharge Curves for MF91 Cells at Low Temp')
     plt.gca().set_ylim(0, 4.5)
     plt.gca().set_xlim(-4, 160)
     # Only show legend if there are labeled artists
@@ -279,6 +279,7 @@ def plot_last_cells_discharge_curves(file_tuples, normalized=False, color_dict=N
     plt.grid(False)
     plt.tick_params(which='both', axis= 'both', direction='in', bottom=True, left=True, labelbottom=True, labelleft=True)
     plt.tight_layout()
+    plt.savefig('t1.png', dpi=300)
     # Enable toolbar
 
     plt.show()
@@ -353,7 +354,8 @@ target_codes = [ 'FA01','EN04','DU06','EO05','EJ05',
                  'EC06',]
 target_codes = ['EM01','EC06','FO02','FO05',]#'EC01']#'FC04']
 target_codes = ['FQ08', 'FQ01', 'FQ03', 'FF05']
-target_codes = ['EM01','EC06','FO02','FO05','FQ08', 'FQ01', 'FQ03', 'FF05']
+target_codes = ['EM01','FO02','FO05','EC06',]
+#target_codes = ['FQ08', 'FQ01', 'FQ03', 'FF05']
 #holder_codes = ['holder1','holder2']
 #holder_codes.extend(target_codes)
 cell_codes= [cell_code for cell_code in target_codes]
