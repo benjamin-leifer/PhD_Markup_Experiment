@@ -15,7 +15,8 @@ lookup_table_path = r'C:\Users\benja\OneDrive - Northeastern University\Spring 2
 search_directory = r'C:\Users\benja\OneDrive - Northeastern University\Gallaway Group\Gallaway Extreme SSD Drive\Equipment Data\Lab Arbin\Li-Ion\Low Temp Li Ion\2025\03\Cycle Life Best Survivors'
 
 #search_directory = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Cycle Life Best Survivors'
-#search_directory = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Cycle Life Best Survivors\Form Experiment'
+search_directory = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Cycle Life Best Survivors\Form Experiment'
+search_directory = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Cycle Life Best Survivors\Form Experiment\07152025'
 # ==========================
 # 1. Set the working directory
 # ==========================
@@ -1204,11 +1205,23 @@ else:
 # Real_comp = [get_tuples_by_cell_code(file_paths_keys, r'EU03')[0],
 #              get_tuples_by_cell_code(file_paths_keys, r'FF02')[0],
 #              get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],]
-josh_ask = [get_tuples_by_cell_code(file_paths_keys, r'EU03')[0],
-            get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],
-            get_tuples_by_cell_code(file_paths_keys, r'FF02')[0],]
+# josh_ask = [get_tuples_by_cell_code(file_paths_keys, r'EU03')[0],
+#             get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],
+#             get_tuples_by_cell_code(file_paths_keys, r'FF02')[0],]
 
+Forms_0716 =[
+    get_tuples_by_cell_code(file_paths_keys, r'FR03')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'FR04')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'FR05')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'FR06')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'FR07')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'FS03')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'FS04')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'FS05')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'FS06')[0],
+    get_tuples_by_cell_code(file_paths_keys, r'FS07')[0],
 
+]
 # One cell → all discharge curves smoothed with Savitzky–Golay
 #plot_dq_dv_all_cycles(selected_cell, segment='discharge', smooth='savgol')
 

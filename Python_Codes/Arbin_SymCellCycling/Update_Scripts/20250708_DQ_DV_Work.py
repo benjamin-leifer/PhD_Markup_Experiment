@@ -1731,7 +1731,7 @@ get_tuples_by_cell_code(file_paths_keys, r'FU05')[0],
 # ]
 
 FT_List = [
-    get_tuples_by_cell_code(file_paths_keys, r'FT01')[0],
+    #get_tuples_by_cell_code(file_paths_keys, r'FT01')[0],
     get_tuples_by_cell_code(file_paths_keys, r'FT02')[0],
     get_tuples_by_cell_code(file_paths_keys, r'FT03')[0],
     get_tuples_by_cell_code(file_paths_keys, r'FT04')[0],
@@ -1758,38 +1758,38 @@ HighFi_set = [
 ]
 # Example: all tuples for cell-code pattern 'FU'
 
-# 1. Overlay individual cells
-# plot_discharge_and_ce_vs_cycle(
-#     MF91_C10,
-#     normalized=False,
-#     x_bounds=(0, 11.5),          # optional
-#     #save_str='FU_overlay'      # optional
+#1. Overlay individual cells
+plot_discharge_and_ce_vs_cycle(
+    DTFV_C10,
+    normalized=False,
+    x_bounds=(0, 11.5),          # optional
+    #save_str='FU_overlay'      # optional
+)
+
+# 2. Mean ± 1 σ across the same set
+plot_mean_discharge_and_ce(
+    DTFV_C10,
+    normalized=False,
+    x_bounds=(0, 11.5),          # optional
+    n_cycles=45,               # cap at 45 cycles (optional)
+    #save_str='FU_mean'         # optional
+)
+
+# # Compare first-cycle charge dQ/dV of four cells
+# plot_dq_dv_cells_same_cycle(
+#     HighFi_set,           # your list of (path, key, extra)
+#     cycle=1,
+#     segment='charge',
+#     smooth='savgol',
+#     labels=['FW02', 'FX02', 'FY02', 'FZ02', 'GA02'],
 # )
 #
-# # 2. Mean ± 1 σ across the same set
-# plot_mean_discharge_and_ce(
-#     MF91_C10,
-#     normalized=False,
-#     x_bounds=(0, 11.5),          # optional
-#     n_cycles=45,               # cap at 45 cycles (optional)
-#     #save_str='FU_mean'         # optional
+# plot_dq_dv_cells_same_cycle_2(
+#     HighFi_set,
+#     smooth="savgol",  smooth_kw={"window": 31},
+#     post_smooth="rolling", post_kw={"window": 7},
+#     clip_sigma=4
 # )
-
-# Compare first-cycle charge dQ/dV of four cells
-plot_dq_dv_cells_same_cycle(
-    HighFi_set,           # your list of (path, key, extra)
-    cycle=1,
-    segment='charge',
-    smooth='savgol',
-    labels=['FW02', 'FX02', 'FY02', 'FZ02', 'GA02'],
-)
-
-plot_dq_dv_cells_same_cycle_2(
-    HighFi_set,
-    smooth="savgol",  smooth_kw={"window": 31},
-    post_smooth="rolling", post_kw={"window": 7},
-    clip_sigma=4
-)
 # Many cells → mean trace (+1 σ) of first-cycle charge dQ/dV
 plot_mean_dq_dv(FU_list, segment='charge', smooth='savgol')
 
