@@ -18,6 +18,7 @@ try:  # pragma: no cover - behaviour depends on environment
     from .sample import Sample  # type: ignore
     from .testresult import TestResult, CycleDetailData  # type: ignore
     from .raw_file import RawDataFile  # type: ignore
+    from .test_protocol import TestProtocol  # type: ignore
 
     __all__ = [
         "Sample",
@@ -25,6 +26,7 @@ try:  # pragma: no cover - behaviour depends on environment
         "CycleSummary",
         "RawDataFile",
         "CycleDetailData",
+        "TestProtocol",
     ]
 except Exception:  # pragma: no cover - executed when mongoengine is missing
     # Provide very small dataclass implementations used in tests
@@ -43,6 +45,9 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         final_capacity: float = 0.0
         capacity_retention: float = 0.0
         avg_coulombic_eff: float = 0.0
+        last_cycle_complete: bool | None = None
+        c_rates: list = dc_field(default_factory=list)
+        protocol: "TestProtocol | None" = None
         created_by: str | None = None
         last_modified_by: str | None = None
         notes_log: list = dc_field(default_factory=list)
@@ -51,6 +56,7 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
     class Sample:  # type: ignore
         name: str
         tests: list = dc_field(default_factory=list)
+        nominal_capacity: float | None = None
         avg_initial_capacity: float | None = None
         avg_final_capacity: float | None = None
         avg_capacity_retention: float | None = None
@@ -72,10 +78,17 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
     class CycleDetailData:  # type: ignore
         pass
 
+    @dataclass
+    class TestProtocol:  # type: ignore
+        name: str
+        summary: str
+        c_rates: list = dc_field(default_factory=list)
+
     __all__ = [
         "Sample",
         "TestResult",
         "CycleSummary",
         "RawDataFile",
         "CycleDetailData",
+        "TestProtocol",
     ]

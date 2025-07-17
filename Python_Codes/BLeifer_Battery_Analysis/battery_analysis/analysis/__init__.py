@@ -18,6 +18,13 @@ try:
         plot_cycle_voltage_capacity,
         plot_differential_capacity
     )
+    from .protocol_detection import (
+        is_last_cycle_complete,
+        calculate_cycle_crates,
+        summarize_protocol,
+        get_or_create_protocol,
+        detect_and_update_test_protocol,
+    )
 except ImportError:
     import logging
     logging.warning("Could not import cycle_data_analysis functions")
@@ -32,5 +39,11 @@ __all__ = [
     'get_cycle_voltage_vs_capacity',
     'calculate_differential_capacity',
     'plot_cycle_voltage_capacity',
-    'plot_differential_capacity'
+    'plot_differential_capacity',
+    'is_last_cycle_complete',
+    'calculate_cycle_crates',
+    'summarize_protocol',
+    'get_or_create_protocol',
+    'detect_and_update_test_protocol'
 ]
+

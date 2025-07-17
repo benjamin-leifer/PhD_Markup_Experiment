@@ -37,6 +37,11 @@ class TestResult(Document):
     avg_coulombic_eff = fields.FloatField(required=False)
     avg_energy_efficiency = fields.FloatField(required=False)
 
+    # New fields for automated protocol detection
+    last_cycle_complete = fields.BooleanField(required=False)
+    c_rates = fields.ListField(fields.FloatField(), required=False)
+    protocol = fields.ReferenceField("TestProtocol", required=False)
+
     validated = fields.BooleanField(default=False)
     notes = fields.StringField(required=False)
     custom_data = fields.DictField(required=False)
