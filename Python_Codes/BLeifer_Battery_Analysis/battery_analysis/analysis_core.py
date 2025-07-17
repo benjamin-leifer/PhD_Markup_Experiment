@@ -111,6 +111,16 @@ def create_test_result(sample, cycles_summary, tester, metadata=None):
             {"timestamp": datetime.datetime.utcnow(), "note": "created"}
         )
 
+    # Infer protocol-related information
+    try:
+        from battery_analysis.analysis.protocol_detection import (
+            detect_and_update_test_protocol,
+        )
+
+        detect_and_update_test_protocol(test_result, cycles_summary, prompt=False)
+    except Exception:
+        pass
+
     # Add optional metrics if available
     if "avg_energy_efficiency" in metrics:
         test_result.avg_energy_efficiency = metrics["avg_energy_efficiency"]
