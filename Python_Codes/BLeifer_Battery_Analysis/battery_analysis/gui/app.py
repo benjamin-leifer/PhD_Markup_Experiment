@@ -164,10 +164,11 @@ class BatteryAnalysisApp(tk.Tk):
         self.update_idletasks()
         screen_w = self.winfo_screenwidth()
         screen_h = self.winfo_screenheight()
-        width = max(int(screen_w * 0.8), 1000)
-        height = max(int(screen_h * 0.8), 700)
+        # Use a larger fraction of the screen for better readability
+        width = max(int(screen_w * 0.9), 1200)
+        height = max(int(screen_h * 0.9), 800)
         self.geometry(f"{width}x{height}")
-        self.minsize(1000, 700)
+        self.minsize(1200, 800)
         self.base_width = width
         self.base_height = height
 

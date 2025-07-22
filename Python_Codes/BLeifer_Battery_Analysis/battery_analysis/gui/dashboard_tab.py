@@ -26,7 +26,10 @@ class DashboardTab(ttk.Frame):
         self.refresh_btn.pack(side=tk.RIGHT)
 
         columns = ("sample", "test", "start", "cycle", "status")
-        self.tree = ttk.Treeview(self, columns=columns, show="headings")
+        tree_frame = ttk.Frame(self)
+        tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings")
         self.tree.heading("sample", text="Sample")
         self.tree.heading("test", text="Test Name")
         self.tree.heading("start", text="Start Time")
@@ -39,11 +42,15 @@ class DashboardTab(ttk.Frame):
         self.tree.column("cycle", width=80, anchor=tk.E)
         self.tree.column("status", width=100)
 
-        self.tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        scrollbar = ttk.Scrollbar(self, orient=tk.VERTICAL, command=self.tree.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.tree.config(yscrollcommand=scrollbar.set)
+        v_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.tree.yview)
+        v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        h_scrollbar = ttk.Scrollbar(self, orient=tk.HORIZONTAL, command=self.tree.xview)
+        h_scrollbar.pack(fill=tk.X)
+
+        self.tree.config(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
 
     def refresh_data(self):
         """Refresh the dashboard table with running tests."""

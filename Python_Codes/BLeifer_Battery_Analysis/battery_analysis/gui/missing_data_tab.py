@@ -26,16 +26,23 @@ class MissingDataTab(ttk.Frame):
         self.resolve_btn.pack(side=tk.RIGHT)
 
         columns = ("test", "missing")
-        self.tree = ttk.Treeview(self, columns=columns, show="headings")
+        tree_frame = ttk.Frame(self)
+        tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings")
         self.tree.heading("test", text="Test")
         self.tree.heading("missing", text="Missing Components")
         self.tree.column("test", width=200)
         self.tree.column("missing", width=200)
-        self.tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        scrollbar = ttk.Scrollbar(self, orient=tk.VERTICAL, command=self.tree.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.tree.config(yscrollcommand=scrollbar.set)
+        v_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.tree.yview)
+        v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        h_scrollbar = ttk.Scrollbar(self, orient=tk.HORIZONTAL, command=self.tree.xview)
+        h_scrollbar.pack(fill=tk.X)
+
+        self.tree.config(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
 
         self.refresh_table()
 
@@ -62,6 +69,7 @@ class MissingDataTab(ttk.Frame):
         fields = rec["missing"]
         dlg = tk.Toplevel(self)
         dlg.title("Resolve Components")
+        dlg.geometry("400x300")
         entries = {}
         for f in fields:
             ttk.Label(dlg, text=f.capitalize()+":").pack(anchor=tk.W, padx=5, pady=2)
