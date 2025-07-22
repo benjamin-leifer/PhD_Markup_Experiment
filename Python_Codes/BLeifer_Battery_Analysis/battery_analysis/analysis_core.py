@@ -35,10 +35,10 @@ def create_test_result(sample, cycles_summary, tester, metadata=None):
     cycle_docs = []
     for cycle in cycles_summary:
         cycle_doc = models.CycleSummary(
-            cycle_index=cycle["cycle_index"],
-            charge_capacity=cycle["charge_capacity"],
-            discharge_capacity=cycle["discharge_capacity"],
-            coulombic_efficiency=cycle["coulombic_efficiency"],
+            cycle_index=cycle.get("cycle_index"),
+            charge_capacity=cycle.get("charge_capacity", 0.0),
+            discharge_capacity=cycle.get("discharge_capacity", 0.0),
+            coulombic_efficiency=cycle.get("coulombic_efficiency", 0.0),
         )
 
         # Add optional fields if present
@@ -502,23 +502,36 @@ def compute_metrics(cycles_summary):
     # Convert to DataFrame for easier calculations
     df = pd.DataFrame(cycles_summary)
 
+    # Safely handle missing columns
+    discharge = (
+        df["discharge_capacity"]
+        if "discharge_capacity" in df.columns
+        else pd.Series(dtype=float)
+    )
+    charge_eff = (
+        df["coulombic_efficiency"]
+        if "coulombic_efficiency" in df.columns
+        else pd.Series(dtype=float)
+    )
+
     # Use the first cycle's discharge capacity as the baseline for
     # initial capacity and capacity retention calculations
+    initial_cap = discharge.iloc[0] if not discharge.empty else None
+    final_cap = discharge.iloc[-1] if not discharge.empty else None
+    if initial_cap and final_cap is not None and initial_cap > 0:
+        retention = final_cap / initial_cap
+    else:
+        retention = None
+
     metrics = {
         "cycle_count": len(df),
-        "initial_capacity": df["discharge_capacity"].iloc[0] if not df.empty else None,
-        "final_capacity": df["discharge_capacity"].iloc[-1] if not df.empty else None,
-        "capacity_retention": (
-            (df["discharge_capacity"].iloc[-1] / df["discharge_capacity"].iloc[0])
-            if not df.empty and df["discharge_capacity"].iloc[0] > 0
-            else None
-        ),
-        "avg_coulombic_eff": (
-            np.mean(df["coulombic_efficiency"]) if not df.empty else None
-        ),
+        "initial_capacity": initial_cap,
+        "final_capacity": final_cap,
+        "capacity_retention": retention,
+        "avg_coulombic_eff": float(charge_eff.mean()) if not charge_eff.empty else None,
         "avg_energy_efficiency": (
-            np.mean(df["energy_efficiency"])
-            if "energy_efficiency" in df.columns
+            float(df["energy_efficiency"].mean())
+            if "energy_efficiency" in df.columns and not df["energy_efficiency"].empty
             else None
         ),
     }
