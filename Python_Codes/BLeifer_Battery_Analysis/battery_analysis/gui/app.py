@@ -1272,10 +1272,17 @@ class DataUploadTab(ttk.Frame):
                             if samples:
                                 sample = samples.first()
 
-                    # Use the default sample if no match found
+                    # Create a new sample if no match found
                     if not sample:
-                        self.main_app.log_message(f"No matching sample found for code '{sample_code}', using default")
-                        sample = default_sample
+                        if sample_code:
+                            self.main_app.log_message(
+                                f"No matching sample found for code '{sample_code}', creating new sample")
+                            sample = models.Sample(name=sample_code)
+                            sample.save()
+                            self.main_app.log_message(f"Created new sample: {sample.name}")
+                        else:
+                            self.main_app.log_message("No sample code detected, using default sample")
+                            sample = default_sample
                         unmatched_count += 1
                     else:
                         self.main_app.log_message(f"Matched file to sample: {sample.name}")
@@ -1405,10 +1412,17 @@ class DataUploadTab(ttk.Frame):
                             if samples:
                                 sample = samples.first()
 
-                    # Use the default sample if no match found
+                    # Create a new sample if no match found
                     if not sample:
-                        self.main_app.log_message(f"No matching sample found for code '{sample_code}', using default")
-                        sample = default_sample
+                        if sample_code:
+                            self.main_app.log_message(
+                                f"No matching sample found for code '{sample_code}', creating new sample")
+                            sample = models.Sample(name=sample_code)
+                            sample.save()
+                            self.main_app.log_message(f"Created new sample: {sample.name}")
+                        else:
+                            self.main_app.log_message("No sample code detected, using default sample")
+                            sample = default_sample
                         unmatched_count += 1
                     else:
                         self.main_app.log_message(f"Matched file to sample: {sample.name}")
