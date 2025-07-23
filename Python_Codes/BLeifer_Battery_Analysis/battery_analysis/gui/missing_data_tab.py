@@ -24,6 +24,8 @@ class MissingDataTab(ttk.Frame):
         self.refresh_btn.pack(side=tk.LEFT)
         self.resolve_btn = ttk.Button(control, text="Resolve Selected", command=self.resolve_selected)
         self.resolve_btn.pack(side=tk.RIGHT)
+        self.reassign_btn = ttk.Button(control, text="Reassign Test", command=self.reassign_selected)
+        self.reassign_btn.pack(side=tk.RIGHT, padx=(0, 5))
 
         columns = ("test", "missing")
         tree_frame = ttk.Frame(self)
@@ -91,6 +93,61 @@ class MissingDataTab(ttk.Frame):
                 self.main_app.missing_data.remove(rec)
             dlg.destroy()
             self.refresh_table()
+        ttk.Button(dlg, text="Save", command=save).pack(pady=5)
+        dlg.transient(self)
+        dlg.grab_set()
+
+    def reassign_selected(self):
+        sel = self.tree.selection()
+        if not sel:
+            return
+        rec = self._item_map.get(sel[0])
+        if not rec:
+            return
+        test = models.TestResult.objects(id=rec["test_id"]).first()
+        if not test:
+            messagebox.showerror("Error", "Test not found")
+            return
+
+        dlg = tk.Toplevel(self)
+        dlg.title("Reassign Test")
+        dlg.geometry("300x150")
+
+        ttk.Label(dlg, text="New Sample Name:").pack(anchor=tk.W, padx=5, pady=5)
+        entry = ttk.Entry(dlg)
+        entry.pack(fill=tk.X, padx=5)
+
+        def save():
+            name = entry.get().strip()
+            if not name:
+                messagebox.showerror("Error", "Sample name required")
+                return
+            sample = models.Sample.objects(name=name).first()
+            if not sample:
+                sample = models.Sample(name=name)
+                sample.save()
+
+            # remove from old sample
+            old_sample = test.sample.fetch() if hasattr(test.sample, "fetch") else test.sample
+            if old_sample and test in getattr(old_sample, "tests", []):
+                old_sample.tests.remove(test)
+                old_sample.save()
+
+            test.sample = sample
+            test.save()
+            if test not in getattr(sample, "tests", []):
+                sample.tests.append(test)
+                sample.save()
+
+            missing = [f for f in ("anode", "cathode", "separator", "electrolyte") if getattr(sample, f, None) is None]
+            if missing:
+                self.main_app.missing_data.append({"test_id": str(test.id), "sample_id": str(sample.id), "missing": missing})
+
+            if rec in self.main_app.missing_data:
+                self.main_app.missing_data.remove(rec)
+            dlg.destroy()
+            self.refresh_table()
+
         ttk.Button(dlg, text="Save", command=save).pack(pady=5)
         dlg.transient(self)
         dlg.grab_set()
