@@ -43,6 +43,8 @@ MASS_MG = {id_: 0.02496886674 / 1000  # mg → g
 MASS_G = {
     "GD01": 0.02496886674,   # example masses
     "GC01": 0.02496886674,
+    "GC02": 0.02496886674,
+    "GD02": 0.02496886674,
 }
 
 # Analysis parameters (unchanged from original script)
