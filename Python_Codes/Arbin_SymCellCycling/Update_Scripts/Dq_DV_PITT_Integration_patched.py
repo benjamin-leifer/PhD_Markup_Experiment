@@ -21,7 +21,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
 
-
 warnings.filterwarnings("ignore", category=FutureWarning, module="pandas")
 
 # ───────────────────────── USER CONFIG SECTION ──────────────────────────
@@ -144,109 +143,71 @@ def load_arbin(fp: Path, cycle: int, charge: bool) -> pd.DataFrame:
     _dbg(f"  Arbin rows {len(df)}")
     return df.reset_index(drop=True).astype(float)
 
-# ================= PCGA STEP CAPACITY (mAh) – ROBUST ===================
-import re
-import numpy as np
-import pandas as pd
-from pathlib import Path
+# ═════════════════════ PCGA step-capacity helpers ═══════════════════════
+def read_mpt_header(path: Path) -> int:
+    with path.open("r", errors="ignore") as fh:
+        for i,ln in enumerate(fh):
+            if "Nb header lines" in ln:
+                return int(ln.split(":")[1].strip())
+            if i>100: break
+    raise RuntimeError(f"Header count not found in {path.name}")
 
-def _find_ctrl_v_col(df: pd.DataFrame) -> str:
-    # Priority: programmed control, then Ewe/V, then any /V column
-    for pat in [r"control.*?/V", r"\bEwe/V\b", r"/V$"]:
-        for c in df.columns:
-            if re.search(pat, c, re.IGNORECASE):
-                return c
-    # last resort
-    return df.columns[0]
-
-def integrate_pcga_step_capacity_robust(
-    df: pd.DataFrame,
-    v_res: float = 1e-3,      # 1 mV rounding
-    min_samples: int = 3,     # accept short holds
-    q_abs_min_mAh: float = 0.0,
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Return step-midpoint voltage and step capacity (mAh) for a PCGA file.
-    Robust to bad/constant Ns: falls back to rounded target V, then adaptive ΔV,
-    then rounded measured Ewe/V.
-    """
-    import re
-    import numpy as np
-    import pandas as pd
-
-    # --- columns
-    ctrl_col = next((c for c in df.columns if re.search(r"control.*?/V", c, re.I)), "Ewe/V")
-    v_target = pd.to_numeric(df[ctrl_col], errors="coerce").reset_index(drop=True)
-    v_meas   = pd.to_numeric(df["Ewe/V"],   errors="coerce").reset_index(drop=True)
+def integrate_pcga_steps(df, masses, cell_id, EPS_DV=0.003):
+    ctrl = next((c for c in df.columns if re.search(r"control.*?/V", c, re.I)), "Ewe/V")
+    v_target = df[ctrl].astype(float).reset_index(drop=True)
+    v_meas   = df["Ewe/V"].astype(float).reset_index(drop=True)
     i_col    = next(c for c in df.columns if re.search(r"I.*?/mA", c))
-    cur      = pd.to_numeric(df[i_col],     errors="coerce").reset_index(drop=True)
-    t        = pd.to_numeric(df["time/s"],  errors="coerce").reset_index(drop=True)
+    cur      = df[i_col].astype(float).reset_index(drop=True)
+    t        = df["time/s"].astype(float).reset_index(drop=True)
 
+    # robust step boundaries
     idx = None
-
-    # --- 1) Ns if present and actually varies
     if "Ns" in df.columns:
         Ns = pd.to_numeric(df["Ns"], errors="coerce").ffill().astype(int).reset_index(drop=True)
-        if Ns.nunique() > 2:  # require more than trivial change
+        if Ns.nunique() > 2:
             idx = [0] + [k for k in range(1, len(Ns)) if Ns[k] != Ns[k-1]] + [len(Ns)]
-
-    # --- 2) 1 mV rounding on programmed target
-    if idx is None or len(idx) < 12:  # need a reasonable number of steps
-        v_round = (v_target / v_res).round().astype("Int64")
+    # 1 mV rounding on target
+    if idx is None or len(idx) < 12:
+        v_round = (v_target / 1e-3).round().astype("Int64")
         idx2 = [0] + [k for k in range(1, len(v_round)) if v_round[k] != v_round[k-1]] + [len(v_round)]
         if len(idx2) > (len(idx) if idx else 0):
             idx = idx2
-
-    # --- 3) adaptive threshold on target ΔV
+    # adaptive as fallback
     if idx is None or len(idx) < 12:
-        diffs = np.abs(np.diff(v_target.to_numpy()))
+        diffs = (v_target.shift(-1) - v_target).abs().to_numpy()[:-1]
         nz = diffs[diffs > 0]
         if nz.size:
-            thr = max(0.25 * nz.min(), v_res / 2)
-            idx3 = [0] + [k for k in range(1, len(v_target)) if abs(v_target[k] - v_target[k-1]) > thr] + [len(v_target)]
+            thr = max(0.25 * nz.min(), 5e-4)  # at least 0.5 mV
+            idx3 = [0] + [k for k in range(1, len(v_target)) if abs(v_target.iloc[k] - v_target.iloc[k-1]) > thr] + [len(v_target)]
             if len(idx3) > (len(idx) if idx else 0):
                 idx = idx3
-
-    # --- 4) last resort: 1 mV rounding on measured Ewe/V
+    # measured Ewe/V rounding last
     if idx is None or len(idx) < 12:
-        v_round_m = (v_meas / v_res).round().astype("Int64")
-        idx4 = [0] + [k for k in range(1, len(v_round_m)) if v_round_m[k] != v_round_m[k-1]] + [len(v_round_m)]
-        idx = idx4
+        v_round_m = (v_meas / 1e-3).round().astype("Int64")
+        idx = [0] + [k for k in range(1, len(v_round_m)) if v_round_m[k] != v_round_m[k-1]] + [len(v_round_m)]
 
-    # integrate
-    V_step, Q_step = [], []
+    Vmid, dQ_dV = [], []
+    m = masses.get(cell_id)
+    if m is None:
+        raise KeyError(f"Mass not defined for cell {cell_id}")
+    step_dv = 0.003  # 3 mV as specified
     for s, e in zip(idx[:-1], idx[1:]):
-        if e - s < min_samples:
+        if e - s < 3:
             continue
-        dt = t.iloc[s:e].diff().fillna(0.0).to_numpy()
-        i  = cur.iloc[s:e].to_numpy()
-        Q  = (i * dt).sum() / 3600.0  # mAh
-        if abs(Q) <= q_abs_min_mAh:
+        dt = t.iloc[s:e].diff().fillna(0.0)
+        Q_mAh = (cur.iloc[s:e] * dt).sum() / 3600.0
+        if Q_mAh == 0:
             continue
-        V  = float(v_meas.iloc[s:e].mean())
-        V_step.append(V); Q_step.append(Q)
+        q_mAh_g = Q_mAh / m
+        dQdV = q_mAh_g / step_dv
+        Vmid.append(v_meas.iloc[s:e].mean())
+        dQ_dV.append(dQdV)
 
-    return np.asarray(V_step), np.asarray(Q_step)
+    return np.array(Vmid), np.array(dQ_dV)
+    return np.array(Vmid), np.array(dQ_dV)
 
-
-
-def read_mpt(path: Path) -> pd.DataFrame:
-    nb = None
-    with path.open("r", errors="ignore") as fh:
-        for i, ln in enumerate(fh):
-            if "Nb header lines" in ln:
-                nb = int(ln.split(":")[1].strip()); break
-            if i > 100: break
-    if nb is None:
-        raise RuntimeError(f"Header count not found in {path.name}")
-    return pd.read_csv(path, sep="\t", skiprows=nb-1, header=0,
-                       engine="python", encoding="ISO-8859-1", on_bad_lines="skip")
-
-
-def pcga03_files_in(root: Path) -> list[Path]:
-    return sorted(p for p in root.rglob("*_03_PCGA_*.mpt"))
-# =======================================================================
-
+def pcga_files_in(dir_: Path) -> list[Path]:
+    return sorted(p for p in dir_.rglob("*_03_PCGA_*.mpt"))
 
 def cell_short_id(fname: str) -> str:
     first = fname.split("_")[0]                 # BL-LL-GD01
@@ -296,41 +257,54 @@ def main():
                        color=cmap(idx%10))
 
     # -------------------- PCGA overlay (mAh g^-1 V^-1) ------------------
-    # -------------------- Overlay: PCGA-03 Step Capacity (mAh) vs V ----------
-    pcga_files = pcga03_files_in(Path(DATA_DIR))
-    print(f"\nPCGA-03 files: {len(pcga_files)} found")
+    pcga_files = pcga_files_in(DATA_DIR)
+    print(f"\nFound {len(pcga_files)} *_03_PCGA_*.mpt files")
 
-    if pcga_files:
-        ax_pcga = ax_dqdv.twinx()
-        ax_pcga.set_ylabel("PCGA step capacity (mAh)")
-        ax_pcga.tick_params(axis="y", which="both", labelsize="small")
+    used_labels = set()
+    for p in pcga_files:
+        try:
+            hdr = read_mpt_header(p)
+            df_pcga = pd.read_csv(
+                p,
+                sep="\t",
+                skiprows=hdr - 1,
+                header=0,
+                engine="python",
+                encoding="ISO-8859-1",
+                on_bad_lines="skip",
+            )
+            cid = cell_short_id(p.name)
 
-        used = set()
-        for p in pcga_files:
-            try:
-                dfp = read_mpt(p)
-                V, Q = integrate_pcga_step_capacity_robust(dfp, v_res=1e-3)
-                print(f"  {p.name}: {len(V)} steps")
-                if len(V) == 0:
-                    continue
-                # one legend entry per file/cell
-                m = re.search(r"LL-([A-Za-z0-9]{4})", p.name)
-                cid = m.group(1).upper() if m else p.stem
-                label = f"{cid} PCGA 03"
-                if label in used:
-                    label = "_nolegend_"
-                else:
-                    used.add(label)
-                ax_pcga.scatter(V, Q, s=28, marker="o",
-                                edgecolors="black", linewidths=0.5,
-                                alpha=0.85, zorder=10, label=label)
-            except Exception as e:
-                print(f"  ✗ {p.name}: {e}")
+            if cid not in MASS_G:
+                print(f" ⚠︎  MASS_G entry missing for '{cid}' – file skipped")
+                continue
+            EPS_DV = 0.003
+            V, dQdV = integrate_pcga_steps(df_pcga, MASS_G, cid, EPS_DV)
+            print(f"   {p.name}  →  {len(V)} valid steps")
 
-        # Optionally show a legend for the PCGA markers too
-        handles, labels = ax_pcga.get_legend_handles_labels()
-        if labels:
-            ax_pcga.legend(handles, labels, loc="upper right", fontsize="x-small")
+            if len(V) == 0:
+                continue  # nothing to plot
+
+            # create one legend label per cell
+            label = f"{cid} PCGA"
+            if label in used_labels:
+                label = "_nolegend_"
+            else:
+                used_labels.add(label)
+
+            ax_dqdv.scatter(
+                V, dQdV,
+                marker="o",  # filled circle
+                s=48,  # bigger
+                linewidths=0.5,
+                edgecolors="black",
+                alpha=0.9,
+                zorder=10,  # sit on top of curves
+                label=label,
+            )
+
+        except Exception as e:
+            print(f"   ✗  {p.name}  →  {e}")
 
     # --------------- cosmetics ------------------------------------------
     ax_dqdv.set_xlabel("Voltage (V)")
