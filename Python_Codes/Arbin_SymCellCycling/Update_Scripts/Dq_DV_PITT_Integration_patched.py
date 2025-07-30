@@ -32,8 +32,8 @@ FILES: List[str] = [
     "BL-LL-GA01_RT_C_20_Charge_02_CP_C02.mpt",
     "BL-LL-GA02_RT_C_20_Form_HighFid_Channel_64_Wb_1.xlsx",
     "BL-LL-FZ02_RT_C_20_Form_HighFid_Channel_63_Wb_1.xlsx",
-    "BL-LL-FW02_RT_C_20_Form_HighFid_Channel_60_Wb_1.xlsx",
-    "BL-LL-FX02_RT_C_20_Form_HighFid_Channel_61_Wb_1.xlsx",
+    #"BL-LL-FW02_RT_C_20_Form_HighFid_Channel_60_Wb_1.xlsx",
+    #"BL-LL-FX02_RT_C_20_Form_HighFid_Channel_61_Wb_1.xlsx",
 ]
 
 # active-material masses (mg) if you want normalised units
@@ -41,10 +41,10 @@ MASS_MG = {id_: 0.02496886674 / 1000  # mg → g
            for id_ in ["FZ01","FY01","FX01","FW01","GA01",
                         "FZ02","FY02","FX02","FW02","GA02",]}
 MASS_G = {
-    "GD01": 0.02496886674,   # example masses
-    "GC01": 0.02496886674,
-    "GC02": 0.02496886674,
-    "GD02": 0.02496886674,
+    #"GD01": 0.02496886674,   # example masses
+    #"GC01": 0.02496886674,
+    "GC02": 0.02496886674*10000,
+    "GD02": 0.02496886674*10000,
 }
 
 # Analysis parameters (unchanged from original script)
@@ -293,7 +293,7 @@ def main():
                 label = "_nolegend_"
             else:
                 used_labels.add(label)
-
+            #ax_pcga = ax_dqdv.twinx()  # secondary Y-axis for PCGA
             ax_dqdv.scatter(
                 V, dQdV,
                 marker="o",  # filled circle
@@ -311,6 +311,7 @@ def main():
     # --------------- cosmetics ------------------------------------------
     ax_dqdv.set_xlabel("Voltage (V)")
     ax_dqdv.set_ylabel("dQ/dV (mAh g$^{-1}$ V$^{-1}$)")
+    #ax_pcga.set_ylabel("PCGA dQ/dV (mAh g$^{-1}$ V$^{-1}$)")
     tag = "smoothed" if DQDV_SMOOTH else "raw"
     ax_dqdv.set_title(f"dQ/dV ({tag}) – C{CYCLE}")
 
