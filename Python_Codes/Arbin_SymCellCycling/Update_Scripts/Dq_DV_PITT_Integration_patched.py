@@ -294,16 +294,20 @@ def main():
             else:
                 used_labels.add(label)
             #ax_pcga = ax_dqdv.twinx()  # secondary Y-axis for PCGA
-            ax_dqdv.scatter(
-                V, dQdV,
-                marker="o",  # filled circle
-                s=48,  # bigger
-                linewidths=0.5,
-                edgecolors="black",
-                alpha=0.9,
-                zorder=10,  # sit on top of curves
-                label=label,
-            )
+            # ax_dqdv.scatter(
+            #     V, dQdV,
+            #     marker="o",  # filled circle
+            #     s=48,  # bigger
+            #     linewidths=0.5,
+            #     edgecolors="black",
+            #     alpha=0.9,
+            #     zorder=10,  # sit on top of curves
+            #     label=label,
+            # )
+            ax_dqdv.plot(V, dQdV,
+                         color=cmap(len(used_labels) % 10),
+                         linestyle= "--",  # dashed line
+                         label=label)
 
         except Exception as e:
             print(f"   ✗  {p.name}  →  {e}")
