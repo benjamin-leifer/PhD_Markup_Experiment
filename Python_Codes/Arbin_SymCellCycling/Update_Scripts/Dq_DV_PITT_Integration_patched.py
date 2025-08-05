@@ -28,10 +28,10 @@ DATA_DIR = Path(r"C:\Users\benja\Downloads\DQ_DV Work\Lab Arbin_DQ_DV_2025_07_15
 
 FILES: List[str] = [
     # ---------- your dQ/dV & charge-curve input files ----------
-    "BL-LL-FZ01_RT_C_20_Charge_02_CP_C04.mpt",
-    "BL-LL-GA01_RT_C_20_Charge_02_CP_C02.mpt",
-    "BL-LL-GA02_RT_C_20_Form_HighFid_Channel_64_Wb_1.xlsx",
-    "BL-LL-FZ02_RT_C_20_Form_HighFid_Channel_63_Wb_1.xlsx",
+    #"BL-LL-FZ01_RT_C_20_Charge_02_CP_C04.mpt",
+    #"BL-LL-GA01_RT_C_20_Charge_02_CP_C02.mpt",
+    #"BL-LL-GA02_RT_C_20_Form_HighFid_Channel_64_Wb_1.xlsx",
+    #"BL-LL-FZ02_RT_C_20_Form_HighFid_Channel_63_Wb_1.xlsx",
     #"BL-LL-FW02_RT_C_20_Form_HighFid_Channel_60_Wb_1.xlsx",
     #"BL-LL-FX02_RT_C_20_Form_HighFid_Channel_61_Wb_1.xlsx",
 ]
@@ -44,7 +44,21 @@ MASS_G = {
     #"GD01": 0.02496886674,   # example masses
     #"GC01": 0.02496886674,
     "GC02": 0.02496886674*10000,
-    "GD02": 0.02496886674*10000,
+    #"GD02": 0.02496886674*10000,
+    #"GJ06": 0.02496886674*10000,
+    #"GK06": 0.02496886674*10000,
+    "GL01": 0.02496886674*10000,
+    "GM01": 0.02496886674*10000,
+
+}
+
+electrolyte_lookup = {
+    "GC02": "DTFV1422 - PITT",
+    "GD02": "DTFV1452 - Old - PITT",
+    "GJ06": "DTFV1452 - New - PITT",
+    "GK06": "DTFV1425 - PITT",
+    "GL01": "DTFV1411 - PITT",
+    "GM01": "MF91 - PITT",
 }
 
 # Analysis parameters (unchanged from original script)
@@ -288,7 +302,7 @@ def main():
                 continue  # nothing to plot
 
             # create one legend label per cell
-            label = f"{cid} PCGA"
+            label = electrolyte_lookup[cid]
             if label in used_labels:
                 label = "_nolegend_"
             else:
@@ -306,7 +320,7 @@ def main():
             # )
             ax_dqdv.plot(V, dQdV,
                          color=cmap(len(used_labels) % 10),
-                         linestyle= "--",  # dashed line
+                         linestyle= "-",  # dashed line
                          label=label)
 
         except Exception as e:
@@ -318,7 +332,6 @@ def main():
     #ax_pcga.set_ylabel("PCGA dQ/dV (mAh g$^{-1}$ V$^{-1}$)")
     tag = "smoothed" if DQDV_SMOOTH else "raw"
     ax_dqdv.set_title(f"dQ/dV ({tag}) – C{CYCLE}")
-
     ax_charge.set_xlabel("Capacity (mAh g$^{-1}$)" if MASS_MG
                          else "Capacity (mAh)")
     ax_charge.set_ylabel("Voltage (V)")
@@ -326,6 +339,7 @@ def main():
 
     ax_dqdv.legend(loc="best", fontsize="x-small")
     ax_charge.legend(loc="best", fontsize="x-small")
+    #plt.savefig(DATA_DIR / "dq_dv_pitt.png", dpi=300, bbox_inches="tight")
 
     plt.show()
 

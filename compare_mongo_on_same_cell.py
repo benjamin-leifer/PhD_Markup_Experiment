@@ -173,61 +173,60 @@ def plot_mean_capacity_with_std(
     save_str: str | None = None,
     electrolyte_lookup: Dict[str, str] | None = None,
 ) -> None:
-    """Plot mean capacity with shaded standard deviation for grouped cell codes."""
-    fig, ax = plt.subplots(figsize=(10, 6))
+    """
+    Draw one figure with a mean-capacity curve (±STD band) for every
+    sub-list in ``grouped_cell_codes``.
+    """
     electrolyte_lookup = electrolyte_lookup or {}
+
+    fig, ax = plt.subplots(figsize=(10, 6))
 
     for group_idx, cell_codes in enumerate(grouped_cell_codes):
         group_charge_caps = []
         group_cycles = None
 
+        # ----- gather data for this group -----
         for code in cell_codes:
-            tests = find_tests_by_cell_code(code)
-            for test in tests:
+            for test in find_tests_by_cell_code(code):
                 cycles, charge_caps, _, _ = extract_cycle_data(test, normalized)
                 group_charge_caps.append(charge_caps)
                 if group_cycles is None:
                     group_cycles = cycles
 
-        if not group_charge_caps or group_cycles is None:
+        if not group_charge_caps:
             logging.warning("No data found for group %d", group_idx + 1)
             continue
 
-        # Pad lists to the same length
-        max_length = max(len(caps) for caps in group_charge_caps)
-        padded_caps = [caps + [np.nan] * (max_length - len(caps)) for caps in group_charge_caps]
+        # ----- pad to common length -----
+        max_len = max(len(c) for c in group_charge_caps)
+        padded = [c + [np.nan] * (max_len - len(c)) for c in group_charge_caps]
+        group_cycles = (group_cycles + [np.nan] * (max_len - len(group_cycles)))[:max_len]
 
-        # Trim or pad group_cycles to match max_length
-        group_cycles = group_cycles[:max_length] if len(group_cycles) > max_length else group_cycles + [np.nan] * (max_length - len(group_cycles))
+        mean_caps = np.nanmean(padded, axis=0)
+        std_caps  = np.nanstd(padded,  axis=0)
 
-        # Calculate mean and standard deviation
-        group_charge_caps = np.array(padded_caps)
-        mean_caps = np.nanmean(group_charge_caps, axis=0)
-        std_caps = np.nanstd(group_charge_caps, axis=0)
+        # ----- plot -----
+        line, = ax.plot(group_cycles, mean_caps, label=f"Group {group_idx+1}")
+        ax.fill_between(group_cycles,
+                        mean_caps - std_caps,
+                        mean_caps + std_caps,
+                        alpha=0.20,
+                        color=line.get_color())
 
-        # Plot mean and shaded standard deviation
-        ax.plot(group_cycles, mean_caps, label=f"Group {group_idx + 1}")
-        ax.fill_between(
-            group_cycles,
-            mean_caps - std_caps,
-            mean_caps + std_caps,
-            alpha=0.2,
-            label=f"Group {group_idx + 1} (±STD)"
-        )
-
+    # ----- cosmetics -----
     ax.set_xlabel("Cycle Number")
     ax.set_xlim(x_bounds)
+    ax.set_ylabel("Capacity (%)" if normalized else "Capacity (mAh)")
     if normalized:
-        ax.set_ylabel("Capacity (%)")
         ax.set_ylim(0, 120)
-    else:
-        ax.set_ylabel("Capacity (mAh)")
 
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), fontsize="small", ncol=2)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15),
+              fontsize="small", ncol=2)
     plt.tight_layout()
     if save_str:
-        plt.savefig(f"{save_str}_mean_capacity.png", dpi=300)
+        plt.savefig(f"{save_str}_mean_groups.png", dpi=300)
     plt.show()
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Plot MongoDB cycling data by cell code")
@@ -235,14 +234,17 @@ def main() -> None:
         "codes",
         nargs="*",  # now optional
         default=[
+            ['FT02', 'FT03','FT04','FT05'],
+            ['FU01','FU02', 'FU03','FU04','FU05','FS01', 'FS02',],
+            ['GB01', 'GB02', 'GB03', 'GB04', 'GB06','GB07',],# Example default codes
             #["FM01", "FM02", "FM03"],  # Example default codes
             #["FM04", "FM05", "FM06"],
             #["FK01", "FK02", "FK03"],
             #["FK04", "FK05",],
             #["FS03", "FS04", "FS05"],
-            ['FM01', 'FM06', 'FK02', 'FK05', 'FS03'],
-            ['FS06',],
-            ['FU06',],
+            #['FM01', 'FM06', 'FK02', 'FK05', 'FS03'],
+            #['FS06',],
+            #['FU06',],
             #[ 'FF02',],
             #['FJ02', 'FJ04',],
             #['FR03', ],
@@ -279,7 +281,7 @@ def main() -> None:
         return
 
     # ---------- NEW: mean ± std first ----------
-    grouped_codes = [args.codes]  # treat all CLI codes as one group
+    grouped_codes = args.codes if isinstance(args.codes[0], list) else [args.codes]  # treat all CLI codes as one group
     plot_mean_capacity_with_std(
         grouped_codes,
         normalized=args.normalized,
