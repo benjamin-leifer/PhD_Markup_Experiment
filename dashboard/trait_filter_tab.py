@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import List, Dict, Optional, Any
 
 import dash
-from dash import dcc, html
+from dash import dcc, html, dash_table
 import dash_bootstrap_components as dbc
 from dash import Input, Output, State
 
@@ -209,40 +209,36 @@ def build_query(
     return {"$and": conditions}
 
 
-def _build_table(rows: List[Dict[str, Any]], normalized: bool) -> dbc.Table:
+def _build_table(rows: List[Dict[str, Any]], normalized: bool) -> dash_table.DataTable:
     cap_header = "Capacity (mAh/cm²)" if normalized else "Capacity (mAh)"
     res_header = "Resistance (Ω·cm²)" if normalized else "Resistance (Ω)"
-    header = html.Thead(
-        html.Tr(
-            [
-                html.Th("Name"),
-                html.Th("Chemistry"),
-                html.Th("Manufacturer"),
-                html.Th(cap_header),
-                html.Th(res_header),
-                html.Th("CE %"),
-            ]
-        )
-    )
-    body_rows = [
-        html.Tr(
-            [
-                html.Td(r["name"]),
-                html.Td(r["chemistry"]),
-                html.Td(r["manufacturer"]),
-                html.Td(
-                    f"{r['capacity']:.3f}" if r.get("capacity") is not None else "-"
-                ),
-                html.Td(
-                    f"{r['resistance']:.3f}" if r.get("resistance") is not None else "-"
-                ),
-                html.Td(f"{r['ce']:.1f}" if r.get("ce") is not None else "-"),
-            ]
-        )
-        for r in rows
+    # round numeric values for display
+    for r in rows:
+        if r.get("capacity") is not None:
+            r["capacity"] = round(r["capacity"], 3)
+        if r.get("resistance") is not None:
+            r["resistance"] = round(r["resistance"], 3)
+        if r.get("ce") is not None:
+            r["ce"] = round(r["ce"], 1)
+
+    columns = [
+        {"name": "Name", "id": "name"},
+        {"name": "Chemistry", "id": "chemistry"},
+        {"name": "Manufacturer", "id": "manufacturer"},
+        {"name": cap_header, "id": "capacity", "type": "numeric"},
+        {"name": res_header, "id": "resistance", "type": "numeric"},
+        {"name": "CE %", "id": "ce", "type": "numeric"},
     ]
-    body = html.Tbody(body_rows)
-    return dbc.Table([header, body], bordered=True, hover=True, striped=True)
+
+    return dash_table.DataTable(
+        columns=columns,
+        data=rows,
+        filter_action="native",
+        sort_action="native",
+        page_size=10,
+        style_table={"overflowX": "auto"},
+        style_cell={"textAlign": "left"},
+    )
 
 
 def layout() -> html.Div:
