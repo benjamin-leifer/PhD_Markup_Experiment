@@ -12,6 +12,8 @@ import dash
 from dash import dcc, html
 import dash_bootstrap_components as dbc
 
+from . import cycle_detail_viewer
+
 
 def create_app() -> dash.Dash:
     """Create and configure the Dash application.
@@ -25,9 +27,15 @@ def create_app() -> dash.Dash:
     app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
     tabs = [
-        dcc.Tab(label="Dashboard", value="dashboard", children=html.Div("Dashboard")),
         dcc.Tab(
-            label="Comparison", value="comparison", children=html.Div("Comparison")
+            label="Dashboard",
+            value="dashboard",
+            children=html.Div("Dashboard"),
+        ),
+        dcc.Tab(
+            label="Comparison",
+            value="comparison",
+            children=html.Div("Comparison"),
         ),
         dcc.Tab(
             label="Advanced Analysis",
@@ -51,11 +59,18 @@ def create_app() -> dash.Dash:
             value="trait_filter",
             children=html.Div("Trait Filter"),
         ),
+        dcc.Tab(
+            label="Cycle Detail",
+            value="cycle_detail",
+            children=cycle_detail_viewer.layout(),
+        ),
     ]
 
     app.layout = dbc.Container(
         dcc.Tabs(id="tabs", value="dashboard", children=tabs), fluid=True
     )
+
+    cycle_detail_viewer.register_callbacks(app)
 
     return app
 
