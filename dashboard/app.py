@@ -13,7 +13,14 @@ from . import cell_flagger
 
 from . import data_access
 from . import layout as layout_components
-from . import trait_filter_tab, advanced_analysis_tab, eis_tab, comparison_tab
+from . import (
+    trait_filter_tab,
+    advanced_analysis_tab,
+    eis_tab,
+    comparison_tab,
+    document_flow_tab,
+    missing_data_tab,
+)
 
 
 def create_app() -> dash.Dash:
@@ -76,6 +83,14 @@ def create_app() -> dash.Dash:
                         dcc.Tab(
                             eis_tab.layout(),
                             label="EIS",
+                        ),
+                        dcc.Tab(
+                            document_flow_tab.layout(),
+                            label="Document Status",
+                        ),
+                        dcc.Tab(
+                            missing_data_tab.layout(),
+                            label="Missing Data",
                         ),
                         dcc.Tab(
                             html.Div(
@@ -276,6 +291,8 @@ def create_app() -> dash.Dash:
     comparison_tab.register_callbacks(app)
     advanced_analysis_tab.register_callbacks(app)
     eis_tab.register_callbacks(app)
+    document_flow_tab.register_callbacks(app)
+    missing_data_tab.register_callbacks(app)
 
     return app
 
