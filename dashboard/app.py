@@ -13,7 +13,7 @@ from . import cell_flagger
 
 from . import data_access
 from . import layout as layout_components
-from . import trait_filter_tab
+from . import trait_filter_tab, advanced_analysis_tab, eis_tab
 
 
 def create_app() -> dash.Dash:
@@ -64,6 +64,14 @@ def create_app() -> dash.Dash:
                         dcc.Tab(
                             trait_filter_tab.layout(),
                             label="Trait Filter",
+                        ),
+                        dcc.Tab(
+                            advanced_analysis_tab.layout(),
+                            label="Advanced Analysis",
+                        ),
+                        dcc.Tab(
+                            eis_tab.layout(),
+                            label="EIS",
                         ),
                         dcc.Tab(
                             html.Div(
@@ -261,6 +269,8 @@ def create_app() -> dash.Dash:
         return ""
 
     trait_filter_tab.register_callbacks(app)
+    advanced_analysis_tab.register_callbacks(app)
+    eis_tab.register_callbacks(app)
 
     return app
 
