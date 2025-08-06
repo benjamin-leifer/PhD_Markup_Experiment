@@ -65,11 +65,13 @@ This project is licensed under the [MIT License](LICENSE).
 ## Dashboard
 
 A lightweight Dash application provides a simple interface for monitoring battery tests.
-To run the dashboard locally, install `dash` and execute:
+The required dependencies, including `dash` and `dash-bootstrap-components`, are listed in
+`requirements.txt`.
+
+To run the dashboard locally, execute:
 
 ```bash
-pip install dash dash-bootstrap-components
-python -m dashboard.app
+python -m dashboard
 ```
 
 The app currently uses placeholder data but is structured for MongoDB integration
