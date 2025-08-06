@@ -4,11 +4,41 @@ Utilities for handling data updates and file processing.
 import os
 import logging
 import datetime
+import re
 
 # Update imports to avoid circular dependencies
 from battery_analysis import models, parsers
 # Import directly from the analysis package
-from battery_analysis.analysis import compute_metrics, update_sample_properties, create_test_result
+from battery_analysis.analysis import (
+    compute_metrics,
+    update_sample_properties,
+    create_test_result,
+)
+
+
+def _normalize_identifier(name: str | None) -> str | None:
+    """Return a normalized identifier with sequential suffixes removed.
+
+    Some tester exports generate multiple files for a single test where the
+    file names differ only by a trailing indicator such as ``_Wb_1``.  Stripping
+    this pattern allows us to match related files and append their data rather
+    than treating each as a separate test.
+
+    Args:
+        name: Raw file or test name.
+
+    Returns:
+        The name with common sequential suffixes removed, or ``None`` if no
+        name was provided.
+    """
+
+    if not name:
+        return None
+
+    base = os.path.splitext(name)[0]
+    # Remove patterns like "_Wb_1" or "_wb_2" at the end of the name
+    base = re.sub(r"_wb_\d+$", "", base, flags=re.IGNORECASE)
+    return base
 
 def extract_test_identifiers(file_path, parsed_data, metadata):
     """
@@ -22,11 +52,17 @@ def extract_test_identifiers(file_path, parsed_data, metadata):
     Returns:
         dict: Dictionary of identifiers
     """
+    file_name = os.path.basename(file_path)
     identifiers = {
-        'file_name': os.path.basename(file_path),
+        'file_name': file_name,
         'tester': metadata.get('tester', None),
-        'test_name': metadata.get('name', None)
+        'test_name': metadata.get('name', None),
+        # Normalized versions for matching sequential files
+        'base_file_name': _normalize_identifier(file_name),
     }
+
+    if identifiers['test_name']:
+        identifiers['base_test_name'] = _normalize_identifier(identifiers['test_name'])
 
     # Add more identifying information as available
     if 'date' in metadata:
@@ -60,14 +96,23 @@ def find_matching_tests(identifiers, sample_id):
         if not test:
             continue
 
-        # Check for name match
+        # Direct name match
         if identifiers.get('test_name') and test.name == identifiers['test_name']:
             matches.append(test)
             continue
 
-        # Check for file name match (if test has file_path)
-        if identifiers.get('file_name') and hasattr(test, 'file_path') and test.file_path:
+        # Direct file name match (if test has file_path)
+        if identifiers.get('file_name') and getattr(test, 'file_path', None):
             if os.path.basename(test.file_path) == identifiers['file_name']:
+                matches.append(test)
+                continue
+
+        # Normalized name match to handle sequential files
+        norm_incoming = identifiers.get('base_test_name') or identifiers.get('base_file_name')
+        if norm_incoming:
+            existing_name = _normalize_identifier(test.name)
+            existing_file = _normalize_identifier(os.path.basename(test.file_path)) if getattr(test, 'file_path', None) else None
+            if norm_incoming and (existing_name == norm_incoming or existing_file == norm_incoming):
                 matches.append(test)
                 continue
 
