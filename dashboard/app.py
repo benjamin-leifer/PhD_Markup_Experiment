@@ -32,78 +32,110 @@ def create_app() -> dash.Dash:
         upcoming = data_access.get_upcoming_tests()
         stats = data_access.get_summary_stats()
         flags = cell_flagger.get_flags()
+        navbar = dbc.NavbarSimple(
+            brand="Battery Test Dashboard",
+            color="primary",
+            dark=True,
+            className="mb-3",
+        )
+        status_bar = dbc.Navbar(
+            dbc.Container(
+                [
+                    html.Span("Status: Ready", id="status-text", className="navbar-text"),
+                    html.Span(
+                        "Database: Not Connected",
+                        id="db-status",
+                        className="ms-auto navbar-text",
+                    ),
+                ]
+            ),
+            color="light",
+            fixed="bottom",
+        )
+        tabs = dcc.Tabs(
+            [
+                # Order mirrors the original Tkinter GUI tabs
+                dcc.Tab(
+                    [
+                        layout_components.summary_layout(stats),
+                        html.H4("Running Tests"),
+                        layout_components.running_tests_table(running),
+                        html.H4("Upcoming Tests"),
+                        layout_components.upcoming_tests_table(upcoming),
+                    ],
+                    label="Overview",
+                ),
+                dcc.Tab(
+                    layout_components.new_material_form(),
+                    label="New Material",
+                ),
+                dcc.Tab(
+                    layout_components.data_import_layout(),
+                    label="Data Import",
+                ),
+                dcc.Tab(
+                    layout_components.export_button(),
+                    label="Export",
+                ),
+                dcc.Tab(
+                    comparison_tab.layout(),
+                    label="Comparison",
+                ),
+                dcc.Tab(
+                    advanced_analysis_tab.layout(),
+                    label="Advanced Analysis",
+                ),
+                dcc.Tab(
+                    eis_tab.layout(),
+                    label="EIS",
+                ),
+                dcc.Tab(
+                    document_flow_tab.layout(),
+                    label="Document Status",
+                ),
+                dcc.Tab(
+                    missing_data_tab.layout(),
+                    label="Missing Data",
+                ),
+                dcc.Tab(
+                    trait_filter_tab.layout(),
+                    label="Trait Filter",
+                ),
+                dcc.Tab(
+                    html.Div(
+                        layout_components.flagged_table(flags),
+                        id="flagged-container",
+                    ),
+                    label="Flags",
+                ),
+            ],
+            id="tabs",
+        )
         return dbc.Container(
             [
-                html.H2("Battery Test Dashboard", className="mt-2"),
-                dcc.Dropdown(
-                    id="current-user",
-                    options=[
-                        {"label": "User 1", "value": "user1"},
-                        {"label": "User 2", "value": "user2"},
+                navbar,
+                dbc.Row(
+                    [
+                        dbc.Col(
+                            dcc.Dropdown(
+                                id="current-user",
+                                options=[
+                                    {"label": "User 1", "value": "user1"},
+                                    {"label": "User 2", "value": "user2"},
+                                ],
+                                placeholder="Select User",
+                            ),
+                            md=4,
+                        )
                     ],
-                    placeholder="Select User",
+                    className="mb-3",
                 ),
                 html.Div(id="user-set-out", style={"display": "none"}),
-                dcc.Tabs(
-                    [
-                        dcc.Tab(
-                            [
-                                layout_components.summary_layout(stats),
-                                html.H4("Running Tests"),
-                                layout_components.running_tests_table(running),
-                                html.H4("Upcoming Tests"),
-                                layout_components.upcoming_tests_table(upcoming),
-                            ],
-                            label="Overview",
-                        ),
-                        dcc.Tab(
-                            layout_components.new_material_form(),
-                            label="New Material",
-                        ),
-                        dcc.Tab(
-                            layout_components.data_import_layout(),
-                            label="Data Import",
-                        ),
-                        dcc.Tab(
-                            layout_components.export_button(),
-                            label="Export",
-                        ),
-                        dcc.Tab(
-                            trait_filter_tab.layout(),
-                            label="Trait Filter",
-                        ),
-                        dcc.Tab(
-                            comparison_tab.layout(),
-                            label="Comparison",
-                        ),
-                        dcc.Tab(
-                            advanced_analysis_tab.layout(),
-                            label="Advanced Analysis",
-                        ),
-                        dcc.Tab(
-                            eis_tab.layout(),
-                            label="EIS",
-                        ),
-                        dcc.Tab(
-                            document_flow_tab.layout(),
-                            label="Document Status",
-                        ),
-                        dcc.Tab(
-                            missing_data_tab.layout(),
-                            label="Missing Data",
-                        ),
-                        dcc.Tab(
-                            html.Div(
-                                layout_components.flagged_table(flags),
-                                id="flagged-container",
-                            ),
-                            label="Flags",
-                        ),
-                    ]
-                ),
+                dbc.Row([dbc.Col(tabs, width=12)]),
                 layout_components.metadata_modal(),
                 layout_components.export_modal(),
                 layout_components.upload_metadata_modal(),
+                status_bar,
             ],
             fluid=True,
         )
