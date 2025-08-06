@@ -1,5 +1,6 @@
 import datetime
 import io
+from pathlib import Path
 from typing import List, Dict
 
 from battery_analysis import user_tracking
@@ -7,6 +8,10 @@ from battery_analysis import user_tracking
 import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+
+UPLOAD_DIR = Path(__file__).resolve().parent / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
+_uploaded_files: List[Dict] = []
 
 # Placeholder functions for database access.
 # These would normally interface with MongoDB via pymongo or mongoengine.
@@ -126,3 +131,23 @@ def get_upcoming_tests_pdf() -> bytes:
     """Return upcoming tests data formatted as PDF bytes."""
     user_tracking.log_export("upcoming_pdf")
     return _tests_to_pdf(get_upcoming_tests())
+
+
+def store_temp_upload(filename: str, content: bytes) -> str:
+    """Save raw uploaded file content to server-side storage."""
+    path = UPLOAD_DIR / filename
+    with open(path, "wb") as f:
+        f.write(content)
+    return str(path)
+
+
+def register_upload(filename: str, path: str, cycles, metadata) -> None:
+    """Persist parsed upload information in memory."""
+    _uploaded_files.append(
+        {"filename": filename, "path": path, "cycles": cycles, "metadata": metadata}
+    )
+
+
+def get_uploaded_files() -> List[Dict]:
+    """Return list of uploaded files and metadata."""
+    return _uploaded_files

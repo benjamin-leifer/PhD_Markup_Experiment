@@ -346,3 +346,60 @@ def export_modal() -> dbc.Modal:
         id="export-modal",
         is_open=False,
     )
+
+
+def data_import_layout() -> html.Div:
+    """Layout for the Data Import tab with file upload and status display."""
+    return html.Div(
+        [
+            dcc.Upload(
+                id="upload-data",
+                children=html.Div(
+                    ["Drag and Drop or ", html.A("Select Files")]
+                ),
+                style={
+                    "width": "100%",
+                    "height": "60px",
+                    "lineHeight": "60px",
+                    "borderWidth": "1px",
+                    "borderStyle": "dashed",
+                    "borderRadius": "5px",
+                    "textAlign": "center",
+                    "margin": "10px",
+                },
+            ),
+            dcc.Store(id="upload-info"),
+            html.Div(id="upload-status"),
+            html.Ul(id="uploaded-files-list"),
+        ]
+    )
+
+
+def upload_metadata_modal() -> dbc.Modal:
+    """Modal dialog for editing metadata after a file upload."""
+    return dbc.Modal(
+        [
+            dbc.ModalHeader(dbc.ModalTitle("File Metadata")),
+            dbc.ModalBody(
+                dbc.Form(
+                    [
+                        dbc.Label("Sample Code"),
+                        dbc.Input(id="meta-sample-code"),
+                        dbc.Label("Chemistry"),
+                        dbc.Input(id="meta-chemistry"),
+                        dbc.Label("Notes"),
+                        dbc.Textarea(id="meta-notes"),
+                    ]
+                )
+            ),
+            dbc.ModalFooter(
+                [
+                    dbc.Button("Save", id="save-metadata", color="primary"),
+                    dbc.Button("Cancel", id="cancel-metadata", color="secondary"),
+                ]
+            ),
+        ],
+        id="upload-metadata-modal",
+        is_open=False,
+    )
+
