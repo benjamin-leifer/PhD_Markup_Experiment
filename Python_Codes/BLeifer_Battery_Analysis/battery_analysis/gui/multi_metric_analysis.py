@@ -15,7 +15,12 @@ from typing import Iterable, List
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-from .. import models
+try:
+    from .. import models
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
+
+    models = importlib.import_module("models")
 
 
 class MultiMetricAnalysis(ttk.Frame):
@@ -30,7 +35,9 @@ class MultiMetricAnalysis(ttk.Frame):
         ("Internal Resistance", "median_internal_resistance"),
     ]
 
-    def __init__(self, parent: tk.Widget, samples: Iterable[models.Sample] | None = None) -> None:
+    def __init__(
+        self, parent: tk.Widget, samples: Iterable[models.Sample] | None = None
+    ) -> None:
         super().__init__(parent)
         self.samples: List[models.Sample] = list(samples) if samples else []
         self.metric_vars = {key: tk.BooleanVar(value=False) for _, key in self.METRICS}
@@ -54,7 +61,9 @@ class MultiMetricAnalysis(ttk.Frame):
         table_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         self.table = ttk.Treeview(table_frame, show="headings")
         self.table.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scroll = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.table.yview)
+        scroll = ttk.Scrollbar(
+            table_frame, orient=tk.VERTICAL, command=self.table.yview
+        )
         scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.table.configure(yscrollcommand=scroll.set)
 
@@ -93,7 +102,9 @@ class MultiMetricAnalysis(ttk.Frame):
             self.table.column(col, width=120, anchor=tk.W)
         self.table.delete(*self.table.get_children())
         for s in self.samples:
-            values = [getattr(s, "name", "")] + [self._fmt(getattr(s, m, None)) for m in metrics]
+            values = [getattr(s, "name", "")] + [
+                self._fmt(getattr(s, m, None)) for m in metrics
+            ]
             self.table.insert("", tk.END, values=values)
 
     def _update_plot(self) -> None:

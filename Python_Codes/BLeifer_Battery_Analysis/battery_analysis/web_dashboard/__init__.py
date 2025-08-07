@@ -1,5 +1,10 @@
 """Web dashboard module for battery analysis."""
 
-from .app import create_app
+try:
+    from .app import create_app
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
+
+    create_app = importlib.import_module("app").create_app
 
 __all__ = ["create_app"]

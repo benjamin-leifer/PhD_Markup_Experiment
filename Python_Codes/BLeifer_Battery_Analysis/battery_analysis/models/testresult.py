@@ -2,7 +2,13 @@
 
 import datetime
 from mongoengine import Document, fields
-from .cycle_summary import CycleSummary
+
+try:
+    from .cycle_summary import CycleSummary
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
+
+    CycleSummary = importlib.import_module("cycle_summary").CycleSummary
 
 
 class TestResult(Document):

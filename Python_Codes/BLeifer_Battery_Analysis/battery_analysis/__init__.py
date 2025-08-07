@@ -45,13 +45,21 @@ Basic Usage:
 """
 
 # Package version
-__version__ = '0.1.0'
+__version__ = "0.1.0"
 
 # Import main components for easier access
-from . import models
-from . import analysis
-from . import report
-from . import utils
+try:
+    from . import models
+    from . import analysis
+    from . import report
+    from . import utils
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
+
+    models = importlib.import_module("models")
+    analysis = importlib.import_module("analysis")
+    report = importlib.import_module("report")
+    utils = importlib.import_module("utils")
 
 import warnings
 
@@ -78,6 +86,10 @@ def _check_missing_advanced_packages():
 
 try:  # Some optional dependencies like scipy may be missing
     from . import advanced_analysis
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
+
+    advanced_analysis = importlib.import_module("advanced_analysis")
 except Exception as exc:  # pragma: no cover - optional import
     advanced_analysis = None
     MISSING_ADVANCED_PACKAGES = _check_missing_advanced_packages()
@@ -91,19 +103,35 @@ except Exception as exc:  # pragma: no cover - optional import
 
 try:
     from . import plots
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
+
+    plots = importlib.import_module("plots")
 except Exception:  # pragma: no cover - optional import
     plots = None
 
 try:
     from . import eis
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
+
+    eis = importlib.import_module("eis")
 except Exception:  # pragma: no cover - optional import
     eis = None
 
 try:
     from . import outlier_analysis
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
+
+    outlier_analysis = importlib.import_module("outlier_analysis")
 except Exception:  # pragma: no cover - optional import
     outlier_analysis = None
 
 # Make parsers accessible
-from .parsers import parse_file
+try:
+    from .parsers import parse_file
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
 
+    parse_file = importlib.import_module("parsers").parse_file

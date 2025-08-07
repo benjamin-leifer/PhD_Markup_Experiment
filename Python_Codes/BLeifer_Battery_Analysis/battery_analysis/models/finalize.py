@@ -1,5 +1,6 @@
 # battery_analysis/models/finalize.py
 
+
 def add_delete_rules():
     """Add delete rules after models are registered."""
     # Import the necessary components
@@ -10,8 +11,14 @@ def add_delete_rules():
     print("Models currently registered:", _document_registry.keys())
 
     # Import our models
-    from .sample import Sample
-    from .testresult import TestResult
+    try:
+        from .sample import Sample
+        from .testresult import TestResult
+    except ImportError:  # pragma: no cover - allow running as script
+        import importlib
+
+        Sample = importlib.import_module("sample").Sample
+        TestResult = importlib.import_module("testresult").TestResult
 
     # Check registry again
     print("Models after import:", _document_registry.keys())

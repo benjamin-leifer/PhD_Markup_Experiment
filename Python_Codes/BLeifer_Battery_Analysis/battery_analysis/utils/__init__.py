@@ -56,7 +56,12 @@ except Exception:  # pragma: no cover - executed when mongoengine missing
 # ---------------------------------------------------------------------------
 # Database helper (robust connector)
 # ---------------------------------------------------------------------------
-from .db import connect_with_fallback as _connect_with_fallback
+try:
+    from .db import connect_with_fallback as _connect_with_fallback
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
+
+    _connect_with_fallback = importlib.import_module("db").connect_with_fallback
 
 
 def connect_to_database(db_name="battery_test_db", host="localhost", port=27017):
@@ -154,6 +159,7 @@ def get_file_list(directory):
 
 # Keep references to popped out figures so their windows stay open
 _active_popouts = []
+
 
 def popout_figure(fig):
     """Open a copy of ``fig`` in a standalone matplotlib window.

@@ -5,7 +5,12 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-from .. import models
+try:
+    from .. import models
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
+
+    models = importlib.import_module("models")
 
 
 class MissingDataTab(ttk.Frame):
@@ -20,11 +25,17 @@ class MissingDataTab(ttk.Frame):
     def create_widgets(self):
         control = ttk.Frame(self)
         control.pack(fill=tk.X, padx=10, pady=5)
-        self.refresh_btn = ttk.Button(control, text="Refresh", command=self.refresh_table)
+        self.refresh_btn = ttk.Button(
+            control, text="Refresh", command=self.refresh_table
+        )
         self.refresh_btn.pack(side=tk.LEFT)
-        self.resolve_btn = ttk.Button(control, text="Resolve Selected", command=self.resolve_selected)
+        self.resolve_btn = ttk.Button(
+            control, text="Resolve Selected", command=self.resolve_selected
+        )
         self.resolve_btn.pack(side=tk.RIGHT)
-        self.reassign_btn = ttk.Button(control, text="Reassign Test", command=self.reassign_selected)
+        self.reassign_btn = ttk.Button(
+            control, text="Reassign Test", command=self.reassign_selected
+        )
         self.reassign_btn.pack(side=tk.RIGHT, padx=(0, 5))
 
         columns = ("test", "missing")
@@ -38,7 +49,9 @@ class MissingDataTab(ttk.Frame):
         self.tree.column("missing", width=200)
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        v_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.tree.yview)
+        v_scrollbar = ttk.Scrollbar(
+            tree_frame, orient=tk.VERTICAL, command=self.tree.yview
+        )
         v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         h_scrollbar = ttk.Scrollbar(self, orient=tk.HORIZONTAL, command=self.tree.xview)
@@ -53,7 +66,11 @@ class MissingDataTab(ttk.Frame):
             self.tree.delete(row)
         self._item_map.clear()
         for rec in getattr(self.main_app, "missing_data", []):
-            item = self.tree.insert("", tk.END, values=(rec.get("test_id"), ", ".join(rec.get("missing", []))))
+            item = self.tree.insert(
+                "",
+                tk.END,
+                values=(rec.get("test_id"), ", ".join(rec.get("missing", []))),
+            )
             self._item_map[item] = rec
 
     def resolve_selected(self):
@@ -74,10 +91,11 @@ class MissingDataTab(ttk.Frame):
         dlg.geometry("400x300")
         entries = {}
         for f in fields:
-            ttk.Label(dlg, text=f.capitalize()+":").pack(anchor=tk.W, padx=5, pady=2)
+            ttk.Label(dlg, text=f.capitalize() + ":").pack(anchor=tk.W, padx=5, pady=2)
             e = ttk.Entry(dlg)
             e.pack(fill=tk.X, padx=5)
             entries[f] = e
+
         def save():
             for f, ent in entries.items():
                 name = ent.get().strip()
@@ -93,6 +111,7 @@ class MissingDataTab(ttk.Frame):
                 self.main_app.missing_data.remove(rec)
             dlg.destroy()
             self.refresh_table()
+
         ttk.Button(dlg, text="Save", command=save).pack(pady=5)
         dlg.transient(self)
         dlg.grab_set()
@@ -128,7 +147,9 @@ class MissingDataTab(ttk.Frame):
                 sample.save()
 
             # remove from old sample
-            old_sample = test.sample.fetch() if hasattr(test.sample, "fetch") else test.sample
+            old_sample = (
+                test.sample.fetch() if hasattr(test.sample, "fetch") else test.sample
+            )
             if old_sample and test in getattr(old_sample, "tests", []):
                 old_sample.tests.remove(test)
                 old_sample.save()
@@ -139,9 +160,19 @@ class MissingDataTab(ttk.Frame):
                 sample.tests.append(test)
                 sample.save()
 
-            missing = [f for f in ("anode", "cathode", "separator", "electrolyte") if getattr(sample, f, None) is None]
+            missing = [
+                f
+                for f in ("anode", "cathode", "separator", "electrolyte")
+                if getattr(sample, f, None) is None
+            ]
             if missing:
-                self.main_app.missing_data.append({"test_id": str(test.id), "sample_id": str(sample.id), "missing": missing})
+                self.main_app.missing_data.append(
+                    {
+                        "test_id": str(test.id),
+                        "sample_id": str(sample.id),
+                        "missing": missing,
+                    }
+                )
 
             if rec in self.main_app.missing_data:
                 self.main_app.missing_data.remove(rec)

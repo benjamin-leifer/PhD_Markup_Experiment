@@ -3,18 +3,14 @@
 import dash
 import dash_bootstrap_components as dbc
 
-# Allow running as a standalone script by fixing the package context
-if __name__ == "__main__" and __package__ is None:  # pragma: no cover - manual run
-    import pathlib
-    import sys
+try:
+    from . import layout as layout_components
+    from . import data_access
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
 
-    # Add the package root directory so that "battery_analysis" can be
-    # imported when this file is executed as a script.
-    sys.path.append(str(pathlib.Path(__file__).resolve().parents[2]))
-    __package__ = "battery_analysis.web_dashboard"
-
-from . import layout as layout_components
-from . import data_access
+    layout_components = importlib.import_module("layout")
+    data_access = importlib.import_module("data_access")
 
 
 def create_app() -> dash.Dash:

@@ -11,9 +11,18 @@ import matplotlib.pyplot as plt
 from scipy import signal, interpolate, optimize, stats
 from scipy.cluster import hierarchy
 from sklearn.decomposition import PCA
-from . import models
-from . import utils
-from . import pybamm_models
+import os
+
+try:
+    from . import models
+    from . import utils
+    from . import pybamm_models
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
+
+    models = importlib.import_module("models")
+    utils = importlib.import_module("utils")
+    pybamm_models = importlib.import_module("pybamm_models")
 
 # ---------------------------------------------------------------------------
 # Column-name aliases so the code works with Arbin, BioLogic, Neware, etc.
@@ -35,6 +44,7 @@ ALIAS_VOLTAGE = {
     "Ecell_V",
     "Potential (V)",
 }
+
 
 def _get_series(df, aliases):
     """Return the first matching column in *df* whose name is in *aliases*."""
@@ -129,7 +139,11 @@ def get_voltage_capacity_data(test_id, cycle_number=None):
                 xl = pd.ExcelFile(file_path)
                 # pick a sheet that looks like data
                 sheet_name = next(
-                    (s for s in xl.sheet_names if "channel" in s.lower() or "data" in s.lower()),
+                    (
+                        s
+                        for s in xl.sheet_names
+                        if "channel" in s.lower() or "data" in s.lower()
+                    ),
                     xl.sheet_names[0],
                 )
                 df = pd.read_excel(file_path, sheet_name=sheet_name)
@@ -165,8 +179,12 @@ def get_voltage_capacity_data(test_id, cycle_number=None):
                 col = col_name.lower()
                 return any(alias in col for alias in aliases)
 
-            voltage_col = next((c for c in df.columns if _match_alias(c, VOLT_ALIASES)), None)
-            capacity_col = next((c for c in df.columns if _match_alias(c, CAP_ALIASES)), None)
+            voltage_col = next(
+                (c for c in df.columns if _match_alias(c, VOLT_ALIASES)), None
+            )
+            capacity_col = next(
+                (c for c in df.columns if _match_alias(c, CAP_ALIASES)), None
+            )
 
             if voltage_col is None or capacity_col is None:
                 raise ValueError("Could not identify required data columns")
@@ -174,7 +192,11 @@ def get_voltage_capacity_data(test_id, cycle_number=None):
             # ------------ optional cycle filter ------------------------- #
             if cycle_number is not None:
                 cycle_col = next(
-                    (c for c in df.columns if "cycle" in str(c).lower() or "cyc" in str(c).lower()),
+                    (
+                        c
+                        for c in df.columns
+                        if "cycle" in str(c).lower() or "cyc" in str(c).lower()
+                    ),
                     None,
                 )
                 if cycle_col is not None:
@@ -191,8 +213,9 @@ def get_voltage_capacity_data(test_id, cycle_number=None):
     raise ValueError("Could not identify required data columns")
 
 
-
-def differential_capacity_analysis(voltage_data, capacity_data, smooth=True, window_size=11):
+def differential_capacity_analysis(
+    voltage_data, capacity_data, smooth=True, window_size=11
+):
     """
     Perform differential capacity analysis (dQ/dV) to identify phase transitions.
 
@@ -220,7 +243,9 @@ def differential_capacity_analysis(voltage_data, capacity_data, smooth=True, win
 
     # Create a smoothed capacity curve using interpolation
     voltage_fine = np.linspace(voltage_unique.min(), voltage_unique.max(), 1000)
-    capacity_interpolator = interpolate.interp1d(voltage_unique, capacity_unique, kind='cubic')
+    capacity_interpolator = interpolate.interp1d(
+        voltage_unique, capacity_unique, kind="cubic"
+    )
     capacity_fine = capacity_interpolator(voltage_fine)
 
     # Calculate the derivative (dQ/dV)
@@ -331,7 +356,9 @@ def voltage_efficiency_analysis(voltage_data, capacity_data, current_data=None):
 
         # Interpolate charge and discharge curves
         f_charge = interpolate.interp1d(cap_charge, v_charge, bounds_error=False)
-        f_discharge = interpolate.interp1d(cap_discharge, v_discharge, bounds_error=False)
+        f_discharge = interpolate.interp1d(
+            cap_discharge, v_discharge, bounds_error=False
+        )
 
         v_charge_interp = f_charge(cap_points)
         v_discharge_interp = f_discharge(cap_points)
@@ -348,12 +375,12 @@ def voltage_efficiency_analysis(voltage_data, capacity_data, current_data=None):
         v_gap_avg = v_gap_max = None
 
     return {
-        'v_charge_avg': v_charge_avg,
-        'v_discharge_avg': v_discharge_avg,
-        'v_hysteresis': v_hysteresis,
-        'v_efficiency': v_efficiency,
-        'v_gap_avg': v_gap_avg,
-        'v_gap_max': v_gap_max
+        "v_charge_avg": v_charge_avg,
+        "v_discharge_avg": v_discharge_avg,
+        "v_hysteresis": v_hysteresis,
+        "v_efficiency": v_efficiency,
+        "v_gap_avg": v_gap_avg,
+        "v_gap_max": v_gap_max,
     }
 
 
@@ -373,7 +400,9 @@ def capacity_fade_analysis(test_id):
 
     # Need at least 10 cycles for meaningful analysis
     if len(test.cycles) < 10:
-        raise ValueError(f"Need at least 10 cycles for fade analysis, found {len(test.cycles)}")
+        raise ValueError(
+            f"Need at least 10 cycles for fade analysis, found {len(test.cycles)}"
+        )
 
     # Extract cycle numbers and discharge capacities
     cycle_nums = np.array([c.cycle_index for c in test.cycles])
@@ -399,15 +428,17 @@ def capacity_fade_analysis(test_id):
         if linear_a < 0:  # Negative slope (capacity decreasing)
             eol_threshold = 0.8 * discharge_caps[0]
             eol_cycle_linear = (eol_threshold - linear_b) / linear_a
-            eol_cycle_linear = max(cycle_nums[-1], eol_cycle_linear)  # Don't predict earlier than last measured cycle
+            eol_cycle_linear = max(
+                cycle_nums[-1], eol_cycle_linear
+            )  # Don't predict earlier than last measured cycle
         else:
             eol_cycle_linear = None
 
-        models_data['linear'] = {
-            'name': 'Linear',
-            'params': {'slope': linear_a, 'intercept': linear_b},
-            'r_squared': linear_r2,
-            'eol_cycle': eol_cycle_linear
+        models_data["linear"] = {
+            "name": "Linear",
+            "params": {"slope": linear_a, "intercept": linear_b},
+            "r_squared": linear_r2,
+            "eol_cycle": eol_cycle_linear,
         }
     except Exception:
         pass
@@ -420,12 +451,16 @@ def capacity_fade_analysis(test_id):
         def power_law(x, a, b, c):
             return a * np.power(x, b) + c
 
-        params, _ = optimize.curve_fit(power_law, cycle_nums, discharge_caps, p0=p0, maxfev=10000)
+        params, _ = optimize.curve_fit(
+            power_law, cycle_nums, discharge_caps, p0=p0, maxfev=10000
+        )
         power_a, power_b, power_c = params
 
         power_fit = power_law(cycle_nums, power_a, power_b, power_c)
         power_r2 = 1 - (
-                    np.sum((discharge_caps - power_fit) ** 2) / np.sum((discharge_caps - np.mean(discharge_caps)) ** 2))
+            np.sum((discharge_caps - power_fit) ** 2)
+            / np.sum((discharge_caps - np.mean(discharge_caps)) ** 2)
+        )
 
         # Predict cycle where capacity reaches 80% of initial
         eol_threshold = 0.8 * discharge_caps[0]
@@ -438,7 +473,9 @@ def capacity_fade_analysis(test_id):
             if power_a < 0:  # Ensure capacity is decreasing
                 last_cycle = cycle_nums[-1]
                 if find_eol(last_cycle) > 0:  # EOL hasn't been reached yet
-                    eol_cycle_power = optimize.brentq(find_eol, last_cycle, last_cycle * 10)
+                    eol_cycle_power = optimize.brentq(
+                        find_eol, last_cycle, last_cycle * 10
+                    )
                 else:
                     eol_cycle_power = None
             else:
@@ -446,11 +483,11 @@ def capacity_fade_analysis(test_id):
         except Exception:
             eol_cycle_power = None
 
-        models_data['power'] = {
-            'name': 'Power Law',
-            'params': {'a': power_a, 'b': power_b, 'c': power_c},
-            'r_squared': power_r2,
-            'eol_cycle': eol_cycle_power
+        models_data["power"] = {
+            "name": "Power Law",
+            "params": {"a": power_a, "b": power_b, "c": power_c},
+            "r_squared": power_r2,
+            "eol_cycle": eol_cycle_power,
         }
     except Exception:
         pass
@@ -463,11 +500,16 @@ def capacity_fade_analysis(test_id):
         def exp_decay(x, a, b, c):
             return a * np.exp(b * x) + c
 
-        params, _ = optimize.curve_fit(exp_decay, cycle_nums, discharge_caps, p0=p0, maxfev=10000)
+        params, _ = optimize.curve_fit(
+            exp_decay, cycle_nums, discharge_caps, p0=p0, maxfev=10000
+        )
         exp_a, exp_b, exp_c = params
 
         exp_fit = exp_decay(cycle_nums, exp_a, exp_b, exp_c)
-        exp_r2 = 1 - (np.sum((discharge_caps - exp_fit) ** 2) / np.sum((discharge_caps - np.mean(discharge_caps)) ** 2))
+        exp_r2 = 1 - (
+            np.sum((discharge_caps - exp_fit) ** 2)
+            / np.sum((discharge_caps - np.mean(discharge_caps)) ** 2)
+        )
 
         # Predict cycle where capacity reaches 80% of initial
         eol_threshold = 0.8 * discharge_caps[0]
@@ -480,7 +522,9 @@ def capacity_fade_analysis(test_id):
             if exp_b < 0:  # Ensure capacity is decreasing (negative exponent)
                 last_cycle = cycle_nums[-1]
                 if find_eol(last_cycle) > 0:  # EOL hasn't been reached yet
-                    eol_cycle_exp = optimize.brentq(find_eol, last_cycle, last_cycle * 10)
+                    eol_cycle_exp = optimize.brentq(
+                        find_eol, last_cycle, last_cycle * 10
+                    )
                 else:
                     eol_cycle_exp = None
             else:
@@ -488,11 +532,11 @@ def capacity_fade_analysis(test_id):
         except Exception:
             eol_cycle_exp = None
 
-        models_data['exponential'] = {
-            'name': 'Exponential',
-            'params': {'a': exp_a, 'b': exp_b, 'c': exp_c},
-            'r_squared': exp_r2,
-            'eol_cycle': eol_cycle_exp
+        models_data["exponential"] = {
+            "name": "Exponential",
+            "params": {"a": exp_a, "b": exp_b, "c": exp_c},
+            "r_squared": exp_r2,
+            "eol_cycle": eol_cycle_exp,
         }
     except Exception:
         pass
@@ -502,8 +546,8 @@ def capacity_fade_analysis(test_id):
     best_r2 = -1
 
     for model_name, model_info in models_data.items():
-        if model_info['r_squared'] > best_r2:
-            best_r2 = model_info['r_squared']
+        if model_info["r_squared"] > best_r2:
+            best_r2 = model_info["r_squared"]
             best_model = model_name
 
     # Calculate confidence in prediction based on:
@@ -514,7 +558,7 @@ def capacity_fade_analysis(test_id):
     confidence = None
     if best_model:
         # Base confidence on R²
-        r2_factor = min(models_data[best_model]['r_squared'], 0.99)
+        r2_factor = min(models_data[best_model]["r_squared"], 0.99)
 
         # Adjust based on number of cycles (more cycles = higher confidence)
         cycle_factor = min(len(test.cycles) / 100, 1.0)
@@ -525,7 +569,9 @@ def capacity_fade_analysis(test_id):
             recent_cycles = cycle_nums[-n_recent:]
             recent_caps = discharge_caps[-n_recent:]
             recent_slope, _, _, _, _ = stats.linregress(recent_cycles, recent_caps)
-            overall_slope = (discharge_caps[-1] - discharge_caps[0]) / (cycle_nums[-1] - cycle_nums[0])
+            overall_slope = (discharge_caps[-1] - discharge_caps[0]) / (
+                cycle_nums[-1] - cycle_nums[0]
+            )
 
             # If recent slope is similar to overall slope, higher confidence
             slope_ratio = abs(recent_slope / overall_slope) if overall_slope != 0 else 0
@@ -538,15 +584,17 @@ def capacity_fade_analysis(test_id):
 
     # Return comprehensive analysis
     return {
-        'cycle_count': len(test.cycles),
-        'initial_capacity': discharge_caps[0],
-        'final_capacity': discharge_caps[-1],
-        'capacity_retention': norm_caps[-1],
-        'fade_rate_pct_per_cycle': fade_rate_pct,
-        'fade_models': models_data,
-        'best_model': best_model,
-        'confidence': confidence,
-        'predicted_eol_cycle': models_data.get(best_model, {}).get('eol_cycle') if best_model else None
+        "cycle_count": len(test.cycles),
+        "initial_capacity": discharge_caps[0],
+        "final_capacity": discharge_caps[-1],
+        "capacity_retention": norm_caps[-1],
+        "fade_rate_pct_per_cycle": fade_rate_pct,
+        "fade_models": models_data,
+        "best_model": best_model,
+        "confidence": confidence,
+        "predicted_eol_cycle": (
+            models_data.get(best_model, {}).get("eol_cycle") if best_model else None
+        ),
     }
 
 
@@ -566,7 +614,9 @@ def analyze_rate_capability(sample_id):
 
     # Need at least 2 tests for comparison
     if len(sample.tests) < 2:
-        raise ValueError(f"Need at least 2 tests for rate analysis, found {len(sample.tests)}")
+        raise ValueError(
+            f"Need at least 2 tests for rate analysis, found {len(sample.tests)}"
+        )
 
     # Get all tests for the sample
     tests = []
@@ -581,7 +631,7 @@ def analyze_rate_capability(sample_id):
         rate = None
 
         # Try to get C-rate from metadata
-        if hasattr(test, 'discharge_rate') and test.discharge_rate is not None:
+        if hasattr(test, "discharge_rate") and test.discharge_rate is not None:
             rate = test.discharge_rate
 
         # If not found, try to extract from test name
@@ -591,7 +641,7 @@ def analyze_rate_capability(sample_id):
                 rate = extracted_rate
 
         # If still not found, try file name
-        if rate is None and hasattr(test, 'file_path') and test.file_path:
+        if rate is None and hasattr(test, "file_path") and test.file_path:
             extracted_rate = utils.extract_crate(os.path.basename(test.file_path))
             if extracted_rate:
                 rate = extracted_rate
@@ -627,13 +677,15 @@ def analyze_rate_capability(sample_id):
         retention = capacity / reference_capacity if reference_capacity else 0
         retentions.append(retention)
 
-        rate_capability_data.append({
-            'test_id': str(test.id),
-            'test_name': test.name,
-            'c_rate': rate,
-            'capacity': capacity,
-            'relative_capacity': retention
-        })
+        rate_capability_data.append(
+            {
+                "test_id": str(test.id),
+                "test_name": test.name,
+                "c_rate": rate,
+                "capacity": capacity,
+                "relative_capacity": retention,
+            }
+        )
 
     # Fit curve to capacity vs. rate data
     try:
@@ -649,26 +701,30 @@ def analyze_rate_capability(sample_id):
         r_squared = 1 - (ss_residual / ss_total)
 
         model = {
-            'type': 'logarithmic',
-            'params': {'a': float(a), 'b': float(b)},
-            'r_squared': float(r_squared)
+            "type": "logarithmic",
+            "params": {"a": float(a), "b": float(b)},
+            "r_squared": float(r_squared),
         }
     except Exception:
         model = None
 
     # Calculate additional metrics
     metrics = {
-        'reference_rate': float(reference_rate),
-        'reference_capacity': float(reference_capacity),
-        'peukert_coefficient': calculate_peukert_coefficient(rates, capacities) if len(rates) >= 3 else None
+        "reference_rate": float(reference_rate),
+        "reference_capacity": float(reference_capacity),
+        "peukert_coefficient": (
+            calculate_peukert_coefficient(rates, capacities)
+            if len(rates) >= 3
+            else None
+        ),
     }
 
     return {
-        'sample_name': sample.name,
-        'test_count': len(test_rates),
-        'rate_data': rate_capability_data,
-        'model': model,
-        'metrics': metrics
+        "sample_name": sample.name,
+        "test_count": len(test_rates),
+        "rate_data": rate_capability_data,
+        "model": model,
+        "metrics": metrics,
     }
 
 
@@ -731,7 +787,9 @@ def coulombic_efficiency_analysis(test_id):
 
     # Need at least 5 cycles for meaningful analysis
     if len(test.cycles) < 5:
-        raise ValueError(f"Need at least 5 cycles for CE analysis, found {len(test.cycles)}")
+        raise ValueError(
+            f"Need at least 5 cycles for CE analysis, found {len(test.cycles)}"
+        )
 
     # Extract cycle numbers and coulombic efficiencies
     cycle_nums = np.array([c.cycle_index for c in test.cycles])
@@ -757,7 +815,9 @@ def coulombic_efficiency_analysis(test_id):
     # Check for CE trends over cycles
     try:
         # Fit linear trend to CE vs cycle
-        slope, intercept, r_value, p_value, std_err = stats.linregress(cycle_nums, ce_values)
+        slope, intercept, r_value, p_value, std_err = stats.linregress(
+            cycle_nums, ce_values
+        )
 
         # Determine if there's a significant trend
         has_trend = False
@@ -770,7 +830,8 @@ def coulombic_efficiency_analysis(test_id):
             elif slope < 0:
                 trend_direction = "deteriorating"
     except Exception:
-        slope = intercept = r_value = p_value = std_err = None
+        slope = r_value = p_value = None
+        intercept = std_err = None  # noqa: F841
         has_trend = False
         trend_direction = "unknown"
 
@@ -779,32 +840,32 @@ def coulombic_efficiency_analysis(test_id):
 
     # Project capacity retention based on CE
     # For n cycles, retention ≈ (CE)^n
-    projected_retention_100 = avg_ce ** 100
-    projected_retention_500 = avg_ce ** 500
-    projected_retention_1000 = avg_ce ** 1000
+    projected_retention_100 = avg_ce**100
+    projected_retention_500 = avg_ce**500
+    projected_retention_1000 = avg_ce**1000
 
     return {
-        'cycle_count': len(test.cycles),
-        'average_ce': float(avg_ce),
-        'std_deviation': float(std_ce),
-        'min_ce': float(min_ce),
-        'max_ce': float(max_ce),
-        'first_cycle_ce': float(first_cycle_ce),
-        'first_cycle_loss': float(first_cycle_loss),
-        'ce_stability': float(ce_stability),
-        'trend': {
-            'has_trend': has_trend,
-            'direction': trend_direction,
-            'slope': float(slope) if slope is not None else None,
-            'r_squared': float(r_value ** 2) if r_value is not None else None,
-            'p_value': float(p_value) if p_value is not None else None
+        "cycle_count": len(test.cycles),
+        "average_ce": float(avg_ce),
+        "std_deviation": float(std_ce),
+        "min_ce": float(min_ce),
+        "max_ce": float(max_ce),
+        "first_cycle_ce": float(first_cycle_ce),
+        "first_cycle_loss": float(first_cycle_loss),
+        "ce_stability": float(ce_stability),
+        "trend": {
+            "has_trend": has_trend,
+            "direction": trend_direction,
+            "slope": float(slope) if slope is not None else None,
+            "r_squared": float(r_value**2) if r_value is not None else None,
+            "p_value": float(p_value) if p_value is not None else None,
         },
-        'ce_deficit': float(avg_ce_deficit),
-        'projected_retention': {
-            '100_cycles': float(projected_retention_100),
-            '500_cycles': float(projected_retention_500),
-            '1000_cycles': float(projected_retention_1000)
-        }
+        "ce_deficit": float(avg_ce_deficit),
+        "projected_retention": {
+            "100_cycles": float(projected_retention_100),
+            "500_cycles": float(projected_retention_500),
+            "1000_cycles": float(projected_retention_1000),
+        },
     }
 
 
@@ -831,14 +892,16 @@ def energy_analysis(test_id):
     energy_efficiency = []
 
     for cycle in test.cycles:
-        if hasattr(cycle, 'discharge_energy') and cycle.discharge_energy is not None:
+        if hasattr(cycle, "discharge_energy") and cycle.discharge_energy is not None:
             discharge_energy.append(cycle.discharge_energy)
         else:
             # Estimate from capacity if energy not directly available
             # Assuming average voltage of 3.7V for Li-ion
-            discharge_energy.append(cycle.discharge_capacity * 3.7 / 1000)  # Convert to Wh
+            discharge_energy.append(
+                cycle.discharge_capacity * 3.7 / 1000
+            )  # Convert to Wh
 
-        if hasattr(cycle, 'energy_efficiency') and cycle.energy_efficiency is not None:
+        if hasattr(cycle, "energy_efficiency") and cycle.energy_efficiency is not None:
             energy_efficiency.append(cycle.energy_efficiency)
         else:
             # Estimate from coulombic efficiency if energy efficiency not available
@@ -849,7 +912,11 @@ def energy_analysis(test_id):
     if discharge_energy:
         initial_discharge_energy = discharge_energy[0]
         final_discharge_energy = discharge_energy[-1]
-        energy_retention = final_discharge_energy / initial_discharge_energy if initial_discharge_energy > 0 else None
+        energy_retention = (
+            final_discharge_energy / initial_discharge_energy
+            if initial_discharge_energy > 0
+            else None
+        )
 
         # Calculate energy fade rate (%/cycle) if we have multiple cycles
         if len(test.cycles) > 1 and energy_retention is not None:
@@ -858,7 +925,9 @@ def energy_analysis(test_id):
         else:
             energy_fade_rate = None
     else:
-        initial_discharge_energy = final_discharge_energy = energy_retention = energy_fade_rate = None
+        initial_discharge_energy = final_discharge_energy = energy_retention = (
+            energy_fade_rate
+        ) = None
 
     # Calculate average energy efficiency
     avg_energy_efficiency = np.mean(energy_efficiency) if energy_efficiency else None
@@ -867,42 +936,48 @@ def energy_analysis(test_id):
     energy_density = {}
     sample = test.sample
 
-    if hasattr(sample, 'mass') and sample.mass and sample.mass > 0:
-        gravimetric_energy_density = initial_discharge_energy / (
-                    sample.mass / 1000) if initial_discharge_energy else None
-        energy_density['gravimetric'] = gravimetric_energy_density
+    if hasattr(sample, "mass") and sample.mass and sample.mass > 0:
+        gravimetric_energy_density = (
+            initial_discharge_energy / (sample.mass / 1000)
+            if initial_discharge_energy
+            else None
+        )
+        energy_density["gravimetric"] = gravimetric_energy_density
 
-    if hasattr(sample, 'volume') and sample.volume and sample.volume > 0:
-        volumetric_energy_density = initial_discharge_energy / (
-                    sample.volume / 1000) if initial_discharge_energy else None
-        energy_density['volumetric'] = volumetric_energy_density
+    if hasattr(sample, "volume") and sample.volume and sample.volume > 0:
+        volumetric_energy_density = (
+            initial_discharge_energy / (sample.volume / 1000)
+            if initial_discharge_energy
+            else None
+        )
+        energy_density["volumetric"] = volumetric_energy_density
 
     # Build result dictionary
     result = {
-        'initial_discharge_energy': initial_discharge_energy,
-        'final_discharge_energy': final_discharge_energy,
-        'energy_retention': energy_retention,
-        'energy_fade_rate_pct_per_cycle': energy_fade_rate,
-        'avg_energy_efficiency': avg_energy_efficiency,
-        'energy_density': energy_density
+        "initial_discharge_energy": initial_discharge_energy,
+        "final_discharge_energy": final_discharge_energy,
+        "energy_retention": energy_retention,
+        "energy_fade_rate_pct_per_cycle": energy_fade_rate,
+        "avg_energy_efficiency": avg_energy_efficiency,
+        "energy_density": energy_density,
     }
 
     # If we have charge energy data, add it
     charge_energy = []
     for cycle in test.cycles:
-        if hasattr(cycle, 'charge_energy') and cycle.charge_energy is not None:
+        if hasattr(cycle, "charge_energy") and cycle.charge_energy is not None:
             charge_energy.append(cycle.charge_energy)
 
     if charge_energy:
-        result['initial_charge_energy'] = charge_energy[0]
-        result['final_charge_energy'] = charge_energy[-1]
-        result['avg_charge_energy'] = np.mean(charge_energy)
-        result['avg_discharge_energy'] = np.mean(discharge_energy)
+        result["initial_charge_energy"] = charge_energy[0]
+        result["final_charge_energy"] = charge_energy[-1]
+        result["avg_charge_energy"] = np.mean(charge_energy)
+        result["avg_discharge_energy"] = np.mean(discharge_energy)
 
     return result
 
 
-def detect_anomalies(test_id, metric='discharge_capacity', n_sigma=3.0):
+def detect_anomalies(test_id, metric="discharge_capacity", n_sigma=3.0):
     """
     Detect anomalous cycles in a test result.
 
@@ -922,11 +997,11 @@ def detect_anomalies(test_id, metric='discharge_capacity', n_sigma=3.0):
     cycle_nums = [c.cycle_index for c in test.cycles]
 
     # Get metric values
-    if metric == 'discharge_capacity':
+    if metric == "discharge_capacity":
         values = [c.discharge_capacity for c in test.cycles]
-    elif metric == 'charge_capacity':
+    elif metric == "charge_capacity":
         values = [c.charge_capacity for c in test.cycles]
-    elif metric == 'coulombic_efficiency':
+    elif metric == "coulombic_efficiency":
         values = [c.coulombic_efficiency for c in test.cycles]
     elif hasattr(test.cycles[0], metric):
         values = [getattr(c, metric) for c in test.cycles if hasattr(c, metric)]
@@ -948,16 +1023,15 @@ def detect_anomalies(test_id, metric='discharge_capacity', n_sigma=3.0):
 
     for i, (cycle, value, z) in enumerate(zip(cycle_nums, values, z_scores)):
         if z > n_sigma:
-            anomalies_zscore.append({
-                'cycle': cycle,
-                'value': value,
-                'z_score': z,
-                'index': i
-            })
+            anomalies_zscore.append(
+                {"cycle": cycle, "value": value, "z_score": z, "index": i}
+            )
 
     # 2. Moving average method (detect sudden jumps)
     window_size = min(5, len(values) // 10 + 1)  # Adaptive window size
-    moving_avg = np.convolve(values_array, np.ones(window_size) / window_size, mode='valid')
+    moving_avg = np.convolve(
+        values_array, np.ones(window_size) / window_size, mode="valid"
+    )
 
     # Calculate % difference from moving average
     diffs = []
@@ -977,51 +1051,57 @@ def detect_anomalies(test_id, metric='discharge_capacity', n_sigma=3.0):
     for i, diff in enumerate(diffs):
         if abs(diff) > diff_threshold:
             original_idx = i + window_size - 1
-            anomalies_mavg.append({
-                'cycle': cycle_nums[original_idx],
-                'value': values[original_idx],
-                'difference_pct': diff,
-                'index': original_idx
-            })
+            anomalies_mavg.append(
+                {
+                    "cycle": cycle_nums[original_idx],
+                    "value": values[original_idx],
+                    "difference_pct": diff,
+                    "index": original_idx,
+                }
+            )
 
     # Combine anomalies from both methods (avoiding duplicates)
     combined_anomaly_indices = set()
     anomalies_combined = []
 
     for anomaly in anomalies_zscore:
-        combined_anomaly_indices.add(anomaly['index'])
-        anomalies_combined.append({
-            'cycle': anomaly['cycle'],
-            'value': anomaly['value'],
-            'detection_method': 'z-score',
-            'significance': anomaly['z_score']
-        })
+        combined_anomaly_indices.add(anomaly["index"])
+        anomalies_combined.append(
+            {
+                "cycle": anomaly["cycle"],
+                "value": anomaly["value"],
+                "detection_method": "z-score",
+                "significance": anomaly["z_score"],
+            }
+        )
 
     for anomaly in anomalies_mavg:
-        if anomaly['index'] not in combined_anomaly_indices:
-            combined_anomaly_indices.add(anomaly['index'])
-            anomalies_combined.append({
-                'cycle': anomaly['cycle'],
-                'value': anomaly['value'],
-                'detection_method': 'moving_average',
-                'significance': abs(anomaly['difference_pct'])
-            })
+        if anomaly["index"] not in combined_anomaly_indices:
+            combined_anomaly_indices.add(anomaly["index"])
+            anomalies_combined.append(
+                {
+                    "cycle": anomaly["cycle"],
+                    "value": anomaly["value"],
+                    "detection_method": "moving_average",
+                    "significance": abs(anomaly["difference_pct"]),
+                }
+            )
 
     # Return results
     return {
-        'test_id': str(test_id),
-        'metric_analyzed': metric,
-        'normal_range': {
-            'mean': float(mean),
-            'std_dev': float(std),
-            'threshold': float(n_sigma * std)
+        "test_id": str(test_id),
+        "metric_analyzed": metric,
+        "normal_range": {
+            "mean": float(mean),
+            "std_dev": float(std),
+            "threshold": float(n_sigma * std),
         },
-        'anomaly_count': len(anomalies_combined),
-        'anomalies': sorted(anomalies_combined, key=lambda x: x['cycle'])
+        "anomaly_count": len(anomalies_combined),
+        "anomalies": sorted(anomalies_combined, key=lambda x: x["cycle"]),
     }
 
 
-def cluster_tests(test_ids, metrics=None, method='hierarchical', n_clusters=None):
+def cluster_tests(test_ids, metrics=None, method="hierarchical", n_clusters=None):
     """
     Cluster tests based on their performance metrics.
 
@@ -1035,14 +1115,19 @@ def cluster_tests(test_ids, metrics=None, method='hierarchical', n_clusters=None
         dict: Clustering results including cluster assignments for each test
     """
     if metrics is None:
-        metrics = ['initial_capacity', 'final_capacity', 'capacity_retention',
-                   'avg_coulombic_eff', 'cycle_count']
+        metrics = [
+            "initial_capacity",
+            "final_capacity",
+            "capacity_retention",
+            "avg_coulombic_eff",
+            "cycle_count",
+        ]
 
     # First perform PCA to reduce dimensionality
     pca_result = pca_analysis(test_ids, metrics)
 
     # Get principal components
-    principal_components = pca_result.get('principal_components', [])
+    principal_components = pca_result.get("principal_components", [])
 
     # If no PCA components in results, create artificial x,y coordinates
     if not principal_components or len(principal_components) < 1:
@@ -1050,14 +1135,14 @@ def cluster_tests(test_ids, metrics=None, method='hierarchical', n_clusters=None
         x_coords = []
         y_coords = []
 
-        for i, test in enumerate(pca_result['tests']):
+        for i, test in enumerate(pca_result["tests"]):
             x_coords.append(i % 5)  # Arbitrary distribution
             y_coords.append(i // 5)
 
         principal_components = list(zip(x_coords, y_coords))
 
     # Get test info
-    test_info = pca_result['tests']
+    test_info = pca_result["tests"]
 
     # Determine number of clusters if not specified
     if n_clusters is None:
@@ -1065,36 +1150,37 @@ def cluster_tests(test_ids, metrics=None, method='hierarchical', n_clusters=None
         n_clusters = max(2, min(5, len(test_ids) // 3))
 
     # Perform clustering
-    if method == 'hierarchical':
+    if method == "hierarchical":
         # Compute distance matrix
         dist_matrix = hierarchy.distance.pdist(principal_components)
-        Z = hierarchy.linkage(dist_matrix, 'ward')
+        Z = hierarchy.linkage(dist_matrix, "ward")
 
         # Get cluster assignments
-        cluster_labels = hierarchy.fcluster(Z, n_clusters, criterion='maxclust')
+        cluster_labels = hierarchy.fcluster(Z, n_clusters, criterion="maxclust")
     else:  # kmeans
         from sklearn.cluster import KMeans
+
         kmeans = KMeans(n_clusters=n_clusters, random_state=42)
         cluster_labels = kmeans.fit_predict(principal_components)
 
     # Assign cluster labels to test info
     for i, label in enumerate(cluster_labels):
         if i < len(test_info):
-            test_info[i]['cluster'] = int(label)
+            test_info[i]["cluster"] = int(label)
 
     # Group tests by cluster
     clusters = {}
     for i in range(1, n_clusters + 1):
-        clusters[str(i)] = [test for test in test_info if test.get('cluster') == i]
+        clusters[str(i)] = [test for test in test_info if test.get("cluster") == i]
 
     # Create result
     result = {
-        'method': method,
-        'n_clusters': n_clusters,
-        'metrics_used': metrics,
-        'clusters': clusters,
-        'tests': test_info,
-        'principal_components': principal_components
+        "method": method,
+        "n_clusters": n_clusters,
+        "metrics_used": metrics,
+        "clusters": clusters,
+        "tests": test_info,
+        "principal_components": principal_components,
     }
 
     return result
@@ -1112,8 +1198,13 @@ def pca_analysis(test_ids, metrics=None):
         dict: PCA results including principal components and explained variance
     """
     if metrics is None:
-        metrics = ['initial_capacity', 'final_capacity', 'capacity_retention',
-                   'avg_coulombic_eff', 'cycle_count']
+        metrics = [
+            "initial_capacity",
+            "final_capacity",
+            "capacity_retention",
+            "avg_coulombic_eff",
+            "cycle_count",
+        ]
 
     # Get test results
     tests = []
@@ -1144,11 +1235,13 @@ def pca_analysis(test_ids, metrics=None):
                 test_features.append(0.0)  # Metric not available
 
         features.append(test_features)
-        test_info.append({
-            'test_id': str(test.id),
-            'test_name': test.name,
-            'sample_name': utils.get_sample_name(test.sample)
-        })
+        test_info.append(
+            {
+                "test_id": str(test.id),
+                "test_name": test.name,
+                "sample_name": utils.get_sample_name(test.sample),
+            }
+        )
 
     # Convert to numpy array
     X = np.array(features)
@@ -1163,12 +1256,12 @@ def pca_analysis(test_ids, metrics=None):
 
     # Create result
     result = {
-        'metrics': metrics,
-        'explained_variance_ratio': pca.explained_variance_ratio_.tolist(),
-        'cumulative_variance': np.cumsum(pca.explained_variance_ratio_).tolist(),
-        'component_matrix': pca.components_.tolist(),
-        'principal_components': principal_components.tolist(),
-        'tests': test_info
+        "metrics": metrics,
+        "explained_variance_ratio": pca.explained_variance_ratio_.tolist(),
+        "cumulative_variance": np.cumsum(pca.explained_variance_ratio_).tolist(),
+        "component_matrix": pca.components_.tolist(),
+        "principal_components": principal_components.tolist(),
+        "tests": test_info,
     }
 
     return result
@@ -1187,8 +1280,13 @@ def find_similar_tests(test_id, metrics=None, max_results=5):
         list: Ranked list of similar tests with similarity scores
     """
     if metrics is None:
-        metrics = ['initial_capacity', 'final_capacity', 'capacity_retention',
-                   'avg_coulombic_eff', 'cycle_count']
+        metrics = [
+            "initial_capacity",
+            "final_capacity",
+            "capacity_retention",
+            "avg_coulombic_eff",
+            "cycle_count",
+        ]
 
     # Get reference test
     reference_test = models.TestResult.objects(id=test_id).first()
@@ -1250,17 +1348,19 @@ def find_similar_tests(test_id, metrics=None, max_results=5):
             # Combine similarities (weighted average)
             similarity = 0.7 * cosine_sim + 0.3 * euclidean_sim
 
-            similarities.append({
-                'test_id': str(test.id),
-                'test_name': test.name,
-                'sample_name': utils.get_sample_name(test.sample),
-                'similarity': float(similarity),
-                'cosine_similarity': float(cosine_sim),
-                'euclidean_similarity': float(euclidean_sim)
-            })
+            similarities.append(
+                {
+                    "test_id": str(test.id),
+                    "test_name": test.name,
+                    "sample_name": utils.get_sample_name(test.sample),
+                    "similarity": float(similarity),
+                    "cosine_similarity": float(cosine_sim),
+                    "euclidean_similarity": float(euclidean_sim),
+                }
+            )
 
     # Sort by similarity (descending)
-    similarities.sort(key=lambda x: x['similarity'], reverse=True)
+    similarities.sort(key=lambda x: x["similarity"], reverse=True)
 
     # Return top matches
     return similarities[:max_results]
@@ -1294,10 +1394,10 @@ def get_cycle_voltage_capacity_data(test_id, cycle_number):
 
     # Check if detailed data is available
     has_detailed_data = (
-            hasattr(cycle, 'voltage_charge') and
-            hasattr(cycle, 'capacity_charge') and
-            hasattr(cycle, 'voltage_discharge') and
-            hasattr(cycle, 'capacity_discharge')
+        hasattr(cycle, "voltage_charge")
+        and hasattr(cycle, "capacity_charge")
+        and hasattr(cycle, "voltage_discharge")
+        and hasattr(cycle, "capacity_discharge")
     )
 
     if not has_detailed_data or not cycle.voltage_charge:
@@ -1305,18 +1405,20 @@ def get_cycle_voltage_capacity_data(test_id, cycle_number):
 
     # Return the detailed data
     return {
-        'charge': {
-            'voltage': cycle.voltage_charge,
-            'current': cycle.current_charge if hasattr(cycle, 'current_charge') else [],
-            'capacity': cycle.capacity_charge,
-            'time': cycle.time_charge if hasattr(cycle, 'time_charge') else []
+        "charge": {
+            "voltage": cycle.voltage_charge,
+            "current": cycle.current_charge if hasattr(cycle, "current_charge") else [],
+            "capacity": cycle.capacity_charge,
+            "time": cycle.time_charge if hasattr(cycle, "time_charge") else [],
         },
-        'discharge': {
-            'voltage': cycle.voltage_discharge,
-            'current': cycle.current_discharge if hasattr(cycle, 'current_discharge') else [],
-            'capacity': cycle.capacity_discharge,
-            'time': cycle.time_discharge if hasattr(cycle, 'time_discharge') else []
-        }
+        "discharge": {
+            "voltage": cycle.voltage_discharge,
+            "current": (
+                cycle.current_discharge if hasattr(cycle, "current_discharge") else []
+            ),
+            "capacity": cycle.capacity_discharge,
+            "time": cycle.time_discharge if hasattr(cycle, "time_discharge") else [],
+        },
     }
 
 
@@ -1331,7 +1433,6 @@ def plot_cycle_voltage_capacity(test_id, cycle_number, chemistry=None):
     Returns:
         matplotlib.figure.Figure: The generated figure
     """
-    import matplotlib.pyplot as plt
 
     # Get the cycle data
     cycle_data = get_cycle_voltage_capacity_data(test_id, cycle_number)
@@ -1346,27 +1447,27 @@ def plot_cycle_voltage_capacity(test_id, cycle_number, chemistry=None):
     fig, ax = plt.subplots(figsize=(10, 6))
 
     # Plot charge data
-    if cycle_data['charge']['voltage'] and cycle_data['charge']['capacity']:
+    if cycle_data["charge"]["voltage"] and cycle_data["charge"]["capacity"]:
         ax.plot(
-            cycle_data['charge']['capacity'],
-            cycle_data['charge']['voltage'],
-            'b-',
-            label=label
+            cycle_data["charge"]["capacity"],
+            cycle_data["charge"]["voltage"],
+            "b-",
+            label=label,
         )
 
     # Plot discharge data
-    if cycle_data['discharge']['voltage'] and cycle_data['discharge']['capacity']:
+    if cycle_data["discharge"]["voltage"] and cycle_data["discharge"]["capacity"]:
         ax.plot(
-            cycle_data['discharge']['capacity'],
-            cycle_data['discharge']['voltage'],
-            'r-',
-            label=None
+            cycle_data["discharge"]["capacity"],
+            cycle_data["discharge"]["voltage"],
+            "r-",
+            label=None,
         )
 
     # Set labels and title
-    ax.set_xlabel('Capacity (mAh)')
-    ax.set_ylabel('Voltage (V)')
-    ax.set_title(f'Voltage vs. Capacity - Cycle {cycle_number}')
+    ax.set_xlabel("Capacity (mAh)")
+    ax.set_ylabel("Voltage (V)")
+    ax.set_title(f"Voltage vs. Capacity - Cycle {cycle_number}")
     ax.grid(True)
     ax.legend()
 
@@ -1391,12 +1492,12 @@ def calculate_differential_capacity(test_id, cycle_number, smoothing=True):
     # Get the cycle data
     cycle_data = get_cycle_voltage_capacity_data(test_id, cycle_number)
 
-    result = {'charge': {}, 'discharge': {}}
+    result = {"charge": {}, "discharge": {}}
 
     # Process charge data
-    if cycle_data['charge']['voltage'] and cycle_data['charge']['capacity']:
-        v = np.array(cycle_data['charge']['voltage'])
-        q = np.array(cycle_data['charge']['capacity'])
+    if cycle_data["charge"]["voltage"] and cycle_data["charge"]["capacity"]:
+        v = np.array(cycle_data["charge"]["voltage"])
+        q = np.array(cycle_data["charge"]["capacity"])
 
         # Sort by voltage (increasing)
         sort_idx = np.argsort(v)
@@ -1420,20 +1521,20 @@ def calculate_differential_capacity(test_id, cycle_number, smoothing=True):
                 window = min(11, len(dqdv) - 2 if len(dqdv) % 2 == 0 else len(dqdv) - 1)
                 window = max(3, window - 1 if window % 2 == 0 else window)
                 dqdv_smooth = savgol_filter(dqdv, window, 1)
-                result['charge'] = {
-                    'voltage': v_centers.tolist(),
-                    'dqdv': dqdv_smooth.tolist()
+                result["charge"] = {
+                    "voltage": v_centers.tolist(),
+                    "dqdv": dqdv_smooth.tolist(),
                 }
             else:
-                result['charge'] = {
-                    'voltage': v_centers.tolist(),
-                    'dqdv': dqdv.tolist()
+                result["charge"] = {
+                    "voltage": v_centers.tolist(),
+                    "dqdv": dqdv.tolist(),
                 }
 
     # Process discharge data
-    if cycle_data['discharge']['voltage'] and cycle_data['discharge']['capacity']:
-        v = np.array(cycle_data['discharge']['voltage'])
-        q = np.array(cycle_data['discharge']['capacity'])
+    if cycle_data["discharge"]["voltage"] and cycle_data["discharge"]["capacity"]:
+        v = np.array(cycle_data["discharge"]["voltage"])
+        q = np.array(cycle_data["discharge"]["capacity"])
 
         # Sort by voltage (decreasing for discharge)
         sort_idx = np.argsort(v)[::-1]
@@ -1457,19 +1558,17 @@ def calculate_differential_capacity(test_id, cycle_number, smoothing=True):
                 window = min(11, len(dqdv) - 2 if len(dqdv) % 2 == 0 else len(dqdv) - 1)
                 window = max(3, window - 1 if window % 2 == 0 else window)
                 dqdv_smooth = savgol_filter(dqdv, window, 1)
-                result['discharge'] = {
-                    'voltage': v_centers.tolist(),
-                    'dqdv': dqdv_smooth.tolist()
+                result["discharge"] = {
+                    "voltage": v_centers.tolist(),
+                    "dqdv": dqdv_smooth.tolist(),
                 }
             else:
-                result['discharge'] = {
-                    'voltage': v_centers.tolist(),
-                    'dqdv': dqdv.tolist()
+                result["discharge"] = {
+                    "voltage": v_centers.tolist(),
+                    "dqdv": dqdv.tolist(),
                 }
 
     return result
-
-
 
 
 def compute_dqdv(capacity, voltage, *, smooth=True, window_size=11, polyorder=3):
@@ -1502,9 +1601,10 @@ def compute_dqdv(capacity, voltage, *, smooth=True, window_size=11, polyorder=3)
         If fewer than three valid (non-NaN) points remain.
     """
     from scipy.signal import savgol_filter
+
     # -- 1. to numpy + drop NaNs with a single mask -------------------------
     capacity = np.asarray(capacity, dtype=float)
-    voltage  = np.asarray(voltage, dtype=float)
+    voltage = np.asarray(voltage, dtype=float)
 
     mask = (~np.isnan(capacity)) & (~np.isnan(voltage))
     capacity, voltage = capacity[mask], voltage[mask]
@@ -1531,7 +1631,7 @@ def compute_dqdv(capacity, voltage, *, smooth=True, window_size=11, polyorder=3)
             window_size += 1
         if window_size > dqdv.size:
             window_size = dqdv.size if dqdv.size % 2 else dqdv.size - 1
-        if window_size >= polyorder + 2:       # SG requirement
+        if window_size >= polyorder + 2:  # SG requirement
             dqdv = savgol_filter(dqdv, window_size, polyorder)
 
     return v_mid, dqdv
@@ -1539,7 +1639,10 @@ def compute_dqdv(capacity, voltage, *, smooth=True, window_size=11, polyorder=3)
 
 # Append new function for Josh_request_Dq_dv
 
-def josh_request_dq_dv(file_path: str, sheet_name: str = "Channel51_1", mass_g: float = 0.0015) -> pd.DataFrame:
+
+def josh_request_dq_dv(
+    file_path: str, sheet_name: str = "Channel51_1", mass_g: float = 0.0015
+) -> pd.DataFrame:
     """Return smoothed dQ/dV DataFrame for the first cycle of *sheet_name*.
 
     Parameters
@@ -1559,7 +1662,9 @@ def josh_request_dq_dv(file_path: str, sheet_name: str = "Channel51_1", mass_g: 
     """
     raw = pd.read_excel(file_path, sheet_name=sheet_name, header=None, nrows=20)
     hdr = next(
-        i for i, row in raw.iterrows() if row.astype(str).str.contains("Cycle Index").any()
+        i
+        for i, row in raw.iterrows()
+        if row.astype(str).str.contains("Cycle Index").any()
     )
     df = pd.read_excel(file_path, sheet_name=sheet_name, header=hdr)
     df.columns = df.columns.str.strip()
@@ -1576,4 +1681,3 @@ def josh_request_dq_dv(file_path: str, sheet_name: str = "Channel51_1", mass_g: 
     dfdq["dQdV_sm"] = dfdq["dQdV"].rolling(51, center=True, min_periods=1).mean()
     dfdq["dQdV_sm"] = np.clip(dfdq["dQdV_sm"], 0, None)
     return dfdq[["V", "dQdV_sm"]]
-

@@ -12,7 +12,13 @@ try:  # pragma: no cover - optional dependency
 except Exception:  # pragma: no cover - gracefully handle missing seaborn
     sns = None
 
-from . import models, utils
+try:
+    from . import models, utils
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
+
+    models = importlib.import_module("models")
+    utils = importlib.import_module("utils")
 
 
 _valid_metrics = [

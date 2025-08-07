@@ -1,6 +1,11 @@
 """Entry point to run the dashboard with ``python -m dashboard``."""
 
-from . import create_app
+try:
+    from . import create_app
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
+
+    create_app = importlib.import_module("app").create_app
 
 
 def main() -> None:

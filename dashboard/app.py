@@ -9,21 +9,36 @@ import base64
 
 from battery_analysis.parsers import parse_file
 
-from . import cell_flagger
+try:
+    from . import cell_flagger
+    from . import data_access
+    from . import layout as layout_components
+    from . import (
+        trait_filter_tab,
+        advanced_analysis_tab,
+        cycle_detail_tab,
+        eis_tab,
+        comparison_tab,
+        document_flow_tab,
+        missing_data_tab,
+    )
+    from . import auth
+    from . import preferences
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
 
-from . import data_access
-from . import layout as layout_components
-from . import (
-    trait_filter_tab,
-    advanced_analysis_tab,
-    cycle_detail_tab,
-    eis_tab,
-    comparison_tab,
-    document_flow_tab,
-    missing_data_tab,
-)
-from . import auth
-from . import preferences
+    cell_flagger = importlib.import_module("cell_flagger")
+    data_access = importlib.import_module("data_access")
+    layout_components = importlib.import_module("layout")
+    trait_filter_tab = importlib.import_module("trait_filter_tab")
+    advanced_analysis_tab = importlib.import_module("advanced_analysis_tab")
+    cycle_detail_tab = importlib.import_module("cycle_detail_tab")
+    eis_tab = importlib.import_module("eis_tab")
+    comparison_tab = importlib.import_module("comparison_tab")
+    document_flow_tab = importlib.import_module("document_flow_tab")
+    missing_data_tab = importlib.import_module("missing_data_tab")
+    auth = importlib.import_module("auth")
+    preferences = importlib.import_module("preferences")
 
 
 def create_app(test_role: str | None = None) -> dash.Dash:
