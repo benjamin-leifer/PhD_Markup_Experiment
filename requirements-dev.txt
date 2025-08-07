@@ -1,7 +1,6 @@
 pytest>=6.0.0
 pytest-cov>=2.12.0
 black>=21.5b2
-flake8>=3.9.2
 mongomock>=4.1.2
 dash[testing]>=3.0
 dash-bootstrap-components>=2.0
@@ -12,3 +11,4 @@ openpyxl>=3.0
 reportlab>=3.5
 pre-commit>=3.0
 ruff>=0.1.0
+
