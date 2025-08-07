@@ -101,7 +101,7 @@ class MissingDataTab(ttk.Frame):
                 name = ent.get().strip()
                 if not name:
                     continue
-                comp = models.Sample.objects(name=name).first()
+                comp = models.Sample.get_by_name(name)
                 if not comp:
                     comp = models.Sample(name=name)
                     comp.save()
@@ -141,7 +141,7 @@ class MissingDataTab(ttk.Frame):
             if not name:
                 messagebox.showerror("Error", "Sample name required")
                 return
-            sample = models.Sample.objects(name=name).first()
+            sample = models.Sample.get_by_name(name)
             if not sample:
                 sample = models.Sample(name=name)
                 sample.save()

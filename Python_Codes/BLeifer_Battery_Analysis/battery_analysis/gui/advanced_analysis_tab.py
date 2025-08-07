@@ -12,10 +12,8 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from battery_analysis.gui.custom_toolbar import CustomToolbar
 from battery_analysis.utils import popout_figure
 import numpy as np
-import pandas as pd
 import threading
 import logging
-import os
 
 from battery_analysis import models
 from battery_analysis import advanced_analysis
@@ -218,7 +216,7 @@ class AdvancedAnalysisTab(ttk.Frame):
 
         try:
             # Get the sample from the database
-            sample = models.Sample.objects(name=sample_name).first()
+            sample = models.Sample.get_by_name(sample_name)
 
             if not sample:
                 messagebox.showerror(
@@ -745,7 +743,7 @@ class AdvancedAnalysisTab(ttk.Frame):
 
         # Peak information
         self.results_text.insert(
-            tk.END, f"Detected Peaks (Phase Transitions)\n", "heading"
+            tk.END, "Detected Peaks (Phase Transitions)\n", "heading"
         )
 
         if len(peaks) == 0:
@@ -766,7 +764,7 @@ class AdvancedAnalysisTab(ttk.Frame):
         v_min = min(self.current_dqdv_data["voltage"])
         v_max = max(self.current_dqdv_data["voltage"])
 
-        self.results_text.insert(tk.END, f"Voltage Range\n", "heading")
+        self.results_text.insert(tk.END, "Voltage Range\n", "heading")
         self.results_text.insert(tk.END, f"Min: {v_min:.3f} V\n")
         self.results_text.insert(tk.END, f"Max: {v_max:.3f} V\n")
         self.results_text.insert(tk.END, f"Range: {v_max - v_min:.3f} V\n\n")
@@ -775,7 +773,7 @@ class AdvancedAnalysisTab(ttk.Frame):
         c_min = min(self.current_dqdv_data["capacity"])
         c_max = max(self.current_dqdv_data["capacity"])
 
-        self.results_text.insert(tk.END, f"Capacity Range\n", "heading")
+        self.results_text.insert(tk.END, "Capacity Range\n", "heading")
         self.results_text.insert(tk.END, f"Min: {c_min:.3f} mAh\n")
         self.results_text.insert(tk.END, f"Max: {c_max:.3f} mAh\n")
         self.results_text.insert(tk.END, f"Range: {c_max - c_min:.3f} mAh\n\n")
@@ -846,7 +844,7 @@ class AdvancedAnalysisTab(ttk.Frame):
             # Switch to the plot tab
             self.notebook.select(0)
 
-            self.main_app.log_message(f"Capacity fade analysis complete")
+            self.main_app.log_message("Capacity fade analysis complete")
 
         except Exception as e:
             self.main_app.log_message(
@@ -1133,7 +1131,7 @@ class AdvancedAnalysisTab(ttk.Frame):
             if eol <= completed:
                 self.results_text.insert(
                     tk.END,
-                    f"Cell has already reached end-of-life criterion (80% capacity).\n",
+                    "Cell has already reached end-of-life criterion (80% capacity).\n",
                 )
             else:
                 self.results_text.insert(
@@ -1200,7 +1198,7 @@ class AdvancedAnalysisTab(ttk.Frame):
             # Switch to the plot tab
             self.notebook.select(0)
 
-            self.main_app.log_message(f"Anomaly detection complete")
+            self.main_app.log_message("Anomaly detection complete")
 
         except Exception as e:
             self.main_app.log_message(
@@ -1358,7 +1356,7 @@ class AdvancedAnalysisTab(ttk.Frame):
             self.results_text.insert(
                 tk.END,
                 f"No anomalies detected in the {metric_name.lower()} data. "
-                + f"The cell shows consistent behavior throughout cycling.\n",
+                + "The cell shows consistent behavior throughout cycling.\n",
             )
         else:
             # Group anomalies by method
@@ -1377,14 +1375,14 @@ class AdvancedAnalysisTab(ttk.Frame):
                 self.results_text.insert(
                     tk.END,
                     f"Found {len(z_score_anomalies)} statistical outliers using z-score method. "
-                    + f"These are cycles that deviate significantly from the average behavior.\n\n",
+                    + "These are cycles that deviate significantly from the average behavior.\n\n",
                 )
 
             if mavg_anomalies:
                 self.results_text.insert(
                     tk.END,
                     f"Found {len(mavg_anomalies)} anomalies using moving average method. "
-                    + f"These represent sudden changes in performance compared to recent cycles.\n\n",
+                    + "These represent sudden changes in performance compared to recent cycles.\n\n",
                 )
 
             # Potential causes
@@ -1482,7 +1480,7 @@ class AdvancedAnalysisTab(ttk.Frame):
             # Switch to the plot tab
             self.notebook.select(0)
 
-            self.main_app.log_message(f"Energy analysis complete")
+            self.main_app.log_message("Energy analysis complete")
 
         except Exception as e:
             self.main_app.log_message(
@@ -1790,7 +1788,7 @@ class AdvancedAnalysisTab(ttk.Frame):
             # Switch to the plot tab
             self.notebook.select(0)
 
-            self.main_app.log_message(f"Clustering analysis complete")
+            self.main_app.log_message("Clustering analysis complete")
 
         except Exception as e:
             self.main_app.log_message(

@@ -433,7 +433,7 @@ class PyBAMMTab(ttk.Frame):
 
         try:
             # Get the sample from the database
-            sample = models.Sample.objects(name=sample_name).first()
+            sample = models.Sample.get_by_name(sample_name)
 
             if not sample:
                 messagebox.showerror(

@@ -39,7 +39,12 @@ class Sample(Document):
     avg_energy_efficiency = fields.FloatField(required=False)
     median_internal_resistance = fields.FloatField(required=False)
 
-    meta = {"collection": "samples"}
+    meta = {"collection": "samples", "indexes": ["name"]}
+
+    @classmethod
+    def get_by_name(cls, name: str):
+        """Return the sample with the given name or ``None`` if not found."""
+        return cls.objects(name=name).first()
 
     def clean(self):
         self.updated_at = datetime.datetime.utcnow()
