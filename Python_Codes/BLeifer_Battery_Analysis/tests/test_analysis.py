@@ -5,19 +5,30 @@ import sys
 
 # Add the package root to sys.path so ``battery_analysis`` can be imported
 TESTS_DIR = os.path.dirname(__file__)
-PACKAGE_ROOT = os.path.abspath(os.path.join(TESTS_DIR, '..'))
+PACKAGE_ROOT = os.path.abspath(os.path.join(TESTS_DIR, ".."))
 if PACKAGE_ROOT not in sys.path:
     sys.path.insert(0, PACKAGE_ROOT)
 
-from battery_analysis import analysis
-from mongoengine import connect, disconnect
-import mongomock
+from battery_analysis import analysis  # noqa: E402
+from mongoengine import connect, disconnect  # noqa: E402
+import mongomock  # noqa: E402
+
 
 def test_compute_metrics():
     # Create a dummy cycles summary list for testing
     cycles = [
-        {"cycle_index": 1, "charge_capacity": 1.0, "discharge_capacity": 0.95, "coulombic_efficiency": 0.95},
-        {"cycle_index": 2, "charge_capacity": 1.0, "discharge_capacity": 0.90, "coulombic_efficiency": 0.90}
+        {
+            "cycle_index": 1,
+            "charge_capacity": 1.0,
+            "discharge_capacity": 0.95,
+            "coulombic_efficiency": 0.95,
+        },
+        {
+            "cycle_index": 2,
+            "charge_capacity": 1.0,
+            "discharge_capacity": 0.90,
+            "coulombic_efficiency": 0.90,
+        },
     ]
     metrics = analysis.compute_metrics(cycles)
     # There are 2 cycles
@@ -30,6 +41,7 @@ def test_compute_metrics():
     assert abs(metrics["capacity_retention"] - expected_retention) < 1e-6
     # Average CE = (0.95 + 0.90)/2
     assert abs(metrics["avg_coulombic_eff"] - 0.925) < 1e-6
+
 
 def test_inferred_property_propagation():
     # Here we simulate using the model layer (without actual DB for simplicity)
@@ -54,17 +66,19 @@ def test_inferred_property_propagation():
             self.avg_coulombic_eff = None
 
     sample = DummySample()
+
     # Normally, sample.save() and connecting to DB is needed, but for logic test we skip DB ops.
     # Create dummy TestResult objects (not saved to DB) and assign to sample
     class DummyTest:  # Simulate minimal interface of TestResult for this test
         def __init__(self, init_cap, final_cap):
             self.initial_capacity = init_cap
             self.final_capacity = final_cap
-            self.capacity_retention = final_cap/init_cap if init_cap else 0
+            self.capacity_retention = final_cap / init_cap if init_cap else 0
             self.avg_coulombic_eff = 0.0
+
     # Add two dummy tests with known values
-    t1 = DummyTest(1.0, 0.8)   # 80% retention
-    t2 = DummyTest(1.2, 1.0)   # ~83.3% retention
+    t1 = DummyTest(1.0, 0.8)  # 80% retention
+    t2 = DummyTest(1.2, 1.0)  # ~83.3% retention
     # Monkey-patch sample.tests to behave like ReferenceField list for analysis.update_sample_properties
     sample.tests.append(t1)
     sample.tests.append(t2)
@@ -74,7 +88,7 @@ def test_inferred_property_propagation():
     # Restore objects manager and clean up connection
     if original_manager is not None:
         TestResult.objects = original_manager
-    
+
     disconnect()
     # Now check that sample averages are correct:
     # avg_initial_capacity = (1.0 + 1.2) / 2 = 1.1
@@ -82,7 +96,7 @@ def test_inferred_property_propagation():
     # avg_final_capacity = (0.8 + 1.0) / 2 = 0.9
     assert abs(sample.avg_final_capacity - 0.9) < 1e-6
     # avg_capacity_retention = (0.8/1.0 + 1.0/1.2) / 2 = (0.8 + 0.8333)/2 ~ 0.8167
-    expected_avg_ret = ((0.8) + (1.0/1.2)) / 2
+    expected_avg_ret = ((0.8) + (1.0 / 1.2)) / 2
     assert abs(sample.avg_capacity_retention - expected_avg_ret) < 1e-6
 
 
@@ -90,21 +104,14 @@ def test_get_cycle_data_include_raw():
     """Ensure raw cycle arrays are returned when include_raw=True."""
     from battery_analysis import models
 
-    # Dummy cycle with detailed arrays
+    # Dummy cycle containing only summary metrics
     class DummyCycle:
         def __init__(self):
             self.cycle_index = 1
             self.charge_capacity = 1.0
             self.discharge_capacity = 0.9
             self.coulombic_efficiency = 0.9
-            self.voltage_charge = [3.6, 3.7]
-            self.current_charge = [0.1, 0.1]
-            self.capacity_charge = [0.0, 0.5]
-            self.time_charge = [0.0, 1.0]
-            self.voltage_discharge = [3.7, 3.6]
-            self.current_discharge = [-0.1, -0.1]
-            self.capacity_discharge = [0.5, 0.0]
-            self.time_discharge = [1.0, 2.0]
+            self.has_detailed_data = True
 
     class DummySample:
         def __init__(self):
@@ -143,14 +150,39 @@ def test_get_cycle_data_include_raw():
     original_manager = getattr(models.TestResult, "objects", None)
     models.TestResult.objects = DummyManager(dummy_test)
 
+    # Patch detailed data retrieval to return arrays
+    from battery_analysis.utils import detailed_data_manager
+
+    def fake_get_detailed_cycle_data(test_id, cycle_index):
+        return {
+            1: {
+                "charge": {
+                    "voltage": [3.6, 3.7],
+                    "current": [0.1, 0.1],
+                    "capacity": [0.0, 0.5],
+                    "time": [0.0, 1.0],
+                },
+                "discharge": {
+                    "voltage": [3.7, 3.6],
+                    "current": [-0.1, -0.1],
+                    "capacity": [0.5, 0.0],
+                    "time": [1.0, 2.0],
+                },
+            }
+        }
+
+    original_get = detailed_data_manager.get_detailed_cycle_data
+    detailed_data_manager.get_detailed_cycle_data = fake_get_detailed_cycle_data
+
     try:
         data = analysis.get_cycle_data("T1", include_raw=True)
     finally:
-        # Restore manager
+        # Restore manager and patched function
         if original_manager is not None:
             models.TestResult.objects = original_manager
         else:
             delattr(models.TestResult, "objects")
+        detailed_data_manager.get_detailed_cycle_data = original_get
 
     assert data["cycles"][0]["cycle_index"] == 1
     assert "raw" in data["cycles"][0]

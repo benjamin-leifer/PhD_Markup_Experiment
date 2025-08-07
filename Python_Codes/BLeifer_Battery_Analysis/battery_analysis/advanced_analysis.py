@@ -1367,59 +1367,19 @@ def find_similar_tests(test_id, metrics=None, max_results=5):
 
 
 def get_cycle_voltage_capacity_data(test_id, cycle_number):
+    """Get detailed voltage vs capacity data for a specific cycle.
+
+    This is a thin wrapper around
+    :func:`battery_analysis.analysis.cycle_data_analysis.get_cycle_voltage_vs_capacity`
+    which retrieves the data from GridFS when available and falls back to any
+    legacy inline arrays.
     """
-    Get detailed voltage vs capacity data for a specific cycle.
 
-    Args:
-        test_id: ID of the TestResult to analyze
-        cycle_number: Specific cycle to extract
-
-    Returns:
-        dict: Dictionary with charge and discharge data
-    """
-    # Get TestResult object
-    test = models.TestResult.objects(id=test_id).first()
-    if not test:
-        raise ValueError(f"Test with ID {test_id} not found")
-
-    # Find the requested cycle
-    cycle = None
-    for c in test.cycles:
-        if c.cycle_index == cycle_number:
-            cycle = c
-            break
-
-    if not cycle:
-        raise ValueError(f"Cycle {cycle_number} not found in test {test_id}")
-
-    # Check if detailed data is available
-    has_detailed_data = (
-        hasattr(cycle, "voltage_charge")
-        and hasattr(cycle, "capacity_charge")
-        and hasattr(cycle, "voltage_discharge")
-        and hasattr(cycle, "capacity_discharge")
+    from battery_analysis.analysis.cycle_data_analysis import (
+        get_cycle_voltage_vs_capacity,
     )
 
-    if not has_detailed_data or not cycle.voltage_charge:
-        raise ValueError(f"Detailed data not available for cycle {cycle_number}")
-
-    # Return the detailed data
-    return {
-        "charge": {
-            "voltage": cycle.voltage_charge,
-            "current": cycle.current_charge if hasattr(cycle, "current_charge") else [],
-            "capacity": cycle.capacity_charge,
-            "time": cycle.time_charge if hasattr(cycle, "time_charge") else [],
-        },
-        "discharge": {
-            "voltage": cycle.voltage_discharge,
-            "current": (
-                cycle.current_discharge if hasattr(cycle, "current_discharge") else []
-            ),
-            "capacity": cycle.capacity_discharge,
-            "time": cycle.time_discharge if hasattr(cycle, "time_discharge") else [],
-        },
-    }
+    return get_cycle_voltage_vs_capacity(test_id, cycle_number)
 
 
 def plot_cycle_voltage_capacity(test_id, cycle_number, chemistry=None):

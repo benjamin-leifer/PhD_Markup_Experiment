@@ -3,11 +3,12 @@ import sys
 import pytest
 
 TESTS_DIR = os.path.dirname(__file__)
-PACKAGE_ROOT = os.path.abspath(os.path.join(TESTS_DIR, '..'))
+PACKAGE_ROOT = os.path.abspath(os.path.join(TESTS_DIR, ".."))
 if PACKAGE_ROOT not in sys.path:
     sys.path.insert(0, PACKAGE_ROOT)
 
-from battery_analysis import models
+from battery_analysis import models  # noqa: E402
+from mongoengine import disconnect  # noqa: E402
 
 
 def test_sample_components_creation():
@@ -19,10 +20,12 @@ def test_sample_components_creation():
 
 
 def test_record_missing_components():
+    disconnect()
     import importlib
     import matplotlib
     import types
     import sys
+
     orig_use = matplotlib.use
     matplotlib.use = lambda *a, **k: None
     sys.modules.setdefault("networkx", types.ModuleType("networkx"))
@@ -50,6 +53,7 @@ def test_record_missing_components():
 
 def test_missing_data_tab_listings():
     import tkinter as tk
+
     try:
         root = tk.Tk()
         root.withdraw()
