@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import List, Dict, Optional
 
+import io
+
 import numpy as np
 import dash
 from dash import dcc, html
@@ -72,6 +74,8 @@ SAMPLE_DROPDOWN = "cd-sample"
 TEST_DROPDOWN = "cd-test"
 CYCLE_DROPDOWN = "cd-cycle"
 POP_BUTTON = "cd-popout"
+EXPORT_BUTTON = "cd-export-btn"
+EXPORT_DOWNLOAD = "cd-export-download"
 GRAPH = "cd-graph"
 MODAL = "cd-modal"
 MODAL_GRAPH = "cd-modal-graph"
@@ -108,9 +112,14 @@ def layout() -> html.Div:
                         md=3,
                     ),
                     dbc.Col(
+                        dbc.Button("Export Plot", id=EXPORT_BUTTON, color="secondary"),
+                        md="auto",
+                    ),
+                    dbc.Col(
                         dbc.Button("Pop-out", id=POP_BUTTON),
                         md="auto",
                     ),
+                    dcc.Download(id=EXPORT_DOWNLOAD),
                 ],
                 className="gy-2",
             ),
@@ -210,6 +219,21 @@ def register_callbacks(app: dash.Dash) -> None:
         if n_clicks:
             return not is_open
         return is_open
+
+    @app.callback(
+        Output(EXPORT_DOWNLOAD, "data"),
+        Input(EXPORT_BUTTON, "n_clicks"),
+        State(GRAPH, "figure"),
+        prevent_initial_call=True,
+    )
+    def _export_plot(n_clicks, fig_dict):
+        if not fig_dict:
+            return dash.no_update
+        fig = go.Figure(fig_dict)
+        buffer = io.BytesIO()
+        fig.write_image(buffer, format="png")
+        buffer.seek(0)
+        return dcc.send_bytes(buffer.getvalue(), "cycle_detail.png")
 
 
 __all__ = ["layout", "register_callbacks"]
