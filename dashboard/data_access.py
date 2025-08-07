@@ -1,8 +1,9 @@
 import datetime
 import io
 import os
+import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from battery_analysis import user_tracking
 
@@ -18,8 +19,10 @@ except Exception:  # pragma: no cover - allow running without DB
     connect_with_fallback = None
 
 
-UPLOAD_DIR = Path(__file__).resolve().parent / "uploads"
+BASE_DIR = Path(__file__).resolve().parent
+UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
+TEST_DATA_FILE = BASE_DIR / "test_data" / "offline_dump.json"
 _uploaded_files: List[Dict] = []
 _DB_CONNECTED: bool | None = None
 
@@ -81,6 +84,32 @@ def _placeholder_running(now: datetime.datetime) -> List[Dict]:
     ]
 
 
+def _load_offline_manifest() -> Dict[str, Any]:
+    """Load test data manifest from ``test_data/offline_dump.json``."""
+    if TEST_DATA_FILE.exists():
+        try:
+            with open(TEST_DATA_FILE, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            for row in data.get("tests", []):
+                ts = row.get("last_timestamp")
+                if isinstance(ts, str):
+                    try:
+                        row["last_timestamp"] = datetime.datetime.fromisoformat(ts)
+                    except ValueError:
+                        pass
+            for row in data.get("upcoming", []):
+                ts = row.get("start_time")
+                if isinstance(ts, str):
+                    try:
+                        row["start_time"] = datetime.datetime.fromisoformat(ts)
+                    except ValueError:
+                        pass
+            return data
+        except Exception:
+            pass
+    return {"tests": [], "upcoming": [], "summary": {}}
+
+
 def get_running_tests() -> List[Dict]:
     """Return currently running tests from the database or example data."""
     now = datetime.datetime.now()
@@ -121,6 +150,9 @@ def get_running_tests() -> List[Dict]:
                 return rows
         except Exception:
             pass
+    manifest = _load_offline_manifest()
+    if manifest["tests"]:
+        return manifest["tests"]
     return _placeholder_running(now)
 
 
@@ -170,6 +202,9 @@ def get_upcoming_tests() -> List[Dict]:
                 return rows
         except Exception:
             pass
+    manifest = _load_offline_manifest()
+    if manifest["upcoming"]:
+        return manifest["upcoming"]
     return _placeholder_upcoming(now)
 
 
@@ -188,6 +223,9 @@ def get_summary_stats() -> Dict:
             }
         except Exception:
             pass
+    manifest = _load_offline_manifest()
+    if manifest["summary"]:
+        return manifest["summary"]
     return {"running": 2, "completed_today": 5, "failures": 0}
 
 
