@@ -154,6 +154,8 @@ def create_test_result(sample, cycles_summary, tester, metadata=None):
 
     # Save the TestResult to the database
     try:
+        if hasattr(test_result, "full_clean"):
+            test_result.full_clean()
         test_result.save()
 
         # Link this test to the sample

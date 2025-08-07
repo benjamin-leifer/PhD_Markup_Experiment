@@ -496,6 +496,8 @@ def import_eis_data(file_path, sample_id=None, metadata=None):
         )
 
         # Save the test result
+        if hasattr(test_result, "full_clean"):
+            test_result.full_clean()
         test_result.save()
 
         # Link to the sample

@@ -16,15 +16,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Add parent directory to path to run the example directly
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Set up logging
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 # Import package components
-from battery_analysis import utils, models
-from battery_analysis import advanced_analysis as aa
+from battery_analysis import utils, models  # noqa: E402
+from battery_analysis import advanced_analysis as aa  # noqa: E402
 
 
 def main():
@@ -32,7 +33,7 @@ def main():
 
     # Connect to MongoDB
     logging.info("Connecting to MongoDB...")
-    connected = utils.connect_to_database('battery_test_db')
+    connected = utils.connect_to_database("battery_test_db")
 
     if not connected:
         logging.error("Failed to connect to database. Make sure MongoDB is running.")
@@ -47,7 +48,7 @@ def main():
         chemistry="NMC811/Graphite",
         form_factor="18650",
         nominal_capacity=3500,  # 3500 mAh
-        tags=["demo", "advanced_analysis"]
+        tags=["demo", "advanced_analysis"],
     )
     sample.save()
 
@@ -61,21 +62,24 @@ def main():
         voltage_data, capacity_data = simulate_voltage_capacity_data()
 
         # Perform differential capacity analysis
-        v_centers, dq_dv = aa.differential_capacity_analysis(voltage_data, capacity_data)
+        v_centers, dq_dv = aa.differential_capacity_analysis(
+            voltage_data, capacity_data
+        )
 
         # Plot the results
         plt.figure(figsize=(10, 6))
         plt.plot(v_centers, dq_dv)
-        plt.xlabel('Voltage (V)')
-        plt.ylabel('dQ/dV (mAh/V)')
-        plt.title('Differential Capacity Analysis')
+        plt.xlabel("Voltage (V)")
+        plt.ylabel("dQ/dV (mAh/V)")
+        plt.title("Differential Capacity Analysis")
         plt.grid(True)
-        plt.savefig('dqdv_analysis.png')
+        plt.savefig("dqdv_analysis.png")
         plt.close()
         logging.info("- dQ/dV plot saved as dqdv_analysis.png")
 
         # Identify peaks in dQ/dV curve (phase transitions)
         from scipy.signal import find_peaks
+
         peaks, _ = find_peaks(dq_dv, height=0.1 * max(dq_dv), distance=50)
 
         logging.info(f"- Identified {len(peaks)} major phase transitions at voltages:")
@@ -92,18 +96,30 @@ def main():
 
         logging.info(f"- Initial capacity: {fade_analysis['initial_capacity']:.2f} mAh")
         logging.info(f"- Final capacity: {fade_analysis['final_capacity']:.2f} mAh")
-        logging.info(f"- Capacity retention: {fade_analysis['capacity_retention'] * 100:.2f}%")
-        logging.info(f"- Fade rate: {fade_analysis['fade_rate_pct_per_cycle']:.4f}% per cycle")
+        logging.info(
+            f"- Capacity retention: {fade_analysis['capacity_retention'] * 100:.2f}%"
+        )
+        logging.info(
+            f"- Fade rate: {fade_analysis['fade_rate_pct_per_cycle']:.4f}% per cycle"
+        )
 
-        if fade_analysis['best_model']:
-            best_model = fade_analysis['best_model']
-            logging.info(f"- Best fit model: {fade_analysis['fade_models'][best_model]['name']}")
-            logging.info(f"- R² value: {fade_analysis['fade_models'][best_model]['r_squared']:.4f}")
+        if fade_analysis["best_model"]:
+            best_model = fade_analysis["best_model"]
+            logging.info(
+                f"- Best fit model: {fade_analysis['fade_models'][best_model]['name']}"
+            )
+            logging.info(
+                f"- R² value: {fade_analysis['fade_models'][best_model]['r_squared']:.4f}"
+            )
 
-            eol_cycle = fade_analysis['predicted_eol_cycle']
+            eol_cycle = fade_analysis["predicted_eol_cycle"]
             if eol_cycle:
-                logging.info(f"- Predicted 80% capacity retention at cycle: {int(eol_cycle)}")
-                logging.info(f"- Prediction confidence: {fade_analysis['confidence'] * 100:.1f}%")
+                logging.info(
+                    f"- Predicted 80% capacity retention at cycle: {int(eol_cycle)}"
+                )
+                logging.info(
+                    f"- Prediction confidence: {fade_analysis['confidence'] * 100:.1f}%"
+                )
 
     except Exception as e:
         logging.error(f"Error in capacity fade analysis: {e}")
@@ -115,17 +131,21 @@ def main():
         add_anomaly_to_test(test)
 
         # Detect anomalies
-        anomaly_results = aa.detect_anomalies(test.id, metric='discharge_capacity')
+        anomaly_results = aa.detect_anomalies(test.id, metric="discharge_capacity")
 
         logging.info(f"- Analyzed metric: {anomaly_results['metric_analyzed']}")
-        logging.info(f"- Normal range: {anomaly_results['normal_range']['mean']:.2f} ± "
-                     f"{anomaly_results['normal_range']['std_dev']:.2f}")
+        logging.info(
+            f"- Normal range: {anomaly_results['normal_range']['mean']:.2f} ± "
+            f"{anomaly_results['normal_range']['std_dev']:.2f}"
+        )
         logging.info(f"- Detected {anomaly_results['anomaly_count']} anomalies:")
 
-        for anomaly in anomaly_results['anomalies']:
-            logging.info(f"  * Cycle {anomaly['cycle']}: {anomaly['value']:.2f} mAh "
-                         f"(detected via {anomaly['detection_method']}, "
-                         f"significance: {anomaly['significance']:.2f})")
+        for anomaly in anomaly_results["anomalies"]:
+            logging.info(
+                f"  * Cycle {anomaly['cycle']}: {anomaly['value']:.2f} mAh "
+                f"(detected via {anomaly['detection_method']}, "
+                f"significance: {anomaly['significance']:.2f})"
+            )
 
     except Exception as e:
         logging.error(f"Error in anomaly detection: {e}")
@@ -141,7 +161,7 @@ def main():
         cluster_results = aa.cluster_tests(test_ids)
 
         logging.info(f"- Identified {cluster_results['n_clusters']} clusters of tests:")
-        for cluster_id, tests in cluster_results['clusters'].items():
+        for cluster_id, tests in cluster_results["clusters"].items():
             logging.info(f"  * Cluster {cluster_id}: {len(tests)} tests")
             for t in tests:
                 logging.info(f"    - {t['test_name']}")
@@ -151,7 +171,9 @@ def main():
 
         logging.info(f"\n- Tests most similar to {test.name}:")
         for i, t in enumerate(similar_tests):
-            logging.info(f"  {i + 1}. {t['test_name']} (similarity: {t['similarity']:.2f})")
+            logging.info(
+                f"  {i + 1}. {t['test_name']} (similarity: {t['similarity']:.2f})"
+            )
 
     except Exception as e:
         logging.error(f"Error in test comparison: {e}")
@@ -171,7 +193,7 @@ def create_simulated_test(sample, cycles=100):
         upper_cutoff_voltage=4.2,
         lower_cutoff_voltage=3.0,
         charge_rate=0.5,
-        discharge_rate=1.0
+        discharge_rate=1.0,
     )
 
     # Simulate cycle data with realistic capacity fade
@@ -199,7 +221,7 @@ def create_simulated_test(sample, cycles=100):
             cycle_index=cycle_num,
             charge_capacity=charge_capacity,
             discharge_capacity=discharge_capacity,
-            coulombic_efficiency=coulombic_efficiency
+            coulombic_efficiency=coulombic_efficiency,
         )
 
         # Add cycle to test
@@ -213,6 +235,8 @@ def create_simulated_test(sample, cycles=100):
     test.avg_coulombic_eff = np.mean([c.coulombic_efficiency for c in test.cycles])
 
     # Save test
+    if hasattr(test, "full_clean"):
+        test.full_clean()
     test.save()
 
     # Update sample references
@@ -238,6 +262,8 @@ def add_anomaly_to_test(test):
     cycle.discharge_capacity = original_capacity * 0.7
 
     # Update the test
+    if hasattr(test, "full_clean"):
+        test.full_clean()
     test.save()
 
 
@@ -254,7 +280,7 @@ def simulate_voltage_capacity_data():
     transitions = [
         (3.45, 0.15, 200),  # (voltage center, width, intensity)
         (3.70, 0.1, 300),
-        (3.95, 0.12, 250)
+        (3.95, 0.12, 250),
     ]
 
     # Create sigmoid shapes for capacity
@@ -272,18 +298,32 @@ def create_multiple_tests(sample):
     """Create multiple tests with different characteristics for clustering."""
     test_ids = []
 
+    def dummy_cycles(count: int):
+        return [
+            models.CycleSummary(
+                cycle_index=i + 1,
+                charge_capacity=0.0,
+                discharge_capacity=0.0,
+                coulombic_efficiency=1.0,
+            )
+            for i in range(count)
+        ]
+
     # Test 1: High capacity, good retention
     test1 = models.TestResult(
         sample=sample,
         tester="Simulated",
         test_type="Cycling",
         name="High_Cap_Good_Retention",
+        cycles=dummy_cycles(100),
         cycle_count=100,
         initial_capacity=3600,
         final_capacity=3400,
         capacity_retention=3400 / 3600,
-        avg_coulombic_eff=0.995
+        avg_coulombic_eff=0.995,
     )
+    if hasattr(test1, "full_clean"):
+        test1.full_clean()
     test1.save()
     test_ids.append(str(test1.id))
 
@@ -293,12 +333,15 @@ def create_multiple_tests(sample):
         tester="Simulated",
         test_type="Cycling",
         name="High_Cap_Poor_Retention",
+        cycles=dummy_cycles(100),
         cycle_count=100,
         initial_capacity=3650,
         final_capacity=2800,
         capacity_retention=2800 / 3650,
-        avg_coulombic_eff=0.988
+        avg_coulombic_eff=0.988,
     )
+    if hasattr(test2, "full_clean"):
+        test2.full_clean()
     test2.save()
     test_ids.append(str(test2.id))
 
@@ -308,12 +351,15 @@ def create_multiple_tests(sample):
         tester="Simulated",
         test_type="Cycling",
         name="Low_Cap_Good_Retention",
+        cycles=dummy_cycles(100),
         cycle_count=100,
         initial_capacity=3100,
         final_capacity=2950,
         capacity_retention=2950 / 3100,
-        avg_coulombic_eff=0.994
+        avg_coulombic_eff=0.994,
     )
+    if hasattr(test3, "full_clean"):
+        test3.full_clean()
     test3.save()
     test_ids.append(str(test3.id))
 
@@ -323,12 +369,15 @@ def create_multiple_tests(sample):
         tester="Simulated",
         test_type="Cycling",
         name="Low_Cap_Poor_Retention",
+        cycles=dummy_cycles(100),
         cycle_count=100,
         initial_capacity=3050,
         final_capacity=2250,
         capacity_retention=2250 / 3050,
-        avg_coulombic_eff=0.985
+        avg_coulombic_eff=0.985,
     )
+    if hasattr(test4, "full_clean"):
+        test4.full_clean()
     test4.save()
     test_ids.append(str(test4.id))
 
@@ -338,12 +387,15 @@ def create_multiple_tests(sample):
         tester="Simulated",
         test_type="Cycling",
         name="Long_Cycle_Life",
+        cycles=dummy_cycles(500),
         cycle_count=500,
         initial_capacity=3300,
         final_capacity=2900,
         capacity_retention=2900 / 3300,
-        avg_coulombic_eff=0.998
+        avg_coulombic_eff=0.998,
     )
+    if hasattr(test5, "full_clean"):
+        test5.full_clean()
     test5.save()
     test_ids.append(str(test5.id))
 

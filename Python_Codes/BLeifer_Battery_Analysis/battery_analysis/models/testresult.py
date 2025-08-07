@@ -1,7 +1,7 @@
 # battery_analysis/models/test_result.py
 
 import datetime
-from mongoengine import Document, fields
+from mongoengine import Document, fields, ValidationError
 
 try:
     from .cycle_summary import CycleSummary
@@ -59,7 +59,23 @@ class TestResult(Document):
         help_text="List of timestamped note entries",
     )
 
-    meta = {"collection": "test_results"}
+    meta = {
+        "collection": "test_results",
+        "indexes": ["sample", "name", "date"],
+    }
+
+    def clean(self):
+        """Ensure ``cycle_count`` matches the number of cycle summaries."""
+        if self.cycle_count is not None:
+            cycles_len = len(self.cycles or [])
+            if cycles_len != self.cycle_count:
+                raise ValidationError(
+                    "cycle_count must match the number of items in cycles"
+                )
+
+    def full_clean(self) -> None:
+        """Run MongoEngine validation, including :meth:`clean`."""
+        self.validate(clean=True)
 
     def __str__(self):
         try:
