@@ -7,6 +7,7 @@ which is too large to store efficiently in the main MongoDB documents.
 
 import logging
 from battery_analysis.models import TestResult, CycleDetailData
+from .db import ensure_connection
 import io
 import pickle
 
@@ -21,6 +22,9 @@ def store_detailed_cycle_data(test_id, detailed_cycles):
     Returns:
         bool: Success status
     """
+    if not ensure_connection():
+        logging.error("Database connection not available")
+        return False
     try:
         # Get the TestResult to make sure it exists
         test = TestResult.objects(id=test_id).first()
@@ -90,6 +94,9 @@ def get_detailed_cycle_data(test_id, cycle_index=None):
         dict: Dictionary with detailed cycle data
     """
     logging.info(f"Attempting to retrieve GridFS data for test {test_id}, cycle {cycle_index}")
+    if not ensure_connection():
+        logging.error("Database connection not available")
+        return {}
     try:
         if cycle_index is not None:
             # Get specific cycle
