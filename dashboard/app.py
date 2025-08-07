@@ -16,6 +16,7 @@ from . import layout as layout_components
 from . import (
     trait_filter_tab,
     advanced_analysis_tab,
+    cycle_detail_tab,
     eis_tab,
     comparison_tab,
     document_flow_tab,
@@ -84,6 +85,10 @@ def create_app() -> dash.Dash:
                 dcc.Tab(
                     advanced_analysis_tab.layout(),
                     label="Advanced Analysis",
+                ),
+                dcc.Tab(
+                    cycle_detail_tab.layout(),
+                    label="Cycle Detail",
                 ),
                 dcc.Tab(
                     eis_tab.layout(),
@@ -349,6 +354,7 @@ def create_app() -> dash.Dash:
     trait_filter_tab.register_callbacks(app)
     comparison_tab.register_callbacks(app)
     advanced_analysis_tab.register_callbacks(app)
+    cycle_detail_tab.register_callbacks(app)
     eis_tab.register_callbacks(app)
     document_flow_tab.register_callbacks(app)
     missing_data_tab.register_callbacks(app)
