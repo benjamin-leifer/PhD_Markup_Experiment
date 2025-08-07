@@ -9,9 +9,10 @@ exported objects is also written to that directory so the dashboard can
 load the data when MongoDB is unavailable.
 
 The script relies only on ``pymongo`` and ``gridfs`` so it can run in
-minimal environments. Connection parameters are taken from the
-``BATTERY_DB_HOST``, ``BATTERY_DB_PORT`` and ``BATTERY_DB_NAME``
-environment variables with sensible defaults.
+minimal environments. The MongoDB connection itself is handled by
+``Mongodb_implementation.get_client`` which pulls settings from the
+``MONGO_URI`` (or ``MONGO_HOST``/``MONGO_PORT``) environment variables.
+The database name can still be overridden with ``BATTERY_DB_NAME``.
 """
 
 from __future__ import annotations
@@ -22,17 +23,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any
 
-from pymongo import MongoClient
 import gridfs
+
+from Mongodb_implementation import get_client
 
 
 def export_dataset(limit: int = 10) -> Path:
     """Export ``limit`` test results and return path to manifest file."""
-    host = os.getenv("BATTERY_DB_HOST", "localhost")
-    port = int(os.getenv("BATTERY_DB_PORT", "27017"))
     db_name = os.getenv("BATTERY_DB_NAME", "battery_test_db")
 
-    client = MongoClient(host, port)
+    client = get_client()
     db = client[db_name]
     fs = gridfs.GridFS(db)
 
