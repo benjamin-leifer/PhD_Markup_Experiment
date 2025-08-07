@@ -2,8 +2,6 @@
 
 from pathlib import Path
 import sys
-import requests
-from dash.testing.application_runners import ThreadedRunner
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = ROOT / "Python_Codes" / "BLeifer_Battery_Analysis"
@@ -30,18 +28,18 @@ TAB_LABELS = [
 
 
 def test_all_tabs_render():
-    """The app layout renders and includes all tab labels."""
-    app = create_app()
-    with ThreadedRunner() as runner:
-        runner.start(app)
-        response = requests.get(runner.url)
-        for label in TAB_LABELS:
-            assert label in response.text
+    """The app layout renders and includes all tab labels for an admin user."""
+    app = create_app(test_role="admin")
+    render = app.callback_map["page-content.children"]["callback"].__wrapped__
+    layout = render("admin")
+    html_str = str(layout)
+    for label in TAB_LABELS:
+        assert label in html_str
 
 
 def test_basic_callbacks():
     """Each tab's primary callback executes without error."""
-    app = create_app()
+    app = create_app(test_role="admin")
     cb = app.callback_map
 
     toggle = cb["export-modal.is_open"]["callback"].__wrapped__

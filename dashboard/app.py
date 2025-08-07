@@ -22,13 +22,19 @@ from . import (
     document_flow_tab,
     missing_data_tab,
 )
+from . import auth
 
 
-def create_app() -> dash.Dash:
+def create_app(test_role: str | None = None) -> dash.Dash:
     """Create and configure the Dash application."""
-    app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+    app = dash.Dash(
+        __name__,
+        external_stylesheets=[dbc.themes.BOOTSTRAP],
+        suppress_callback_exceptions=True,
+    )
+    auth.register_callbacks(app)
 
-    def serve_layout():
+    def dashboard_layout(user_role: str) -> html.Div:
         running = data_access.get_running_tests()
         upcoming = data_access.get_upcoming_tests()
         stats = data_access.get_summary_stats()
@@ -53,6 +59,7 @@ def create_app() -> dash.Dash:
             color="light",
             fixed="bottom",
         )
+        is_admin = user_role == "admin"
         tabs = dcc.Tabs(
             [
                 # Order mirrors the original Tkinter GUI tabs
@@ -73,10 +80,12 @@ def create_app() -> dash.Dash:
                 dcc.Tab(
                     layout_components.data_import_layout(),
                     label="Data Import",
+                    disabled=not is_admin,
                 ),
                 dcc.Tab(
                     layout_components.export_button(),
                     label="Export",
+                    disabled=not is_admin,
                 ),
                 dcc.Tab(
                     comparison_tab.layout(),
@@ -85,6 +94,7 @@ def create_app() -> dash.Dash:
                 dcc.Tab(
                     advanced_analysis_tab.layout(),
                     label="Advanced Analysis",
+                    disabled=not is_admin,
                 ),
                 dcc.Tab(
                     cycle_detail_tab.layout(),
@@ -105,6 +115,7 @@ def create_app() -> dash.Dash:
                 dcc.Tab(
                     trait_filter_tab.layout(),
                     label="Trait Filter",
+                    disabled=not is_admin,
                 ),
                 dcc.Tab(
                     html.Div(
@@ -145,7 +156,18 @@ def create_app() -> dash.Dash:
             fluid=True,
         )
 
+    def serve_layout() -> html.Div:
+        return html.Div(
+            [dcc.Store(id="user-role", data=test_role), html.Div(id="page-content")]
+        )
+
     app.layout = serve_layout
+
+    @app.callback(Output("page-content", "children"), Input("user-role", "data"))
+    def display_page(role):
+        if not role:
+            return auth.layout()
+        return dashboard_layout(role)
 
     @app.callback(
         Output("metadata-modal", "is_open"),
