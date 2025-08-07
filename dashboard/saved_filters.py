@@ -23,6 +23,7 @@ def _load_all() -> List[Dict]:
 
 def _write_all(filters: List[Dict]) -> None:
     """Write the filter list to disk."""
+    _FILTER_FILE.parent.mkdir(parents=True, exist_ok=True)
     with _FILTER_FILE.open("w", encoding="utf-8") as fh:
         json.dump(filters, fh, indent=2)
 
@@ -58,3 +59,9 @@ def delete_filter(name: str) -> None:
 def list_filters() -> List[Dict[str, str]]:
     """Return metadata for all saved filters."""
     return [{"name": f.get("name", ""), "description": f.get("description", "")} for f in _load_all()]
+
+
+def clear_filters() -> None:
+    """Remove all saved filters from disk."""
+    if _FILTER_FILE.exists():
+        _FILTER_FILE.unlink()
