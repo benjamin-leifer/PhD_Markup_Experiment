@@ -62,33 +62,6 @@ def create_test_result(sample, cycles_summary, tester, metadata=None):
         if "internal_resistance" in cycle and cycle["internal_resistance"] is not None:
             cycle_doc.internal_resistance = cycle["internal_resistance"]
 
-        # NEW: Add detailed cycle data if available
-        # Charge data
-        if "voltage_charge" in cycle and cycle["voltage_charge"]:
-            cycle_doc.voltage_charge = cycle["voltage_charge"]
-
-        if "current_charge" in cycle and cycle["current_charge"]:
-            cycle_doc.current_charge = cycle["current_charge"]
-
-        if "capacity_charge" in cycle and cycle["capacity_charge"]:
-            cycle_doc.capacity_charge = cycle["capacity_charge"]
-
-        if "time_charge" in cycle and cycle["time_charge"]:
-            cycle_doc.time_charge = cycle["time_charge"]
-
-        # Discharge data
-        if "voltage_discharge" in cycle and cycle["voltage_discharge"]:
-            cycle_doc.voltage_discharge = cycle["voltage_discharge"]
-
-        if "current_discharge" in cycle and cycle["current_discharge"]:
-            cycle_doc.current_discharge = cycle["current_discharge"]
-
-        if "capacity_discharge" in cycle and cycle["capacity_discharge"]:
-            cycle_doc.capacity_discharge = cycle["capacity_discharge"]
-
-        if "time_discharge" in cycle and cycle["time_discharge"]:
-            cycle_doc.time_discharge = cycle["time_discharge"]
-
         cycle_docs.append(cycle_doc)
 
     # Get name from metadata or generate a default one
