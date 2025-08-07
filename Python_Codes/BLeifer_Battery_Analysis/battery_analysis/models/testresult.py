@@ -1,6 +1,7 @@
 # battery_analysis/models/test_result.py
 
 import datetime
+import re
 from mongoengine import Document, fields, ValidationError
 
 from battery_analysis.utils.gridfs_conversion import data_to_gridfs, gridfs_to_data
@@ -28,6 +29,9 @@ class TestResult(Document):
         help_text="Type of electrochemical test",
     )
     name = fields.StringField(required=False, help_text="Test name or file identifier")
+    cell_code = fields.StringField(
+        required=False, help_text="Identifier derived from name"
+    )
     file_path = fields.StringField(required=False, help_text="Original data file path")
     date = fields.DateTimeField(required=False, default=datetime.datetime.utcnow)
 
@@ -64,11 +68,15 @@ class TestResult(Document):
 
     meta = {
         "collection": "test_results",
-        "indexes": ["sample", "name", "date"],
+        "indexes": ["sample", "name", "cell_code", "date"],
     }
 
     def clean(self):
         """Custom validation and automatic protocol assignment."""
+        if not self.cell_code and self.name:
+            match = re.search(r"CN\d+", self.name)
+            if match:
+                self.cell_code = match.group(0)
         if self.cycle_count is not None:
             cycles_len = len(self.cycles or [])
             if cycles_len != self.cycle_count:
