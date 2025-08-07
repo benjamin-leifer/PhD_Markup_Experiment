@@ -3,6 +3,9 @@
 import datetime
 from mongoengine import Document, fields, ValidationError
 
+from battery_analysis.utils.gridfs_conversion import data_to_gridfs, gridfs_to_data
+from battery_analysis.utils.db import ensure_connection
+
 try:
     from .cycle_summary import CycleSummary
 except ImportError:  # pragma: no cover - allow running as script
@@ -83,6 +86,96 @@ class TestResult(Document):
         except Exception:
             sample_name = "Unfetched"
         return f"<TestResult {self.name} ({self.tester}) for Sample {sample_name}>"
+
+    # ------------------------------------------------------------------
+    # Detailed cycle data helpers
+    # ------------------------------------------------------------------
+    def save_cycle_detail(self, cycle_index, charge_data, discharge_data):
+        """Save detailed data for a cycle to GridFS.
+
+        Parameters
+        ----------
+        cycle_index: int
+            Index of the cycle being stored.
+        charge_data: dict
+            Dictionary containing charge segment data arrays.
+        discharge_data: dict
+            Dictionary containing discharge segment data arrays.
+        """
+
+        if not ensure_connection():  # pragma: no cover - requires DB
+            return None
+
+        existing = CycleDetailData.objects(
+            test_result=self.id, cycle_index=cycle_index
+        ).first()
+        if existing:
+            existing.delete()
+
+        detail = CycleDetailData(test_result=self, cycle_index=cycle_index)
+        if charge_data:
+            data_to_gridfs(
+                detail.charge_data,
+                charge_data,
+                f"charge_data_cycle_{cycle_index}.pkl",
+            )
+        if discharge_data:
+            data_to_gridfs(
+                detail.discharge_data,
+                discharge_data,
+                f"discharge_data_cycle_{cycle_index}.pkl",
+            )
+        detail.save()
+
+        # Mark the cycle as having detailed data
+        for cyc in self.cycles or []:
+            if getattr(cyc, "cycle_index", None) == cycle_index:
+                setattr(cyc, "has_detailed_data", True)
+                break
+        self.save()
+        return detail
+
+    def get_cycle_detail(self, cycle_index=None):
+        """Retrieve detailed cycle data from GridFS.
+
+        Parameters
+        ----------
+        cycle_index: int | None
+            If provided, only that cycle is returned; otherwise a dictionary of
+            all available cycles is returned.
+
+        Returns
+        -------
+        dict
+            Detailed data with ``charge`` and ``discharge`` keys.
+        """
+
+        if not ensure_connection():  # pragma: no cover - requires DB
+            return {}
+
+        if cycle_index is not None:
+            detail = CycleDetailData.objects(
+                test_result=self.id, cycle_index=cycle_index
+            ).first()
+            if not detail:
+                return {}
+            result = {}
+            if detail.charge_data:
+                result["charge"] = gridfs_to_data(detail.charge_data)
+            if detail.discharge_data:
+                result["discharge"] = gridfs_to_data(detail.discharge_data)
+            return result
+
+        # No cycle index specified: return all cycles
+        data = {}
+        for cyc in self.cycles or []:
+            idx = getattr(cyc, "cycle_index", None)
+            if idx is None:
+                continue
+            cycle_data = self.get_cycle_detail(idx)
+            if cycle_data:
+                data[idx] = cycle_data
+        return data
 
 
 # In battery_analysis/models/test_result.py

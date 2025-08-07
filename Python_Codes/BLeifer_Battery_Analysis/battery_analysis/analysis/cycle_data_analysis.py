@@ -23,28 +23,28 @@ def get_cycle_voltage_vs_capacity(test_id, cycle_number):
     Returns:
         dict: Dictionary with charge and discharge data
     """
-    from battery_analysis.utils.detailed_data_manager import get_detailed_cycle_data
-
-    # Try to get data from GridFS
-    detailed_data = get_detailed_cycle_data(test_id, cycle_number)
-
-    if detailed_data and cycle_number in detailed_data:
-        cycle_data = detailed_data[cycle_number]
-
-        # Ensure at least voltage and capacity data exist
-        charge_data = cycle_data.get('charge', {})
-        discharge_data = cycle_data.get('discharge', {})
-
-        if ('voltage' in charge_data and 'capacity' in charge_data and
-                'voltage' in discharge_data and 'capacity' in discharge_data):
-            return cycle_data
-
-    # If no detailed data in GridFS, try to get it from the CycleSummary document
     from battery_analysis.models import TestResult
 
+    # Try to get data from GridFS via the model helper
     test = TestResult.objects(id=test_id).first()
     if not test:
         raise ValueError(f"Test with ID {test_id} not found")
+
+    cycle_data = test.get_cycle_detail(cycle_number)
+
+    if cycle_data:
+        charge_data = cycle_data.get("charge", {})
+        discharge_data = cycle_data.get("discharge", {})
+
+        if (
+            "voltage" in charge_data
+            and "capacity" in charge_data
+            and "voltage" in discharge_data
+            and "capacity" in discharge_data
+        ):
+            return cycle_data
+
+    # If no detailed data in GridFS, try to get it from the CycleSummary document
 
     for cycle in test.cycles:
         if cycle.cycle_index == cycle_number:
