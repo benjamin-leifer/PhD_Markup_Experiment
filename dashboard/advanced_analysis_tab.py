@@ -319,8 +319,8 @@ def layout() -> html.Div:
                 ),
             ]
         ),
-        dbc.Row([dbc.Col(dcc.Graph(id=RESULT_GRAPH))]),
-        dbc.Row([dbc.Col(html.Div(id=RESULT_TEXT))]),
+        dbc.Row([dbc.Col(dcc.Loading(dcc.Graph(id=RESULT_GRAPH)))]),
+        dbc.Row([dbc.Col(dcc.Loading(html.Div(id=RESULT_TEXT)))]),
     ]
     return html.Div(layout_children)
 
@@ -378,7 +378,9 @@ def register_callbacks(app: dash.Dash) -> None:
         State(JOSH_UPLOAD, "filename"),
         State(JOSH_SHEET, "value"),
         State(JOSH_MASS, "value"),
+        running=[(Output(RUN_BUTTON, "disabled"), True, False)],
         prevent_initial_call=True,
+        background=True,
     )
     def _run_analysis(
         n_clicks,

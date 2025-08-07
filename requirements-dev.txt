@@ -11,4 +11,5 @@ openpyxl>=3.0
 reportlab>=3.5
 pre-commit>=3.0
 ruff>=0.1.0
+diskcache
 
