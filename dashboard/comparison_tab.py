@@ -15,7 +15,12 @@ import dash_bootstrap_components as dbc
 from dash import Input, Output, State
 import plotly.graph_objs as go
 
-from .trait_filter_tab import get_sample_names
+try:
+    from .trait_filter_tab import get_sample_names
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
+
+    get_sample_names = importlib.import_module("trait_filter_tab").get_sample_names
 
 # Component IDs
 SAMPLE_DROPDOWN = "compare-samples"
@@ -82,7 +87,10 @@ def layout() -> html.Div:
                         dcc.RadioItems(
                             options=[
                                 {"label": "Capacity", "value": "capacity"},
-                                {"label": "Normalized Capacity", "value": "norm_capacity"},
+                                {
+                                    "label": "Normalized Capacity",
+                                    "value": "norm_capacity",
+                                },
                                 {"label": "Coulombic Efficiency", "value": "ce"},
                                 {"label": "Impedance", "value": "impedance"},
                             ],
@@ -97,7 +105,9 @@ def layout() -> html.Div:
                         width="auto",
                     ),
                     dbc.Col(
-                        dbc.Button("Export Plot", id=EXPORT_IMG_BUTTON, color="secondary"),
+                        dbc.Button(
+                            "Export Plot", id=EXPORT_IMG_BUTTON, color="secondary"
+                        ),
                         width="auto",
                     ),
                     dcc.Download(id=EXPORT_DOWNLOAD),
@@ -128,9 +138,7 @@ def register_callbacks(app: dash.Dash) -> None:
             y = data[metric] if metric in data else data["capacity"]
             if metric == "norm_capacity":
                 y = data["capacity"] / data["capacity"][0]
-            fig.add_trace(
-                go.Scatter(x=data["cycle"], y=y, mode="lines", name=name)
-            )
+            fig.add_trace(go.Scatter(x=data["cycle"], y=y, mode="lines", name=name))
         y_labels = {
             "capacity": "Capacity (mAh)",
             "norm_capacity": "Normalized Capacity",
@@ -161,7 +169,9 @@ def register_callbacks(app: dash.Dash) -> None:
             if metric == "norm_capacity":
                 y = data["capacity"] / data["capacity"][0]
             for cycle, val in zip(data["cycle"], y):
-                records.append({"sample": name, "cycle": int(cycle), metric: float(val)})
+                records.append(
+                    {"sample": name, "cycle": int(cycle), metric: float(val)}
+                )
         df = pd.DataFrame(records)
         csv_str = df.to_csv(index=False)
         return dcc.send_string(csv_str, "comparison_data.csv")

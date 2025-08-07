@@ -13,7 +13,13 @@ from dash import dcc, html, dash_table
 import dash_bootstrap_components as dbc
 from dash import Input, Output, State
 
-from . import saved_filters, export_handler
+try:
+    from . import saved_filters, export_handler
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
+
+    saved_filters = importlib.import_module("saved_filters")
+    export_handler = importlib.import_module("export_handler")
 import normalization_utils as norm_utils
 
 # Component IDs used in callbacks

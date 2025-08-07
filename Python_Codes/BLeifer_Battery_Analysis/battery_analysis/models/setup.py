@@ -1,11 +1,14 @@
-from mongoengine import CASCADE
-
-
 def setup_model_relationships():
     """Set up relationships between models after they're all defined."""
     # We'll use a different approach that doesn't require register_delete_rule
-    from .sample import Sample
-    from .testresult import TestResult
+    try:
+        from .sample import Sample
+        from .testresult import TestResult
+    except ImportError:  # pragma: no cover - allow running as script
+        import importlib
+
+        Sample = importlib.import_module("sample").Sample
+        TestResult = importlib.import_module("testresult").TestResult
 
     # Instead of registering delete rules separately, we'll just
     # confirm the models are properly registered

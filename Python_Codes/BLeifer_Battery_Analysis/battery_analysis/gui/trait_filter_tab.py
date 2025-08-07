@@ -12,12 +12,19 @@ from tkinter import ttk, messagebox
 
 from typing import List, Optional
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from typing import List, Dict, Optional
 
 from .doe_matrix import DOEHeatmap, demo_matrix
 
-from .. import models
-from .multi_metric_analysis import MultiMetricAnalysis
+try:
+    from .. import models
+    from .multi_metric_analysis import MultiMetricAnalysis
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
+
+    models = importlib.import_module("models")
+    MultiMetricAnalysis = importlib.import_module(
+        "multi_metric_analysis"
+    ).MultiMetricAnalysis
 
 
 def get_distinct_values(field: str) -> List[str]:
@@ -99,7 +106,6 @@ class TraitFilterTab(ttk.Frame):
         )
         self.outlier_btn.grid(row=0, column=6, padx=5, pady=5)
 
-
         result_frame = ttk.Frame(self)
         result_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
@@ -153,7 +159,6 @@ class TraitFilterTab(ttk.Frame):
         self.metric_analysis.update_samples(samples)
         self.main_app.update_status(f"Found {len(samples)} sample(s)")
 
-
     def open_doe_view(self):
         """Open a window displaying the DOE heatmap."""
         rows, cols, matrix = demo_matrix()
@@ -165,7 +170,12 @@ class TraitFilterTab(ttk.Frame):
     def run_outlier_detection(self):
         """Detect outliers among the currently listed samples."""
         try:
-            from .. import outlier_analysis
+            try:
+                from .. import outlier_analysis
+            except ImportError:  # pragma: no cover - allow running as script
+                import importlib
+
+                outlier_analysis = importlib.import_module("outlier_analysis")
         except Exception:
             messagebox.showerror("Error", "Outlier analysis module not available")
             return
@@ -197,4 +207,3 @@ class TraitFilterTab(ttk.Frame):
         self.main_app.update_status(
             f"Outliers: {', '.join(outliers) if outliers else 'None'}"
         )
-

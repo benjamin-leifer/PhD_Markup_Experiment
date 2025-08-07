@@ -12,20 +12,28 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from battery_analysis.gui.custom_toolbar import CustomToolbar
 from battery_analysis.utils import popout_figure
 import numpy as np
-import pandas as pd
 import threading
 import logging
-import os
-import json
 
-from .. import models
+try:
+    from .. import models
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
+
+    models = importlib.import_module("models")
 
 try:
     from .. import pybamm_models
 
     HAS_PYBAMM = pybamm_models.HAS_PYBAMM
-except ImportError:
-    HAS_PYBAMM = False
+except ImportError:  # pragma: no cover - allow running as script
+    try:
+        import importlib
+
+        pybamm_models = importlib.import_module("pybamm_models")
+        HAS_PYBAMM = pybamm_models.HAS_PYBAMM
+    except Exception:
+        HAS_PYBAMM = False
 
 
 class PyBAMMTab(ttk.Frame):
@@ -51,19 +59,19 @@ class PyBAMMTab(ttk.Frame):
             ttk.Label(
                 message_frame,
                 text="PyBAMM is not installed. Please install it to use theoretical modeling features.",
-                font=("Arial", 14)
+                font=("Arial", 14),
             ).pack(pady=20)
 
             ttk.Label(
                 message_frame,
                 text="Install with: pip install pybamm",
-                font=("Arial", 12)
+                font=("Arial", 12),
             ).pack(pady=10)
 
             ttk.Button(
                 message_frame,
                 text="Reload After Installation",
-                command=self.check_pybamm
+                command=self.check_pybamm,
             ).pack(pady=20)
 
             return
@@ -110,8 +118,9 @@ class PyBAMMTab(ttk.Frame):
 
         # Extract parameters button
         self.extract_params_btn = ttk.Button(
-            exp_data_frame, text="Extract Parameters from Sample",
-            command=self.extract_sample_parameters
+            exp_data_frame,
+            text="Extract Parameters from Sample",
+            command=self.extract_sample_parameters,
         )
         self.extract_params_btn.pack(fill=tk.X, padx=5, pady=5)
 
@@ -120,22 +129,33 @@ class PyBAMMTab(ttk.Frame):
         model_frame.pack(fill=tk.X, padx=5, pady=5)
 
         # Model selection
-        ttk.Label(model_frame, text="Model Type:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(model_frame, text="Model Type:").grid(
+            row=0, column=0, sticky=tk.W, padx=5, pady=5
+        )
         self.model_var = tk.StringVar(value="SPM")
 
-        model_combobox = ttk.Combobox(model_frame, textvariable=self.model_var, width=25)
-        model_combobox['values'] = list(pybamm_models.AVAILABLE_MODELS.keys())
+        model_combobox = ttk.Combobox(
+            model_frame, textvariable=self.model_var, width=25
+        )
+        model_combobox["values"] = list(pybamm_models.AVAILABLE_MODELS.keys())
         model_combobox.grid(row=0, column=1, sticky=tk.W + tk.E, padx=5, pady=5)
 
         # When hovering over the model combobox, show a tooltip with model descriptions
-        ToolTip(model_combobox, "\n".join([f"{k}: {v}" for k, v in pybamm_models.AVAILABLE_MODELS.items()]))
+        ToolTip(
+            model_combobox,
+            "\n".join([f"{k}: {v}" for k, v in pybamm_models.AVAILABLE_MODELS.items()]),
+        )
 
         # Chemistry selection
-        ttk.Label(model_frame, text="Chemistry:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(model_frame, text="Chemistry:").grid(
+            row=1, column=0, sticky=tk.W, padx=5, pady=5
+        )
         self.chemistry_var = tk.StringVar(value="NMC")
 
-        chemistry_combobox = ttk.Combobox(model_frame, textvariable=self.chemistry_var, width=25)
-        chemistry_combobox['values'] = ["NMC", "LFP", "NCA", "LCO", "LMO"]
+        chemistry_combobox = ttk.Combobox(
+            model_frame, textvariable=self.chemistry_var, width=25
+        )
+        chemistry_combobox["values"] = ["NMC", "LFP", "NCA", "LCO", "LMO"]
         chemistry_combobox.grid(row=1, column=1, sticky=tk.W + tk.E, padx=5, pady=5)
 
         # Parameter section
@@ -147,7 +167,9 @@ class PyBAMMTab(ttk.Frame):
         canvas_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
 
         self.params_canvas = tk.Canvas(canvas_frame)
-        scrollbar = ttk.Scrollbar(canvas_frame, orient=tk.VERTICAL, command=self.params_canvas.yview)
+        scrollbar = ttk.Scrollbar(
+            canvas_frame, orient=tk.VERTICAL, command=self.params_canvas.yview
+        )
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.params_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -189,12 +211,16 @@ class PyBAMMTab(ttk.Frame):
         c_rates_frame = ttk.Frame(exp_frame)
         c_rates_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        ttk.Label(c_rates_frame, text="Charge C-rate:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+        ttk.Label(c_rates_frame, text="Charge C-rate:").grid(
+            row=0, column=0, sticky=tk.W, padx=5, pady=2
+        )
         self.charge_rate_entry = ttk.Entry(c_rates_frame, width=10)
         self.charge_rate_entry.insert(0, "0.5")
         self.charge_rate_entry.grid(row=0, column=1, sticky=tk.W, padx=5, pady=2)
 
-        ttk.Label(c_rates_frame, text="Discharge C-rate:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
+        ttk.Label(c_rates_frame, text="Discharge C-rate:").grid(
+            row=1, column=0, sticky=tk.W, padx=5, pady=2
+        )
         self.discharge_rate_entry = ttk.Entry(c_rates_frame, width=10)
         self.discharge_rate_entry.insert(0, "1.0")
         self.discharge_rate_entry.grid(row=1, column=1, sticky=tk.W, padx=5, pady=2)
@@ -203,12 +229,16 @@ class PyBAMMTab(ttk.Frame):
         v_limits_frame = ttk.Frame(exp_frame)
         v_limits_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        ttk.Label(v_limits_frame, text="Upper Voltage [V]:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+        ttk.Label(v_limits_frame, text="Upper Voltage [V]:").grid(
+            row=0, column=0, sticky=tk.W, padx=5, pady=2
+        )
         self.upper_v_entry = ttk.Entry(v_limits_frame, width=10)
         self.upper_v_entry.insert(0, "4.2")
         self.upper_v_entry.grid(row=0, column=1, sticky=tk.W, padx=5, pady=2)
 
-        ttk.Label(v_limits_frame, text="Lower Voltage [V]:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
+        ttk.Label(v_limits_frame, text="Lower Voltage [V]:").grid(
+            row=1, column=0, sticky=tk.W, padx=5, pady=2
+        )
         self.lower_v_entry = ttk.Entry(v_limits_frame, width=10)
         self.lower_v_entry.insert(0, "2.5")
         self.lower_v_entry.grid(row=1, column=1, sticky=tk.W, padx=5, pady=2)
@@ -269,12 +299,16 @@ class PyBAMMTab(ttk.Frame):
 
         # Create a matplotlib figure for comparison plots
         self.comparison_fig = plt.figure(figsize=(8, 6))
-        self.comparison_canvas = FigureCanvasTkAgg(self.comparison_fig, master=self.comparison_frame)
+        self.comparison_canvas = FigureCanvasTkAgg(
+            self.comparison_fig, master=self.comparison_frame
+        )
         self.comparison_canvas.draw()
         self.comparison_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
         # Add a toolbar with editing support
-        self.comparison_toolbar = CustomToolbar(self.comparison_canvas, self.comparison_frame)
+        self.comparison_toolbar = CustomToolbar(
+            self.comparison_canvas, self.comparison_frame
+        )
         self.comparison_toolbar.update()
 
         self.comparison_popout_btn = ttk.Button(
@@ -294,7 +328,9 @@ class PyBAMMTab(ttk.Frame):
         self.params_text.config(state=tk.DISABLED)
 
         # Add a scrollbar to the parameters text
-        params_scrollbar = ttk.Scrollbar(self.params_text, orient=tk.VERTICAL, command=self.params_text.yview)
+        params_scrollbar = ttk.Scrollbar(
+            self.params_text, orient=tk.VERTICAL, command=self.params_text.yview
+        )
         params_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.params_text.config(yscrollcommand=params_scrollbar.set)
 
@@ -310,20 +346,25 @@ class PyBAMMTab(ttk.Frame):
             ("Voltage", "voltage"),
             ("Current", "current"),
             ("Capacity", "capacity"),
-            ("Concentrations", "concentrations")
+            ("Concentrations", "concentrations"),
         ]
 
         for text, value in plot_types:
             ttk.Radiobutton(
-                toolbar_frame, text=text, variable=self.plot_type_var, value=value,
-                command=self.update_plot
+                toolbar_frame,
+                text=text,
+                variable=self.plot_type_var,
+                value=value,
+                command=self.update_plot,
             ).pack(side=tk.LEFT, padx=5)
 
         # Comparison toggle
         self.compare_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
-            toolbar_frame, text="Compare with Experiment",
-            variable=self.compare_var, command=self.update_plot
+            toolbar_frame,
+            text="Compare with Experiment",
+            variable=self.compare_var,
+            command=self.update_plot,
         ).pack(side=tk.RIGHT, padx=10)
 
         # Parameter Estimation button
@@ -336,14 +377,19 @@ class PyBAMMTab(ttk.Frame):
         """Check if PyBAMM is installed and reload the tab if it is."""
         # Try to import PyBAMM
         try:
-            import pybamm
+            import pybamm  # noqa: F401
+
             # If successful, destroy and recreate the tab
             for widget in self.winfo_children():
                 widget.destroy()
             self.create_widgets()
-            self.main_app.log_message("PyBAMM detected. Modeling tab reloaded successfully.")
+            self.main_app.log_message(
+                "PyBAMM detected. Modeling tab reloaded successfully."
+            )
         except ImportError:
-            messagebox.showinfo("PyBAMM Not Found", "PyBAMM is still not installed or not available.")
+            messagebox.showinfo(
+                "PyBAMM Not Found", "PyBAMM is still not installed or not available."
+            )
 
     def _configure_params_canvas(self, event):
         """Handle parameter frame configuration events."""
@@ -356,7 +402,9 @@ class PyBAMMTab(ttk.Frame):
     def refresh_samples(self):
         """Refresh the sample list from the database."""
         if not self.main_app.db_connected:
-            messagebox.showwarning("Not Connected", "Please connect to the database first.")
+            messagebox.showwarning(
+                "Not Connected", "Please connect to the database first."
+            )
             return
 
         try:
@@ -365,13 +413,15 @@ class PyBAMMTab(ttk.Frame):
 
             # Update the combobox
             sample_names = [sample.name for sample in samples]
-            self.sample_combobox['values'] = sample_names
+            self.sample_combobox["values"] = sample_names
 
             if sample_names:
                 self.sample_combobox.current(0)
                 self.on_sample_selected(None)
 
-            self.main_app.log_message(f"Loaded {len(sample_names)} samples for PyBAMM modeling")
+            self.main_app.log_message(
+                f"Loaded {len(sample_names)} samples for PyBAMM modeling"
+            )
         except Exception as e:
             self.main_app.log_message(f"Error loading samples: {str(e)}", logging.ERROR)
 
@@ -386,7 +436,9 @@ class PyBAMMTab(ttk.Frame):
             sample = models.Sample.objects(name=sample_name).first()
 
             if not sample:
-                messagebox.showerror("Sample Not Found", f"Sample '{sample_name}' not found in database.")
+                messagebox.showerror(
+                    "Sample Not Found", f"Sample '{sample_name}' not found in database."
+                )
                 return
 
             # Store the current sample
@@ -401,7 +453,7 @@ class PyBAMMTab(ttk.Frame):
 
             # Update the test combobox
             test_names = [test.name for test in tests]
-            self.test_combobox['values'] = test_names
+            self.test_combobox["values"] = test_names
 
             if test_names:
                 self.test_combobox.current(0)
@@ -410,7 +462,9 @@ class PyBAMMTab(ttk.Frame):
                 self.test_combobox.set("")
                 self.current_test = None
 
-            self.main_app.log_message(f"Selected sample {sample_name} for PyBAMM modeling")
+            self.main_app.log_message(
+                f"Selected sample {sample_name} for PyBAMM modeling"
+            )
 
             # Extract chemistry from the sample and update the interface
             if sample.chemistry:
@@ -451,37 +505,49 @@ class PyBAMMTab(ttk.Frame):
 
         try:
             # Get the test from the database
-            test = models.TestResult.objects(sample=self.current_sample, name=test_name).first()
+            test = models.TestResult.objects(
+                sample=self.current_sample, name=test_name
+            ).first()
 
             if not test:
-                messagebox.showerror("Test Not Found", f"Test '{test_name}' not found for this sample.")
+                messagebox.showerror(
+                    "Test Not Found", f"Test '{test_name}' not found for this sample."
+                )
                 return
 
             # Store the current test
             self.current_test = test
 
             # Update interface with test parameters if available
-            if hasattr(test, 'charge_rate') and test.charge_rate is not None:
+            if hasattr(test, "charge_rate") and test.charge_rate is not None:
                 self.charge_rate_entry.delete(0, tk.END)
                 self.charge_rate_entry.insert(0, str(test.charge_rate))
 
-            if hasattr(test, 'discharge_rate') and test.discharge_rate is not None:
+            if hasattr(test, "discharge_rate") and test.discharge_rate is not None:
                 self.discharge_rate_entry.delete(0, tk.END)
                 self.discharge_rate_entry.insert(0, str(test.discharge_rate))
 
-            if hasattr(test, 'upper_cutoff_voltage') and test.upper_cutoff_voltage is not None:
+            if (
+                hasattr(test, "upper_cutoff_voltage")
+                and test.upper_cutoff_voltage is not None
+            ):
                 self.upper_v_entry.delete(0, tk.END)
                 self.upper_v_entry.insert(0, str(test.upper_cutoff_voltage))
 
-            if hasattr(test, 'lower_cutoff_voltage') and test.lower_cutoff_voltage is not None:
+            if (
+                hasattr(test, "lower_cutoff_voltage")
+                and test.lower_cutoff_voltage is not None
+            ):
                 self.lower_v_entry.delete(0, tk.END)
                 self.lower_v_entry.insert(0, str(test.lower_cutoff_voltage))
 
-            if hasattr(test, 'temperature') and test.temperature is not None:
+            if hasattr(test, "temperature") and test.temperature is not None:
                 self.temp_entry.delete(0, tk.END)
                 self.temp_entry.insert(0, str(test.temperature))
 
-            self.main_app.log_message(f"Selected test {test_name} for comparison with PyBAMM modeling")
+            self.main_app.log_message(
+                f"Selected test {test_name} for comparison with PyBAMM modeling"
+            )
 
         except Exception as e:
             self.main_app.log_message(f"Error selecting test: {str(e)}", logging.ERROR)
@@ -509,7 +575,9 @@ class PyBAMMTab(ttk.Frame):
 
         try:
             # Use PyBAMM module to extract parameters
-            parameters = pybamm_models.extract_parameters_from_sample(self.current_sample.id)
+            parameters = pybamm_models.extract_parameters_from_sample(
+                self.current_sample.id
+            )
 
             # Update interface with extracted parameters
             if "cathode_material" in parameters:
@@ -524,8 +592,12 @@ class PyBAMMTab(ttk.Frame):
                     nom_cap = parameters["nominal_capacity"]
                     # Assuming roughly 1000 mol/m³ per 1Ah capacity for demonstration
                     conc = 1000 * nom_cap / 1000  # Convert mAh to Ah, then scale
-                    self.parameter_entries["Initial concentration [mol.m-3]"].delete(0, tk.END)
-                    self.parameter_entries["Initial concentration [mol.m-3]"].insert(0, str(conc))
+                    self.parameter_entries["Initial concentration [mol.m-3]"].delete(
+                        0, tk.END
+                    )
+                    self.parameter_entries["Initial concentration [mol.m-3]"].insert(
+                        0, str(conc)
+                    )
 
             # If validation data is available, update experiment settings
             if "validation_data" in parameters and parameters["validation_data"]:
@@ -538,7 +610,9 @@ class PyBAMMTab(ttk.Frame):
 
                 if "discharge_C_rate" in test_data:
                     self.discharge_rate_entry.delete(0, tk.END)
-                    self.discharge_rate_entry.insert(0, str(test_data["discharge_C_rate"]))
+                    self.discharge_rate_entry.insert(
+                        0, str(test_data["discharge_C_rate"])
+                    )
 
                 # Update voltage limits
                 if "upper_voltage" in test_data:
@@ -554,17 +628,23 @@ class PyBAMMTab(ttk.Frame):
                     self.temp_entry.delete(0, tk.END)
                     self.temp_entry.insert(0, str(test_data["temperature"]))
 
-            self.main_app.log_message(f"Extracted parameters from sample {self.current_sample.name}")
+            self.main_app.log_message(
+                f"Extracted parameters from sample {self.current_sample.name}"
+            )
 
         except Exception as e:
-            self.main_app.log_message(f"Error extracting parameters: {str(e)}", logging.ERROR)
-            messagebox.showerror("Parameter Extraction Error", f"Error extracting parameters: {str(e)}")
+            self.main_app.log_message(
+                f"Error extracting parameters: {str(e)}", logging.ERROR
+            )
+            messagebox.showerror(
+                "Parameter Extraction Error", f"Error extracting parameters: {str(e)}"
+            )
 
     def load_parameters(self):
         """Load parameters from a JSON file."""
         file_path = filedialog.askopenfilename(
             title="Load Parameters",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
         )
 
         if not file_path:
@@ -619,7 +699,9 @@ class PyBAMMTab(ttk.Frame):
             self.main_app.log_message(f"Loaded parameters from {file_path}")
 
         except Exception as e:
-            self.main_app.log_message(f"Error loading parameters: {str(e)}", logging.ERROR)
+            self.main_app.log_message(
+                f"Error loading parameters: {str(e)}", logging.ERROR
+            )
             messagebox.showerror("Load Error", f"Error loading parameters: {str(e)}")
 
     def save_parameters(self):
@@ -627,7 +709,7 @@ class PyBAMMTab(ttk.Frame):
         file_path = filedialog.asksaveasfilename(
             title="Save Parameters",
             defaultextension=".json",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
         )
 
         if not file_path:
@@ -645,8 +727,8 @@ class PyBAMMTab(ttk.Frame):
                     "upper_voltage": float(self.upper_v_entry.get()),
                     "lower_voltage": float(self.lower_v_entry.get()),
                     "temperature_C": float(self.temp_entry.get()),
-                    "cycles": int(self.cycles_entry.get())
-                }
+                    "cycles": int(self.cycles_entry.get()),
+                },
             }
 
             # Add parameters from entries
@@ -664,11 +746,17 @@ class PyBAMMTab(ttk.Frame):
             if success:
                 self.main_app.log_message(f"Saved parameters to {file_path}")
             else:
-                self.main_app.log_message(f"Error saving parameters to {file_path}", logging.ERROR)
-                messagebox.showerror("Save Error", f"Error saving parameters to {file_path}")
+                self.main_app.log_message(
+                    f"Error saving parameters to {file_path}", logging.ERROR
+                )
+                messagebox.showerror(
+                    "Save Error", f"Error saving parameters to {file_path}"
+                )
 
         except Exception as e:
-            self.main_app.log_message(f"Error saving parameters: {str(e)}", logging.ERROR)
+            self.main_app.log_message(
+                f"Error saving parameters: {str(e)}", logging.ERROR
+            )
             messagebox.showerror("Save Error", f"Error saving parameters: {str(e)}")
 
     def run_simulation(self):
@@ -709,28 +797,33 @@ class PyBAMMTab(ttk.Frame):
             # Create parameter dictionary
             parameters = {
                 "chemistry": chemistry,
-                "custom_parameters": custom_parameters
+                "custom_parameters": custom_parameters,
             }
 
             # Create experiment dictionary
             experiment = {
                 "period_specs": [
-                                    {
-                                        "type": "CC_charge",
-                                        "rate": charge_rate,
-                                        "cutoff_voltage": upper_v
-                                    },
-                                    {
-                                        "type": "CC_discharge",
-                                        "rate": discharge_rate,
-                                        "cutoff_voltage": lower_v
-                                    }
-                                ] * cycles
+                    {
+                        "type": "CC_charge",
+                        "rate": charge_rate,
+                        "cutoff_voltage": upper_v,
+                    },
+                    {
+                        "type": "CC_discharge",
+                        "rate": discharge_rate,
+                        "cutoff_voltage": lower_v,
+                    },
+                ]
+                * cycles
             }
 
         except ValueError as e:
-            self.main_app.log_message(f"Error in simulation parameters: {str(e)}", logging.ERROR)
-            messagebox.showerror("Parameter Error", f"Error in simulation parameters: {str(e)}")
+            self.main_app.log_message(
+                f"Error in simulation parameters: {str(e)}", logging.ERROR
+            )
+            messagebox.showerror(
+                "Parameter Error", f"Error in simulation parameters: {str(e)}"
+            )
             self.run_button.config(state=tk.NORMAL)
             self.main_app.update_status("Simulation failed")
             return
@@ -739,7 +832,7 @@ class PyBAMMTab(ttk.Frame):
         threading.Thread(
             target=self._run_simulation_thread,
             args=(model_type, parameters, experiment, temperature_k),
-            daemon=True
+            daemon=True,
         ).start()
 
     def _run_simulation_thread(self, model_type, parameters, experiment, temperature_k):
@@ -747,9 +840,7 @@ class PyBAMMTab(ttk.Frame):
         try:
             # Run the simulation
             results = pybamm_models.run_simulation(
-                model_type=model_type,
-                parameters=parameters,
-                experiment=experiment
+                model_type=model_type, parameters=parameters, experiment=experiment
             )
 
             # Store the results
@@ -770,14 +861,20 @@ class PyBAMMTab(ttk.Frame):
 
             # Update status
             self.main_app.update_status("PyBAMM simulation completed successfully")
-            self.main_app.log_message(f"Completed PyBAMM simulation with model: {model_type}")
+            self.main_app.log_message(
+                f"Completed PyBAMM simulation with model: {model_type}"
+            )
 
             # Switch to the plot tab
             self.view_notebook.select(0)
 
         except Exception as e:
-            self.main_app.log_message(f"Error in PyBAMM simulation: {str(e)}", logging.ERROR)
-            messagebox.showerror("Simulation Error", f"Error in PyBAMM simulation: {str(e)}")
+            self.main_app.log_message(
+                f"Error in PyBAMM simulation: {str(e)}", logging.ERROR
+            )
+            messagebox.showerror(
+                "Simulation Error", f"Error in PyBAMM simulation: {str(e)}"
+            )
             self.main_app.update_status("Simulation failed")
 
         finally:
@@ -798,12 +895,15 @@ class PyBAMMTab(ttk.Frame):
             # Log the comparison
             metrics = self.comparison_results.get("metrics", {})
             if metrics:
-                error = metrics.get("mean_capacity_error_pct", float('nan'))
+                error = metrics.get("mean_capacity_error_pct", float("nan"))
                 self.main_app.log_message(
-                    f"Comparison with {self.current_test.name}: Mean capacity error = {error:.2f}%")
+                    f"Comparison with {self.current_test.name}: Mean capacity error = {error:.2f}%"
+                )
 
         except Exception as e:
-            self.main_app.log_message(f"Error in comparison with experiment: {str(e)}", logging.ERROR)
+            self.main_app.log_message(
+                f"Error in comparison with experiment: {str(e)}", logging.ERROR
+            )
 
     def update_plot(self):
         """Update the plot with current simulation results."""
@@ -902,7 +1002,10 @@ class PyBAMMTab(ttk.Frame):
         for cycle_num, cycle_data in cycles.items():
             variables = cycle_data.get("variables", {})
 
-            if "Terminal voltage [V]" in variables and "Discharge capacity [A.h]" in variables:
+            if (
+                "Terminal voltage [V]" in variables
+                and "Discharge capacity [A.h]" in variables
+            ):
                 voltage = np.array(variables["Terminal voltage [V]"])
                 capacity = np.array(variables["Discharge capacity [A.h]"])
 
@@ -940,7 +1043,10 @@ class PyBAMMTab(ttk.Frame):
         variables = cycle_data.get("variables", {})
 
         # Plot particle surface concentrations
-        if "Negative particle surface concentration" in variables and "Positive particle surface concentration" in variables:
+        if (
+            "Negative particle surface concentration" in variables
+            and "Positive particle surface concentration" in variables
+        ):
             neg_conc = np.array(variables["Negative particle surface concentration"])
             pos_conc = np.array(variables["Positive particle surface concentration"])
 
@@ -955,7 +1061,9 @@ class PyBAMMTab(ttk.Frame):
 
         # Plot electrolyte concentration
         if "X-averaged electrolyte concentration [mol.m-3]" in variables:
-            elyte_conc = np.array(variables["X-averaged electrolyte concentration [mol.m-3]"])
+            elyte_conc = np.array(
+                variables["X-averaged electrolyte concentration [mol.m-3]"]
+            )
 
             ax2.plot(time / 3600, elyte_conc)
 
@@ -997,33 +1105,44 @@ class PyBAMMTab(ttk.Frame):
         x = np.arange(len(cycle_nums))
         width = 0.35
 
-        ax.bar(x - width / 2, sim_capacities, width, label='Simulation')
-        ax.bar(x + width / 2, exp_capacities, width, label='Experiment')
+        ax.bar(x - width / 2, sim_capacities, width, label="Simulation")
+        ax.bar(x + width / 2, exp_capacities, width, label="Experiment")
 
         # Set chart properties
-        ax.set_xlabel('Cycle Number')
-        ax.set_ylabel('Discharge Capacity (mAh)')
-        ax.set_title('Simulated vs. Experimental Capacity')
+        ax.set_xlabel("Cycle Number")
+        ax.set_ylabel("Discharge Capacity (mAh)")
+        ax.set_title("Simulated vs. Experimental Capacity")
         ax.set_xticks(x)
         ax.set_xticklabels(cycle_nums)
         ax.legend()
 
         # Add error text
         for i, error in enumerate(errors):
-            ax.text(x[i], max(sim_capacities[i], exp_capacities[i]) + 50,
-                    f"{error:.1f}%", ha='center', va='bottom',
-                    color='red' if abs(error) > 10 else 'green')
+            ax.text(
+                x[i],
+                max(sim_capacities[i], exp_capacities[i]) + 50,
+                f"{error:.1f}%",
+                ha="center",
+                va="bottom",
+                color="red" if abs(error) > 10 else "green",
+            )
 
         # Add overall metrics if available
         metrics = self.comparison_results.get("metrics", {})
         if metrics:
-            mean_error = metrics.get("mean_capacity_error_pct", float('nan'))
-            rmse = metrics.get("rmse_capacity", float('nan'))
+            mean_error = metrics.get("mean_capacity_error_pct", float("nan"))
+            rmse = metrics.get("rmse_capacity", float("nan"))
 
             text = f"Mean Error: {mean_error:.2f}%\nRMSE: {rmse:.2f}%"
-            ax.text(0.02, 0.98, text, transform=ax.transAxes,
-                    verticalalignment='top', horizontalalignment='left',
-                    bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+            ax.text(
+                0.02,
+                0.98,
+                text,
+                transform=ax.transAxes,
+                verticalalignment="top",
+                horizontalalignment="left",
+                bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+            )
 
         # Update the canvas
         self.comparison_fig.tight_layout()
@@ -1050,15 +1169,25 @@ class PyBAMMTab(ttk.Frame):
         self.params_text.insert(tk.END, "Model Information\n", "heading")
         self.params_text.insert(tk.END, f"Model Type: {self.model_var.get()}\n")
         self.params_text.insert(tk.END, f"Chemistry: {self.chemistry_var.get()}\n")
-        self.params_text.insert(tk.END,
-                                f"Description: {pybamm_models.AVAILABLE_MODELS.get(self.model_var.get(), '')}\n\n")
+        self.params_text.insert(
+            tk.END,
+            f"Description: {pybamm_models.AVAILABLE_MODELS.get(self.model_var.get(), '')}\n\n",
+        )
 
         # Experiment information
         self.params_text.insert(tk.END, "Experiment Configuration\n", "heading")
-        self.params_text.insert(tk.END, f"Charge C-rate: {self.charge_rate_entry.get()}\n")
-        self.params_text.insert(tk.END, f"Discharge C-rate: {self.discharge_rate_entry.get()}\n")
-        self.params_text.insert(tk.END, f"Upper Voltage: {self.upper_v_entry.get()} V\n")
-        self.params_text.insert(tk.END, f"Lower Voltage: {self.lower_v_entry.get()} V\n")
+        self.params_text.insert(
+            tk.END, f"Charge C-rate: {self.charge_rate_entry.get()}\n"
+        )
+        self.params_text.insert(
+            tk.END, f"Discharge C-rate: {self.discharge_rate_entry.get()}\n"
+        )
+        self.params_text.insert(
+            tk.END, f"Upper Voltage: {self.upper_v_entry.get()} V\n"
+        )
+        self.params_text.insert(
+            tk.END, f"Lower Voltage: {self.lower_v_entry.get()} V\n"
+        )
         self.params_text.insert(tk.END, f"Temperature: {self.temp_entry.get()} °C\n")
         self.params_text.insert(tk.END, f"Cycles: {self.cycles_entry.get()}\n\n")
 
@@ -1077,7 +1206,9 @@ class PyBAMMTab(ttk.Frame):
                 self.params_text.insert(tk.END, f"{name}: {value:.4f}\n")
 
         # Apply text styles
-        self.params_text.tag_configure("title", font=("Arial", 14, "bold"), justify='center')
+        self.params_text.tag_configure(
+            "title", font=("Arial", 14, "bold"), justify="center"
+        )
         self.params_text.tag_configure("heading", font=("Arial", 11, "bold"))
 
         # Disable editing
@@ -1086,7 +1217,10 @@ class PyBAMMTab(ttk.Frame):
     def fit_parameters(self):
         """Fit model parameters to experimental data."""
         if not self.current_test:
-            messagebox.showinfo("No Test Selected", "Please select an experimental test to fit parameters to.")
+            messagebox.showinfo(
+                "No Test Selected",
+                "Please select an experimental test to fit parameters to.",
+            )
             return
 
         # Collect parameters to fit
@@ -1100,11 +1234,15 @@ class PyBAMMTab(ttk.Frame):
         model_frame = ttk.Frame(fit_dialog)
         model_frame.pack(fill=tk.X, padx=10, pady=10)
 
-        ttk.Label(model_frame, text="Model Type:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(model_frame, text="Model Type:").grid(
+            row=0, column=0, sticky=tk.W, padx=5, pady=5
+        )
         fit_model_var = tk.StringVar(value=self.model_var.get())
 
-        fit_model_combobox = ttk.Combobox(model_frame, textvariable=fit_model_var, width=25)
-        fit_model_combobox['values'] = list(pybamm_models.AVAILABLE_MODELS.keys())
+        fit_model_combobox = ttk.Combobox(
+            model_frame, textvariable=fit_model_var, width=25
+        )
+        fit_model_combobox["values"] = list(pybamm_models.AVAILABLE_MODELS.keys())
         fit_model_combobox.grid(row=0, column=1, sticky=tk.W + tk.E, padx=5, pady=5)
 
         # Parameters to fit
@@ -1116,7 +1254,9 @@ class PyBAMMTab(ttk.Frame):
         canvas_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
 
         fit_canvas = tk.Canvas(canvas_frame)
-        fit_scrollbar = ttk.Scrollbar(canvas_frame, orient=tk.VERTICAL, command=fit_canvas.yview)
+        fit_scrollbar = ttk.Scrollbar(
+            canvas_frame, orient=tk.VERTICAL, command=fit_canvas.yview
+        )
         fit_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         fit_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -1135,16 +1275,16 @@ class PyBAMMTab(ttk.Frame):
             "Negative electrode Bruggeman coefficient (electrode)",
             "Positive electrode Bruggeman coefficient (electrode)",
             "Electrolyte diffusivity [m2.s-1]",
-            "Electrolyte conductivity [S.m-1]"
+            "Electrolyte conductivity [S.m-1]",
         ]
 
         param_vars = {}
         for i, param in enumerate(fittable_params):
             var = tk.BooleanVar(value=i < 2)  # Default: select first two
             param_vars[param] = var
-            ttk.Checkbutton(
-                fit_params_frame, text=param, variable=var
-            ).grid(row=i, column=0, sticky=tk.W, padx=5, pady=2)
+            ttk.Checkbutton(fit_params_frame, text=param, variable=var).grid(
+                row=i, column=0, sticky=tk.W, padx=5, pady=2
+            )
 
         # Make sure scrolling works
         fit_params_frame.update_idletasks()
@@ -1155,18 +1295,18 @@ class PyBAMMTab(ttk.Frame):
         button_frame.pack(fill=tk.X, padx=10, pady=10)
 
         ttk.Button(
-            button_frame, text="Fit Parameters",
+            button_frame,
+            text="Fit Parameters",
             command=lambda: self._run_parameter_fitting(
                 fit_model_var.get(),
                 {k: v.get() for k, v in param_vars.items()},
-                fit_dialog
-            )
+                fit_dialog,
+            ),
         ).pack(side=tk.RIGHT, padx=5)
 
-        ttk.Button(
-            button_frame, text="Cancel",
-            command=fit_dialog.destroy
-        ).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=fit_dialog.destroy).pack(
+            side=tk.RIGHT, padx=5
+        )
 
     def _run_parameter_fitting(self, model_type, param_selections, dialog):
         """
@@ -1181,21 +1321,27 @@ class PyBAMMTab(ttk.Frame):
         dialog.destroy()
 
         # Get parameters to fit
-        params_to_fit = [param for param, selected in param_selections.items() if selected]
+        params_to_fit = [
+            param for param, selected in param_selections.items() if selected
+        ]
 
         if not params_to_fit:
-            messagebox.showwarning("No Parameters Selected", "Please select at least one parameter to fit.")
+            messagebox.showwarning(
+                "No Parameters Selected", "Please select at least one parameter to fit."
+            )
             return
 
         # Disable interface during fitting
         self.fit_button.config(state=tk.DISABLED)
-        self.main_app.update_status("Fitting parameters, this may take several minutes...")
+        self.main_app.update_status(
+            "Fitting parameters, this may take several minutes..."
+        )
 
         # Run fitting in a thread
         threading.Thread(
             target=self._parameter_fitting_thread,
             args=(model_type, params_to_fit),
-            daemon=True
+            daemon=True,
         ).start()
 
     def _parameter_fitting_thread(self, model_type, params_to_fit):
@@ -1216,7 +1362,7 @@ class PyBAMMTab(ttk.Frame):
                 str(self.current_test.id),
                 model_type=model_type,
                 initial_params=initial_params,
-                params_to_fit=params_to_fit
+                params_to_fit=params_to_fit,
             )
 
             # Update the interface with fitted parameters
@@ -1237,8 +1383,12 @@ class PyBAMMTab(ttk.Frame):
             self.main_app.log_message("Parameter fitting completed successfully")
 
         except Exception as e:
-            self.main_app.log_message(f"Error in parameter fitting: {str(e)}", logging.ERROR)
-            messagebox.showerror("Fitting Error", f"Error in parameter fitting: {str(e)}")
+            self.main_app.log_message(
+                f"Error in parameter fitting: {str(e)}", logging.ERROR
+            )
+            messagebox.showerror(
+                "Fitting Error", f"Error in parameter fitting: {str(e)}"
+            )
             self.main_app.update_status("Parameter fitting failed")
 
         finally:
@@ -1258,7 +1408,9 @@ class PyBAMMTab(ttk.Frame):
         results_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # Add a scrollbar
-        scrollbar = ttk.Scrollbar(results_text, orient=tk.VERTICAL, command=results_text.yview)
+        scrollbar = ttk.Scrollbar(
+            results_text, orient=tk.VERTICAL, command=results_text.yview
+        )
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         results_text.config(yscrollcommand=scrollbar.set)
 
@@ -1278,24 +1430,34 @@ class PyBAMMTab(ttk.Frame):
             results_text.insert(tk.END, f"{metric}: {value:.6f}\n")
 
         # Add optimization info
-        results_text.insert(tk.END, f"\nIterations: {fitted_params.get('iteration_count', 'N/A')}\n")
+        results_text.insert(
+            tk.END, f"\nIterations: {fitted_params.get('iteration_count', 'N/A')}\n"
+        )
 
         # Apply text styles
-        results_text.tag_configure("title", font=("Arial", 14, "bold"), justify='center')
+        results_text.tag_configure(
+            "title", font=("Arial", 14, "bold"), justify="center"
+        )
         results_text.tag_configure("heading", font=("Arial", 11, "bold"))
 
         # Disable editing
         results_text.config(state=tk.DISABLED)
 
         # Add a close button
-        ttk.Button(
-            results_dialog, text="Close", command=results_dialog.destroy
-        ).pack(pady=10)
+        ttk.Button(results_dialog, text="Close", command=results_dialog.destroy).pack(
+            pady=10
+        )
 
         # Center the dialog on the parent window
         results_dialog.update_idletasks()
-        x = self.winfo_rootx() + (self.winfo_width() - results_dialog.winfo_width()) // 2
-        y = self.winfo_rooty() + (self.winfo_height() - results_dialog.winfo_height()) // 2
+        x = (
+            self.winfo_rootx()
+            + (self.winfo_width() - results_dialog.winfo_width()) // 2
+        )
+        y = (
+            self.winfo_rooty()
+            + (self.winfo_height() - results_dialog.winfo_height()) // 2
+        )
         results_dialog.geometry(f"+{x}+{y}")
 
 
@@ -1320,7 +1482,13 @@ class ToolTip:
         self.tooltip.wm_overrideredirect(True)
         self.tooltip.wm_geometry(f"+{x}+{y}")
 
-        label = ttk.Label(self.tooltip, text=self.text, background="#ffffe0", relief="solid", borderwidth=1)
+        label = ttk.Label(
+            self.tooltip,
+            text=self.text,
+            background="#ffffe0",
+            relief="solid",
+            borderwidth=1,
+        )
         label.pack(padx=2, pady=2)
 
     def hide_tooltip(self, event=None):

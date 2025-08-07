@@ -7,7 +7,15 @@ test results, and propagate properties across related samples.
 
 import numpy as np
 import logging
-from . import models, utils
+import datetime
+
+try:
+    from . import models, utils
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
+
+    models = importlib.import_module("models")
+    utils = importlib.import_module("utils")
 import pandas as pd
 
 

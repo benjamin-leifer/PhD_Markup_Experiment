@@ -11,14 +11,24 @@ from __future__ import annotations
 
 # Try to import the real MongoEngine models
 try:  # pragma: no cover - behaviour depends on environment
-    from mongoengine import Document, EmbeddedDocument  # type: ignore
-    from mongoengine import fields, CASCADE  # type: ignore
+    from mongoengine import Document, EmbeddedDocument  # type: ignore  # noqa: F401
+    from mongoengine import fields, CASCADE  # type: ignore  # noqa: F401
 
-    from .cycle_summary import CycleSummary  # type: ignore
-    from .sample import Sample  # type: ignore
-    from .testresult import TestResult, CycleDetailData  # type: ignore
-    from .raw_file import RawDataFile  # type: ignore
-    from .test_protocol import TestProtocol  # type: ignore
+    try:
+        from .cycle_summary import CycleSummary  # type: ignore
+        from .sample import Sample  # type: ignore
+        from .testresult import TestResult, CycleDetailData  # type: ignore
+        from .raw_file import RawDataFile  # type: ignore
+        from .test_protocol import TestProtocol  # type: ignore
+    except ImportError:  # pragma: no cover - allow running as script
+        import importlib
+
+        CycleSummary = importlib.import_module("cycle_summary").CycleSummary  # type: ignore
+        Sample = importlib.import_module("sample").Sample  # type: ignore
+        TestResult = importlib.import_module("testresult").TestResult  # type: ignore
+        CycleDetailData = importlib.import_module("testresult").CycleDetailData  # type: ignore
+        RawDataFile = importlib.import_module("raw_file").RawDataFile  # type: ignore
+        TestProtocol = importlib.import_module("test_protocol").TestProtocol  # type: ignore
 
     __all__ = [
         "Sample",

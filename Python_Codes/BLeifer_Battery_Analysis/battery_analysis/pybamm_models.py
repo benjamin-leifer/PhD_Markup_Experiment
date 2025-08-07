@@ -5,10 +5,7 @@ This module provides interfaces to PyBAMM battery models, enabling simulation,
 parameter estimation, and comparison with experimental data.
 """
 
-import os
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 import logging
 from functools import lru_cache
 import json
@@ -21,7 +18,13 @@ except ImportError:
     HAS_PYBAMM = False
     logging.warning("PyBAMM not found. Install with: pip install pybamm")
 
-from . import models, utils
+try:
+    from . import models, utils
+except ImportError:  # pragma: no cover - allow running as script
+    import importlib
+
+    models = importlib.import_module("models")
+    utils = importlib.import_module("utils")
 
 # Constants
 DEFAULT_CHEMISTRY = "lithium-ion"
@@ -31,7 +34,7 @@ AVAILABLE_MODELS = {
     "DFN": "Doyle-Fuller-Newman Model (slower, more detailed)",
     "SPMe": "Single Particle Model with Electrolyte (balanced)",
     "Newman-Tobias": "Newman-Tobias Model (simplified electrolyte)",
-    "Chen2020": "Chen et al. 2020 model with degradation"
+    "Chen2020": "Chen et al. 2020 model with degradation",
 }
 
 
@@ -61,7 +64,9 @@ def create_model(model_type=DEFAULT_MODEL, chemistry=DEFAULT_CHEMISTRY, options=
         pybamm.BaseBatteryModel: The created model
     """
     if not HAS_PYBAMM:
-        raise ImportError("PyBAMM is required for theoretical modeling. Install with 'pip install pybamm'")
+        raise ImportError(
+            "PyBAMM is required for theoretical modeling. Install with 'pip install pybamm'"
+        )
 
     # Set default options if none provided
     if options is None:
@@ -80,7 +85,9 @@ def create_model(model_type=DEFAULT_MODEL, chemistry=DEFAULT_CHEMISTRY, options=
         # Model with degradation mechanisms
         model = pybamm.lithium_ion.Chen2020(options=options)
     else:
-        raise ValueError(f"Unknown model type: {model_type}. Available types: {list(AVAILABLE_MODELS.keys())}")
+        raise ValueError(
+            f"Unknown model type: {model_type}. Available types: {list(AVAILABLE_MODELS.keys())}"
+        )
 
     return model
 
@@ -97,7 +104,9 @@ def create_parameter_set(chemistry="NMC", options=None):
         dict: Parameter set
     """
     if not HAS_PYBAMM:
-        raise ImportError("PyBAMM is required for theoretical modeling. Install with 'pip install pybamm'")
+        raise ImportError(
+            "PyBAMM is required for theoretical modeling. Install with 'pip install pybamm'"
+        )
 
     # Map chemistry shorthand to PyBAMM parameter sets
     chemistry_map = {
@@ -105,7 +114,7 @@ def create_parameter_set(chemistry="NMC", options=None):
         "LFP": "LFP_graphite",
         "NCA": "NCA_graphite",
         "LCO": "LCO_graphite",
-        "LMO": "LMO_graphite"
+        "LMO": "LMO_graphite",
     }
 
     pybamm_chemistry = chemistry_map.get(chemistry, chemistry)
@@ -141,7 +150,7 @@ def extract_parameters_from_sample(sample_id):
     parameters = {}
 
     # Extract chemistry information
-    if hasattr(sample, 'chemistry') and sample.chemistry:
+    if hasattr(sample, "chemistry") and sample.chemistry:
         # Map chemistry string to model parameters
         chemistry_info = parse_chemistry_string(sample.chemistry)
 
@@ -149,16 +158,16 @@ def extract_parameters_from_sample(sample_id):
         parameters.update(chemistry_info)
 
     # Extract physical properties
-    if hasattr(sample, 'form_factor') and sample.form_factor:
+    if hasattr(sample, "form_factor") and sample.form_factor:
         form_factor_params = extract_form_factor_parameters(sample.form_factor)
         parameters.update(form_factor_params)
 
     # Extract capacity information
-    if hasattr(sample, 'nominal_capacity') and sample.nominal_capacity:
+    if hasattr(sample, "nominal_capacity") and sample.nominal_capacity:
         parameters["nominal_capacity"] = sample.nominal_capacity
 
     # Get Enhanced Sample properties if available
-    if hasattr(sample, 'components') and sample.components:
+    if hasattr(sample, "components") and sample.components:
         component_params = extract_component_parameters(sample)
         parameters.update(component_params)
 
@@ -188,14 +197,14 @@ def parse_chemistry_string(chemistry_str):
         "NCA": ["NCA", "LiNiCoAlO2"],
         "LFP": ["LFP", "LiFePO4"],
         "LCO": ["LCO", "LiCoO2"],
-        "LMO": ["LMO", "LiMn2O4"]
+        "LMO": ["LMO", "LiMn2O4"],
     }
 
     # Common anode materials
     anode_materials = {
         "graphite": ["graphite", "carbon", "C"],
         "silicon": ["silicon", "Si"],
-        "LTO": ["LTO", "Li4Ti5O12"]
+        "LTO": ["LTO", "Li4Ti5O12"],
     }
 
     # Check for cathode material
@@ -222,7 +231,8 @@ def parse_chemistry_string(chemistry_str):
     if cathode_type == "NMC" and "NMC" in chemistry_str:
         # Look for numbers after NMC
         import re
-        match = re.search(r'NMC(\d+)', chemistry_str)
+
+        match = re.search(r"NMC(\d+)", chemistry_str)
         if match:
             digits = match.group(1)
             if len(digits) == 3:
@@ -230,11 +240,7 @@ def parse_chemistry_string(chemistry_str):
                 ni = int(digits[0]) / 10
                 mn = int(digits[1]) / 10
                 co = int(digits[2]) / 10
-                params["cathode_stoichiometry"] = {
-                    "Ni": ni,
-                    "Mn": mn,
-                    "Co": co
-                }
+                params["cathode_stoichiometry"] = {"Ni": ni, "Mn": mn, "Co": co}
 
     return params
 
@@ -257,9 +263,7 @@ def extract_form_factor_parameters(form_factor):
     Returns:
         dict: Dictionary with geometric parameters
     """
-    params = {
-        "form_factor": form_factor
-    }
+    params = {"form_factor": form_factor}
 
     # Cylindrical cells
     if form_factor == "18650":
@@ -301,7 +305,7 @@ def extract_component_parameters(sample):
     params = {}
 
     # Check if sample has components attribute
-    if not hasattr(sample, 'components') or not sample.components:
+    if not hasattr(sample, "components") or not sample.components:
         return params
 
     # Process each component
@@ -309,24 +313,28 @@ def extract_component_parameters(sample):
         role = component.role_type
         material = component.material
 
-        if role == 'cathode':
+        if role == "cathode":
             params["cathode"] = {
                 "material": getattr(material, "name", "unknown"),
-                "loading": component.properties.get("loading", {}).get("value", None) if hasattr(component,
-                                                                                                 "properties") else None
+                "loading": (
+                    component.properties.get("loading", {}).get("value", None)
+                    if hasattr(component, "properties")
+                    else None
+                ),
             }
 
-        elif role == 'anode':
+        elif role == "anode":
             params["anode"] = {
                 "material": getattr(material, "name", "unknown"),
-                "loading": component.properties.get("loading", {}).get("value", None) if hasattr(component,
-                                                                                                 "properties") else None
+                "loading": (
+                    component.properties.get("loading", {}).get("value", None)
+                    if hasattr(component, "properties")
+                    else None
+                ),
             }
 
-        elif role == 'electrolyte':
-            params["electrolyte"] = {
-                "material": getattr(material, "name", "unknown")
-            }
+        elif role == "electrolyte":
+            params["electrolyte"] = {"material": getattr(material, "name", "unknown")}
 
     return params
 
@@ -352,7 +360,7 @@ def extract_test_parameters(test_refs):
         test_data = {
             "test_id": str(test.id),
             "test_name": test.name,
-            "cycle_count": getattr(test, "cycle_count", 0)
+            "cycle_count": getattr(test, "cycle_count", 0),
         }
 
         # Extract temperature if available
@@ -360,10 +368,16 @@ def extract_test_parameters(test_refs):
             test_data["temperature"] = test.temperature
 
         # Extract voltage limits
-        if hasattr(test, "upper_cutoff_voltage") and test.upper_cutoff_voltage is not None:
+        if (
+            hasattr(test, "upper_cutoff_voltage")
+            and test.upper_cutoff_voltage is not None
+        ):
             test_data["upper_voltage"] = test.upper_cutoff_voltage
 
-        if hasattr(test, "lower_cutoff_voltage") and test.lower_cutoff_voltage is not None:
+        if (
+            hasattr(test, "lower_cutoff_voltage")
+            and test.lower_cutoff_voltage is not None
+        ):
             test_data["lower_voltage"] = test.lower_cutoff_voltage
 
         # Extract C-rates if available
@@ -378,7 +392,9 @@ def extract_test_parameters(test_refs):
     return test_params
 
 
-def run_simulation(model_type=DEFAULT_MODEL, parameters=None, experiment=None, solver=None):
+def run_simulation(
+    model_type=DEFAULT_MODEL, parameters=None, experiment=None, solver=None
+):
     """
     Run a PyBAMM simulation with the given model and parameters.
 
@@ -392,7 +408,9 @@ def run_simulation(model_type=DEFAULT_MODEL, parameters=None, experiment=None, s
         dict: Simulation results
     """
     if not HAS_PYBAMM:
-        raise ImportError("PyBAMM is required for theoretical modeling. Install with 'pip install pybamm'")
+        raise ImportError(
+            "PyBAMM is required for theoretical modeling. Install with 'pip install pybamm'"
+        )
 
     # Create model
     model = create_model(model_type)
@@ -411,9 +429,11 @@ def run_simulation(model_type=DEFAULT_MODEL, parameters=None, experiment=None, s
     # Process experiment
     if experiment is None:
         # Default to 1C discharge
-        experiment = pybamm.Experiment([
-            "Discharge at 1C until 2.5 V",
-        ])
+        experiment = pybamm.Experiment(
+            [
+                "Discharge at 1C until 2.5 V",
+            ]
+        )
     elif isinstance(experiment, dict):
         # Create experiment from dictionary
         experiment = create_experiment_from_dict(experiment)
@@ -423,7 +443,9 @@ def run_simulation(model_type=DEFAULT_MODEL, parameters=None, experiment=None, s
         solver = pybamm.CasadiSolver()
 
     # Set up and run simulation
-    sim = pybamm.Simulation(model, experiment=experiment, solver=solver, parameter_values=param)
+    sim = pybamm.Simulation(
+        model, experiment=experiment, solver=solver, parameter_values=param
+    )
 
     try:
         # Run the simulation
@@ -449,7 +471,9 @@ def parameters_dict_to_pybamm(parameters):
         pybamm.ParameterValues: Parameters in PyBAMM format
     """
     if not HAS_PYBAMM:
-        raise ImportError("PyBAMM is required for theoretical modeling. Install with 'pip install pybamm'")
+        raise ImportError(
+            "PyBAMM is required for theoretical modeling. Install with 'pip install pybamm'"
+        )
 
     # Start with a default parameter set
     chemistry = parameters.get("chemistry", "NMC_graphite")
@@ -460,7 +484,7 @@ def parameters_dict_to_pybamm(parameters):
             "NMC": "NMC_graphite",
             "LFP": "LFP_graphite",
             "NCA": "NCA_graphite",
-            "LCO": "LCO_graphite"
+            "LCO": "LCO_graphite",
         }
         chemistry = chemistry_map.get(chemistry, chemistry)
 
@@ -486,7 +510,9 @@ def create_experiment_from_dict(experiment_dict):
         pybamm.Experiment: The created experiment
     """
     if not HAS_PYBAMM:
-        raise ImportError("PyBAMM is required for theoretical modeling. Install with 'pip install pybamm'")
+        raise ImportError(
+            "PyBAMM is required for theoretical modeling. Install with 'pip install pybamm'"
+        )
 
     # Extract period specifications
     period_specs = experiment_dict.get("period_specs", [])
@@ -547,7 +573,7 @@ def process_simulation_results(simulation):
         "model": model.name,
         "has_solution": True,
         "times": solution.t,
-        "cycles": {}
+        "cycles": {},
     }
 
     # Extract important variables for each cycle
@@ -566,7 +592,7 @@ def process_simulation_results(simulation):
             "Negative particle surface concentration",
             "Positive particle surface concentration",
             "Cell temperature [K]",
-            "X-averaged electrolyte concentration [mol.m-3]"
+            "X-averaged electrolyte concentration [mol.m-3]",
         ]
 
         for var_name in var_names:
@@ -578,10 +604,7 @@ def process_simulation_results(simulation):
                 pass
 
         # Add to results dictionary
-        results["cycles"][cycle_num] = {
-            "t": t.tolist(),
-            "variables": variables
-        }
+        results["cycles"][cycle_num] = {"t": t.tolist(), "variables": variables}
 
     return results
 
@@ -603,7 +626,12 @@ def compare_simulation_with_experiment(simulation_results, test_id):
         raise ValueError(f"Test with ID {test_id} not found")
 
     # Extract cycle data from the test
-    from . import analysis
+    try:
+        from . import analysis
+    except ImportError:  # pragma: no cover - allow running as script
+        import importlib
+
+        analysis = importlib.import_module("analysis")
     cycle_data = analysis.get_cycle_data(test_id)
 
     # Prepare comparison results
@@ -613,7 +641,7 @@ def compare_simulation_with_experiment(simulation_results, test_id):
         "sample_name": utils.get_sample_name(test.sample),
         "model": simulation_results.get("model", "Unknown"),
         "metrics": {},
-        "cycles": {}
+        "cycles": {},
     }
 
     # Compare each cycle
@@ -632,34 +660,46 @@ def compare_simulation_with_experiment(simulation_results, test_id):
         sim_capacity = None
         if "Discharge capacity [A.h]" in sim_cycle["variables"]:
             # Get final capacity value
-            sim_capacity = sim_cycle["variables"]["Discharge capacity [A.h]"][-1] * 1000  # Convert A.h to mAh
+            sim_capacity = (
+                sim_cycle["variables"]["Discharge capacity [A.h]"][-1] * 1000
+            )  # Convert A.h to mAh
 
         exp_capacity = exp_cycle["discharge_capacity"]
 
         # Calculate error
         if sim_capacity is not None:
-            capacity_error = (sim_capacity - exp_capacity) / exp_capacity * 100 if exp_capacity > 0 else float('inf')
+            capacity_error = (
+                (sim_capacity - exp_capacity) / exp_capacity * 100
+                if exp_capacity > 0
+                else float("inf")
+            )
 
             # Add to comparison
             comparison["cycles"][cycle_num] = {
                 "sim_capacity": sim_capacity,
                 "exp_capacity": exp_capacity,
-                "capacity_error_pct": capacity_error
+                "capacity_error_pct": capacity_error,
             }
 
     # Calculate overall metrics
     if comparison["cycles"]:
-        capacity_errors = [c["capacity_error_pct"] for c in comparison["cycles"].values()]
+        capacity_errors = [
+            c["capacity_error_pct"] for c in comparison["cycles"].values()
+        ]
 
         comparison["metrics"]["mean_capacity_error_pct"] = np.mean(capacity_errors)
         comparison["metrics"]["max_capacity_error_pct"] = np.max(capacity_errors)
         comparison["metrics"]["min_capacity_error_pct"] = np.min(capacity_errors)
-        comparison["metrics"]["rmse_capacity"] = np.sqrt(np.mean(np.array(capacity_errors) ** 2))
+        comparison["metrics"]["rmse_capacity"] = np.sqrt(
+            np.mean(np.array(capacity_errors) ** 2)
+        )
 
     return comparison
 
 
-def estimate_model_parameters(test_id, model_type=DEFAULT_MODEL, initial_params=None, params_to_fit=None):
+def estimate_model_parameters(
+    test_id, model_type=DEFAULT_MODEL, initial_params=None, params_to_fit=None
+):
     """
     Estimate model parameters by fitting to experimental data.
 
@@ -673,12 +713,16 @@ def estimate_model_parameters(test_id, model_type=DEFAULT_MODEL, initial_params=
         dict: Fitted parameters and goodness of fit metrics
     """
     if not HAS_PYBAMM:
-        raise ImportError("PyBAMM is required for parameter estimation. Install with 'pip install pybamm'")
+        raise ImportError(
+            "PyBAMM is required for parameter estimation. Install with 'pip install pybamm'"
+        )
 
     try:
         import pybamm.parameter_inference as parameterization
     except ImportError:
-        raise ImportError("Could not import parameter inference module. Make sure you have a recent version of PyBAMM.")
+        raise ImportError(
+            "Could not import parameter inference module. Make sure you have a recent version of PyBAMM."
+        )
 
     # Get the experimental data
     test = models.TestResult.objects(id=test_id).first()
@@ -692,7 +736,7 @@ def estimate_model_parameters(test_id, model_type=DEFAULT_MODEL, initial_params=
     if params_to_fit is None:
         params_to_fit = [
             "Negative electrode diffusivity [m2.s-1]",
-            "Positive electrode diffusivity [m2.s-1]"
+            "Positive electrode diffusivity [m2.s-1]",
         ]
 
     # Create model
@@ -703,13 +747,13 @@ def estimate_model_parameters(test_id, model_type=DEFAULT_MODEL, initial_params=
 
     # Run parameter fitting
     result = problem.fit(
-        initial_guess=initial_params,
-        parameters=params_to_fit,
-        bounds=None
+        initial_guess=initial_params, parameters=params_to_fit, bounds=None
     )
 
     # Extract fitted parameters
-    fitted_params = {param: float(value) for param, value in zip(params_to_fit, result.x)}
+    fitted_params = {
+        param: float(value) for param, value in zip(params_to_fit, result.x)
+    }
 
     # Run a simulation with the fitted parameters
     param_values = pybamm.ParameterValues(chemistry=DEFAULT_CHEMISTRY)
@@ -725,7 +769,7 @@ def estimate_model_parameters(test_id, model_type=DEFAULT_MODEL, initial_params=
         "fitted_parameters": fitted_params,
         "goodness_of_fit": goodness_of_fit,
         "initial_params": initial_params,
-        "iteration_count": result.nit
+        "iteration_count": result.nit,
     }
 
 
@@ -755,14 +799,16 @@ def extract_pybamm_experiment_data(test):
         current_data = [1.0, 1.0]  # Placeholder, 1C discharge
         voltage_data = [4.2, 3.0]  # Placeholder, typical voltage range
 
-        cycle_data.append({
-            "cycle": cycle.cycle_index,
-            "time": time_data,
-            "current": current_data,
-            "voltage": voltage_data,
-            "temperature": [298.15, 298.15],  # Placeholder, ambient temperature
-            "capacity": cycle.discharge_capacity / 1000.0  # Convert mAh to Ah
-        })
+        cycle_data.append(
+            {
+                "cycle": cycle.cycle_index,
+                "time": time_data,
+                "current": current_data,
+                "voltage": voltage_data,
+                "temperature": [298.15, 298.15],  # Placeholder, ambient temperature
+                "capacity": cycle.discharge_capacity / 1000.0,  # Convert mAh to Ah
+            }
+        )
 
     # Format for PyBAMM
     data["cycles"] = cycle_data
@@ -785,13 +831,12 @@ def calculate_goodness_of_fit(solution, experimental_data):
     # In a full implementation, this would interpolate the solution to the experimental data points
     # and calculate metrics like RMSE, R², etc.
 
-    return {
-        "rmse_voltage": 0.05,  # Placeholder values
-        "r_squared": 0.95
-    }
+    return {"rmse_voltage": 0.05, "r_squared": 0.95}  # Placeholder values
 
 
-def predict_cycle_life(model_type="Chen2020", parameters=None, operating_conditions=None):
+def predict_cycle_life(
+    model_type="Chen2020", parameters=None, operating_conditions=None
+):
     """
     Predict cycle life using a degradation model.
 
@@ -804,7 +849,9 @@ def predict_cycle_life(model_type="Chen2020", parameters=None, operating_conditi
         dict: Prediction results including cycle life and degradation metrics
     """
     if not HAS_PYBAMM:
-        raise ImportError("PyBAMM is required for cycle life prediction. Install with 'pip install pybamm'")
+        raise ImportError(
+            "PyBAMM is required for cycle life prediction. Install with 'pip install pybamm'"
+        )
 
     # Set default operating conditions
     if operating_conditions is None:
@@ -814,17 +861,20 @@ def predict_cycle_life(model_type="Chen2020", parameters=None, operating_conditi
             "lower_voltage": 2.5,  # V
             "charge_crate": 0.5,  # C
             "discharge_crate": 1.0,  # C
-            "cycles": 500  # Number of cycles to simulate
+            "cycles": 500,  # Number of cycles to simulate
         }
 
     # Create a degradation model
     model = create_model(model_type)
 
     # Set up experiment to match operating conditions
-    experiment = pybamm.Experiment([
-                                       f"Charge at {operating_conditions['charge_crate']}C until {operating_conditions['upper_voltage']} V",
-                                       f"Discharge at {operating_conditions['discharge_crate']}C until {operating_conditions['lower_voltage']} V"
-                                   ] * operating_conditions["cycles"])
+    experiment = pybamm.Experiment(
+        [
+            f"Charge at {operating_conditions['charge_crate']}C until {operating_conditions['upper_voltage']} V",
+            f"Discharge at {operating_conditions['discharge_crate']}C until {operating_conditions['lower_voltage']} V",
+        ]
+        * operating_conditions["cycles"]
+    )
 
     # Process parameters
     if parameters is None:
@@ -843,9 +893,6 @@ def predict_cycle_life(model_type="Chen2020", parameters=None, operating_conditi
 
     # Extract degradation metrics
     # For capacity fade over cycles
-    discharge_capacity = sol["Discharge capacity [A.h]"]
-
-    # Get cycle numbers
     cycle_numbers = []
     capacities = []
     for i, cycle_sol in enumerate(sol.cycles):
@@ -872,6 +919,7 @@ def predict_cycle_life(model_type="Chen2020", parameters=None, operating_conditi
         else:
             # Extrapolate to estimate cycle life
             from scipy import optimize
+
             # Fit a curve to the fade data
             def power_law(x, a, b, c):
                 return a * np.power(x, b) + c
@@ -881,7 +929,7 @@ def predict_cycle_life(model_type="Chen2020", parameters=None, operating_conditi
                 cycle_numbers,
                 capacity_fade_pct,
                 p0=[0.1, 0.5, 0],
-                maxfev=10000
+                maxfev=10000,
             )
 
             # Find when the fitted curve reaches 20% fade
@@ -889,9 +937,11 @@ def predict_cycle_life(model_type="Chen2020", parameters=None, operating_conditi
                 return power_law(x, *params) - 20
 
             try:
-                cycle_life_80 = float(optimize.brentq(find_eol, cycle_numbers[-1], cycle_numbers[-1] * 10))
-            except:
-                cycle_life_80 = float('inf')  # Could not determine EOL
+                cycle_life_80 = float(
+                    optimize.brentq(find_eol, cycle_numbers[-1], cycle_numbers[-1] * 10)
+                )
+            except Exception:
+                cycle_life_80 = float("inf")  # Could not determine EOL
     except Exception as e:
         logging.error(f"Error estimating cycle life: {str(e)}")
         cycle_life_80 = None
@@ -908,8 +958,8 @@ def predict_cycle_life(model_type="Chen2020", parameters=None, operating_conditi
         "data": {
             "cycle_numbers": cycle_numbers.tolist(),
             "capacities_ah": capacities.tolist(),
-            "capacity_fade_pct": capacity_fade_pct.tolist()
-        }
+            "capacity_fade_pct": capacity_fade_pct.tolist(),
+        },
     }
 
     return results
@@ -932,7 +982,7 @@ def save_model_parameters(parameters, filepath):
     for key, value in parameters.items():
         if isinstance(value, (int, float, str, bool, list, dict)) or value is None:
             serializable_params[key] = value
-        elif hasattr(value, '__dict__'):
+        elif hasattr(value, "__dict__"):
             # Convert objects to dictionaries
             serializable_params[key] = value.__dict__
         else:
@@ -941,7 +991,7 @@ def save_model_parameters(parameters, filepath):
 
     # Save to file
     try:
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             json.dump(serializable_params, f, indent=2)
         return True
     except Exception as e:
@@ -960,7 +1010,7 @@ def load_model_parameters(filepath):
         dict: Loaded parameters
     """
     try:
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
             return json.load(f)
     except Exception as e:
         logging.error(f"Error loading parameters: {str(e)}")

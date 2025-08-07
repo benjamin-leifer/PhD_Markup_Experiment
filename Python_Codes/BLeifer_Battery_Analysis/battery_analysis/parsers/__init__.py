@@ -1,10 +1,13 @@
 """
 Parsers for battery test data files from various instruments.
 """
+
 import os
+
+
 def get_supported_formats():
     """Get list of supported file extensions."""
-    return ['.csv', '.xlsx', '.xls', '.mpr', '.mpt', '.dta', '.z', '.res']
+    return [".csv", ".xlsx", ".xls", ".mpr", ".mpt", ".dta", ".z", ".res"]
 
 
 def parse_file(file_path):
@@ -18,15 +21,23 @@ def parse_file(file_path):
         tuple: (cycles_summary, metadata)
     """
     import os
+
     extension = os.path.splitext(file_path)[1].lower()
     filename = os.path.basename(file_path)
 
     # Check for Arbin files based on patterns in your filenames
-    if extension in ['.xlsx', '.xls']:
+    if extension in [".xlsx", ".xls"]:
         # Match patterns like "Channel", "Wb", "RT_Rate_Test"
-        if any(pattern in filename for pattern in ['Channel', '_Wb_', 'Rate_Test']):
+        if any(pattern in filename for pattern in ["Channel", "_Wb_", "Rate_Test"]):
             # Import and use the Arbin parser
-            from .arbin_parser import parse_arbin_excel
+            try:
+                from .arbin_parser import parse_arbin_excel
+            except ImportError:  # pragma: no cover - allow running as script
+                import importlib
+
+                parse_arbin_excel = importlib.import_module(
+                    "arbin_parser"
+                ).parse_arbin_excel
             print(f"Using Arbin parser for {filename}")
             # Call the parser and unpack the detailed_cycles, but only return what's expected
             cycles_summary, metadata, detailed_cycles = parse_arbin_excel(
@@ -38,20 +49,27 @@ def parse_file(file_path):
             # Store detailed_cycles in metadata for later use
             if metadata is None:
                 metadata = {}
-            metadata['detailed_cycles'] = detailed_cycles
+            metadata["detailed_cycles"] = detailed_cycles
 
             return cycles_summary, metadata
 
     # If not matched as Arbin, check for BioLogic files
-    if extension in ['.mpt', '.mpr', '.z']:
+    if extension in [".mpt", ".mpr", ".z"]:
         try:
-            from .biologic_parser import parse_biologic
+            try:
+                from .biologic_parser import parse_biologic
+            except ImportError:  # pragma: no cover - allow running as script
+                import importlib
+
+                parse_biologic = importlib.import_module(
+                    "biologic_parser"
+                ).parse_biologic
             print(f"Using BioLogic parser for {filename}")
             cycles_summary = parse_biologic(file_path)
             metadata = {
-                'tester': 'BioLogic',
-                'name': os.path.basename(file_path),
-                'date': None
+                "tester": "BioLogic",
+                "name": os.path.basename(file_path),
+                "date": None,
             }
             return cycles_summary, metadata
         except ImportError:
@@ -61,24 +79,20 @@ def parse_file(file_path):
     print(f"Using default parser for {filename}")
     cycles_summary = [
         {
-            'cycle_index': 1,
-            'charge_capacity': 100.0,
-            'discharge_capacity': 95.0,
-            'coulombic_efficiency': 0.95
+            "cycle_index": 1,
+            "charge_capacity": 100.0,
+            "discharge_capacity": 95.0,
+            "coulombic_efficiency": 0.95,
         },
         {
-            'cycle_index': 2,
-            'charge_capacity': 98.0,
-            'discharge_capacity': 94.0,
-            'coulombic_efficiency': 0.96
-        }
+            "cycle_index": 2,
+            "charge_capacity": 98.0,
+            "discharge_capacity": 94.0,
+            "coulombic_efficiency": 0.96,
+        },
     ]
 
-    metadata = {
-        'tester': 'Other',
-        'name': os.path.basename(file_path),
-        'date': None
-    }
+    metadata = {"tester": "Other", "name": os.path.basename(file_path), "date": None}
 
     return cycles_summary, metadata
 
@@ -102,38 +116,45 @@ def parse_file_with_sample_matching(file_path):
 
     # Try to extract sample code from filename
     # Pattern: Looking for 2-3 letters followed by 2 digits (like NM01, LFP02, etc.)
-    sample_code_match = re.search(r'([A-Za-z]{2,3}\d{2})', name_without_ext)
+    sample_code_match = re.search(r"([A-Za-z]{2,3}\d{2})", name_without_ext)
 
     if sample_code_match:
         sample_code = sample_code_match.group(1)
     else:
         # If no match in filename, try other methods:
         # 1. Look in the metadata
-        sample_code = metadata.get('sample_code', None)
+        sample_code = metadata.get("sample_code", None)
 
         # 2. Try to find it in the file content (for text-based files)
-        if not sample_code and file_path.lower().endswith(('.txt', '.csv')):
+        if not sample_code and file_path.lower().endswith((".txt", ".csv")):
             try:
-                with open(file_path, 'r') as f:
-                    first_lines = ''.join(f.readline() for _ in range(10))
-                    code_match = re.search(r'Sample[:\s]+([A-Za-z]{2,3}\d{2})', first_lines)
+                with open(file_path, "r") as f:
+                    first_lines = "".join(f.readline() for _ in range(10))
+                    code_match = re.search(
+                        r"Sample[:\s]+([A-Za-z]{2,3}\d{2})", first_lines
+                    )
                     if code_match:
                         sample_code = code_match.group(1)
-            except:
+            except Exception:
                 pass
 
     # Add the sample code to metadata
     if sample_code:
         if metadata is None:
             metadata = {}
-        metadata['sample_code'] = sample_code
+        metadata["sample_code"] = sample_code
 
     return cycles_summary, metadata, sample_code
 
 
 def test_arbin_parser(file_path):
     """Test the Arbin parser with a specific file and print results."""
-    from .arbin_parser import parse_arbin_excel
+    try:
+        from .arbin_parser import parse_arbin_excel
+    except ImportError:  # pragma: no cover - allow running as script
+        import importlib
+
+        parse_arbin_excel = importlib.import_module("arbin_parser").parse_arbin_excel
 
     print(f"Testing Arbin parser with file: {os.path.basename(file_path)}")
 
@@ -144,7 +165,7 @@ def test_arbin_parser(file_path):
             return_detailed=True,
         )
 
-        print(f"Metadata extracted:")
+        print("Metadata extracted:")
         for key, value in metadata.items():
             print(f"  {key}: {value}")
 
@@ -160,6 +181,7 @@ def test_arbin_parser(file_path):
     except Exception as e:
         print(f"Parser error: {str(e)}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -179,9 +201,16 @@ def test_parser(file_path):
     print(f"Testing parser on file: {os.path.basename(file_path)}")
     try:
         extension = os.path.splitext(file_path)[1].lower()
-        if extension in ['.xlsx', '.xls']:
+        if extension in [".xlsx", ".xls"]:
             print("Detected Excel file - testing with Arbin parser")
-            from .arbin_parser import parse_arbin_excel
+            try:
+                from .arbin_parser import parse_arbin_excel
+            except ImportError:  # pragma: no cover - allow running as script
+                import importlib
+
+                parse_arbin_excel = importlib.import_module(
+                    "arbin_parser"
+                ).parse_arbin_excel
             cycles, metadata, detailed_cycles = parse_arbin_excel(
                 file_path,
                 return_metadata=True,
@@ -196,7 +225,9 @@ def test_parser(file_path):
 
         print("\nExtracted metadata:")
         for key, value in metadata.items():
-            if key != 'detailed_cycles':  # Skip printing the large detailed_cycles dictionary
+            if (
+                key != "detailed_cycles"
+            ):  # Skip printing the large detailed_cycles dictionary
                 print(f"  {key}: {value}")
 
         print(f"\nExtracted {len(cycles)} cycles")
@@ -209,7 +240,7 @@ def test_parser(file_path):
             print(f"\nDetailed data available for {len(detailed_cycles)} cycles")
             if detailed_cycles:
                 sample_cycle_idx = next(iter(detailed_cycles))
-                charge_data = detailed_cycles[sample_cycle_idx]['charge_data']
+                charge_data = detailed_cycles[sample_cycle_idx]["charge_data"]
                 print(f"Sample charge data for cycle {sample_cycle_idx}:")
                 for key, value in charge_data.items():
                     print(f"  {key}: {len(value)} points")
@@ -218,5 +249,6 @@ def test_parser(file_path):
     except Exception as e:
         print(f"Parser test failed: {str(e)}")
         import traceback
+
         traceback.print_exc()
         return False
