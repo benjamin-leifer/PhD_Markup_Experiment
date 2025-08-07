@@ -10,8 +10,11 @@ Usage
 
 try:  # pragma: no cover - depends on environment
     from mongoengine import connect
+    from mongoengine.connection import get_connection, ConnectionFailure
 except Exception:  # pragma: no cover - executed when mongoengine missing
     connect = None
+    get_connection = None
+    ConnectionFailure = Exception
 import logging
 import sys
 
@@ -60,6 +63,37 @@ def connect_with_fallback(
         return True
     except Exception as exc:
         logging.error(f"Connection via {new_uri} also failed: {exc}")
+        return False
+
+
+def ensure_connection(**connect_kwargs) -> bool:
+    """Ensure a default MongoEngine connection exists.
+
+    Parameters
+    ----------
+    **connect_kwargs
+        Optional arguments passed through to :func:`connect_with_fallback` if a
+        connection needs to be established.
+
+    Returns
+    -------
+    bool
+        ``True`` if a connection is available, ``False`` otherwise.
+    """
+
+    if connect is None or get_connection is None:
+        logging.warning("mongoengine not available; cannot ensure DB connection")
+        return False
+
+    try:
+        # ``get_connection`` raises ``ConnectionFailure`` when the default
+        # connection is missing.
+        get_connection()
+        return True
+    except ConnectionFailure:
+        return connect_with_fallback(ask_if_fails=False, **connect_kwargs)
+    except Exception as exc:  # pragma: no cover - unexpected failures
+        logging.error(f"Failed to ensure DB connection: {exc}")
         return False
 
 

@@ -10,6 +10,7 @@ import pickle
 import numpy as np
 import pandas as pd
 from battery_analysis.models import CycleDetailData, RawDataFile, TestResult
+from .db import ensure_connection
 
 
 def store_cycle_detail_data(test_id, cycle_index, charge_data, discharge_data):
@@ -25,6 +26,9 @@ def store_cycle_detail_data(test_id, cycle_index, charge_data, discharge_data):
     Returns:
         CycleDetailData: The stored data document
     """
+    if not ensure_connection():
+        return None
+
     # Check if entry already exists
     existing = CycleDetailData.objects(test_result=test_id, cycle_index=cycle_index).first()
     if existing:
@@ -74,6 +78,9 @@ def get_cycle_detail_data(test_id, cycle_index):
     Returns:
         dict: Dictionary with charge and discharge data
     """
+    if not ensure_connection():
+        return None
+
     # Find the document
     detail_data = CycleDetailData.objects(test_result=test_id, cycle_index=cycle_index).first()
     if not detail_data:
@@ -104,6 +111,9 @@ def store_raw_data_file(file_path, test_result=None, file_type=None):
     Returns:
         RawDataFile: The stored file document
     """
+    if not ensure_connection():
+        return None
+
     import os
     import datetime
 
@@ -170,6 +180,9 @@ def get_raw_data_file(test_id, as_file_path=False):
     Returns:
         bytes or str: The file data or path to temp file
     """
+    if not ensure_connection():
+        raise ValueError("Database connection not available")
+
     # Find the file
     raw_file = RawDataFile.objects(test_result=test_id).first()
     if not raw_file:
