@@ -68,13 +68,48 @@ class TestResult(Document):
     }
 
     def clean(self):
-        """Ensure ``cycle_count`` matches the number of cycle summaries."""
+        """Custom validation and automatic protocol assignment."""
         if self.cycle_count is not None:
             cycles_len = len(self.cycles or [])
             if cycles_len != self.cycle_count:
                 raise ValidationError(
                     "cycle_count must match the number of items in cycles"
                 )
+
+        # ------------------------------------------------------------------
+        # Protocol handling
+        # ------------------------------------------------------------------
+        try:  # Lazy import to avoid circular dependencies when running as script
+            from .test_protocol import TestProtocol
+        except Exception:  # pragma: no cover - defensive
+            import importlib
+
+            TestProtocol = importlib.import_module("test_protocol").TestProtocol
+
+        # Validate referenced protocol exists
+        if self.protocol is not None:
+            proto_id = getattr(self.protocol, "id", None)
+            exists = False
+            if proto_id is not None:
+                exists = TestProtocol.objects(id=proto_id).first() is not None
+            if not exists:
+                raise ValidationError(
+                    "protocol reference must point to a saved TestProtocol"
+                )
+
+        # Auto-assign protocol if c_rates match a known pattern and no protocol provided
+        if self.protocol is None and self.c_rates:
+            try:
+                from battery_analysis.analysis.protocol_detection import (
+                    summarize_protocol,
+                )
+
+                summary = summarize_protocol(self.c_rates)
+                proto = TestProtocol.objects(summary=summary).first()
+                if proto:
+                    self.protocol = proto
+            except Exception:  # pragma: no cover - summarization is optional
+                pass
 
     def full_clean(self) -> None:
         """Run MongoEngine validation, including :meth:`clean`."""
