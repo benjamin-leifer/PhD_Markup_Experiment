@@ -360,6 +360,7 @@ def register_callbacks(app: dash.Dash) -> None:
         Output(RESULT_TEXT, "children"),
         Input(RUN_BUTTON, "n_clicks"),
         State(ANALYSIS_RADIO, "value"),
+        State(SAMPLE_DROPDOWN, "value"),
         State(TEST_DROPDOWN, "value"),
         State(CYCLE_INPUT, "value"),
         State(SMOOTH_CHECK, "value"),
@@ -382,6 +383,7 @@ def register_callbacks(app: dash.Dash) -> None:
     def _run_analysis(
         n_clicks,
         analysis,
+        sample_id,
         test_id,
         cycle,
         smooth_vals,
@@ -536,8 +538,66 @@ def register_callbacks(app: dash.Dash) -> None:
                 return fig, text
 
             if analysis == "clustering":
+                test_ids: List[str] = []
+                if sample_id:
+                    test_opts = _get_test_options(sample_id)
+                    test_ids = [t["value"] for t in test_opts]
+                elif test_id:
+                    test_ids = test_id if isinstance(test_id, list) else [test_id]
+                if len(test_ids) < 2:
+                    return go.Figure(), "Select a sample with at least two tests"
+                result = advanced_analysis.cluster_tests(
+                    test_ids,
+                    metrics=[cluster_metric],
+                    method=method or "hierarchical",
+                    n_clusters=n_clusters,
+                )
                 fig = go.Figure()
-                return fig, "Clustering analysis not implemented in Dash"
+                pcs = result.get("principal_components", [])
+                tests_info = result.get("tests", [])
+                clusters = result.get("clusters", {})
+                for cluster_id, tests in clusters.items():
+                    x_vals = []
+                    y_vals = []
+                    texts = []
+                    for t in tests:
+                        try:
+                            idx = tests_info.index(t)
+                        except ValueError:
+                            continue
+                        if idx < len(pcs) and len(pcs[idx]) >= 2:
+                            x_vals.append(pcs[idx][0])
+                            y_vals.append(pcs[idx][1])
+                            texts.append(t.get("test_name", t.get("test_id", "")))
+                    fig.add_trace(
+                        go.Scatter(
+                            x=x_vals,
+                            y=y_vals,
+                            mode="markers",
+                            name=f"Cluster {cluster_id}",
+                            text=texts,
+                        )
+                    )
+                fig.update_layout(
+                    xaxis_title="Component 1",
+                    yaxis_title="Component 2",
+                    template="plotly_white",
+                )
+                summary_items = [
+                    html.Li(
+                        f"Cluster {cid}: "
+                        + ", ".join(
+                            t.get("test_name", t.get("test_id", "")) for t in tlist
+                        )
+                    )
+                    for cid, tlist in clusters.items()
+                ]
+                text = (
+                    html.Div([html.Ul(summary_items)])
+                    if summary_items
+                    else "No clusters"
+                )
+                return fig, text
 
             if analysis == "Josh_request_Dq_dv":
                 if not josh_contents:
