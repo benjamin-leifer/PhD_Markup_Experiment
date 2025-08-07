@@ -12,6 +12,7 @@ from plotly import graph_objs as go
 import numpy as np
 import base64
 import tempfile
+import io
 
 try:  # pragma: no cover - optional dependencies
     from battery_analysis import advanced_analysis, MISSING_ADVANCED_PACKAGES
@@ -53,6 +54,8 @@ JOSH_SHEET = "aa-josh-sheet"
 JOSH_MASS = "aa-josh-mass"
 
 RUN_BUTTON = "aa-run"
+EXPORT_BUTTON = "aa-export-btn"
+EXPORT_DOWNLOAD = "aa-export-download"
 RESULT_GRAPH = "aa-graph"
 RESULT_TEXT = "aa-results"
 
@@ -127,6 +130,12 @@ def layout() -> html.Div:
                     ),
                     width="auto",
                 ),
+                dbc.Col(
+                    dbc.Button(
+                        "Export Plot", id=EXPORT_BUTTON, color="secondary"
+                    ),
+                    width="auto",
+                ),
                 (
                     dbc.Col(
                         dbc.Tooltip(
@@ -138,6 +147,7 @@ def layout() -> html.Div:
                     if not HAS_ADVANCED
                     else html.Div()
                 ),
+                dcc.Download(id=EXPORT_DOWNLOAD),
             ],
             className="mb-2",
         ),
@@ -631,3 +641,18 @@ def register_callbacks(app: dash.Dash) -> None:
             return go.Figure(), "Unknown analysis"
         except Exception as e:  # pragma: no cover - runtime errors
             return go.Figure(), f"Error: {e}"
+
+    @app.callback(
+        Output(EXPORT_DOWNLOAD, "data"),
+        Input(EXPORT_BUTTON, "n_clicks"),
+        State(RESULT_GRAPH, "figure"),
+        prevent_initial_call=True,
+    )
+    def _export_plot(n_clicks, fig_dict):
+        if not fig_dict:
+            return dash.no_update
+        fig = go.Figure(fig_dict)
+        buffer = io.BytesIO()
+        fig.write_image(buffer, format="png")
+        buffer.seek(0)
+        return dcc.send_bytes(buffer.getvalue(), "advanced_analysis.png")

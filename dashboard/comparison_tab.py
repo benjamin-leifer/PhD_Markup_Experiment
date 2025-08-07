@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import List, Dict, Any, Optional
 
+import io
+
 import numpy as np
 import pandas as pd
 
@@ -21,6 +23,8 @@ METRIC_RADIO = "compare-metric"
 GRAPH = "compare-graph"
 EXPORT_BUTTON = "compare-export-btn"
 EXPORT_DOWNLOAD = "compare-export-download"
+EXPORT_IMG_BUTTON = "compare-export-img-btn"
+EXPORT_IMG_DOWNLOAD = "compare-export-img-download"
 
 
 def _get_sample_data(sample: str) -> Dict[str, np.ndarray]:
@@ -92,7 +96,12 @@ def layout() -> html.Div:
                         dbc.Button("Export Data", id=EXPORT_BUTTON, color="secondary"),
                         width="auto",
                     ),
+                    dbc.Col(
+                        dbc.Button("Export Plot", id=EXPORT_IMG_BUTTON, color="secondary"),
+                        width="auto",
+                    ),
                     dcc.Download(id=EXPORT_DOWNLOAD),
+                    dcc.Download(id=EXPORT_IMG_DOWNLOAD),
                 ],
                 className="mb-3",
             ),
@@ -156,3 +165,18 @@ def register_callbacks(app: dash.Dash) -> None:
         df = pd.DataFrame(records)
         csv_str = df.to_csv(index=False)
         return dcc.send_string(csv_str, "comparison_data.csv")
+
+    @app.callback(
+        Output(EXPORT_IMG_DOWNLOAD, "data"),
+        Input(EXPORT_IMG_BUTTON, "n_clicks"),
+        State(GRAPH, "figure"),
+        prevent_initial_call=True,
+    )
+    def _export_plot(n_clicks, fig_dict):
+        if not fig_dict:
+            return dash.no_update
+        fig = go.Figure(fig_dict)
+        buffer = io.BytesIO()
+        fig.write_image(buffer, format="png")
+        buffer.seek(0)
+        return dcc.send_bytes(buffer.getvalue(), "comparison_plot.png")

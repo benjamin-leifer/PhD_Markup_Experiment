@@ -6,3 +6,4 @@ reportlab>=3.5.0
 dash
 dash-bootstrap-components
 diskcache
+kaleido
