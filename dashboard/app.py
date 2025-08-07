@@ -381,8 +381,8 @@ def create_app(test_role: str | None = None) -> dash.Dash:
             return {"display": "none"}, "", "", "", None, alert
 
     @app.callback(
-        Output("upload-status", "children"),
-        Output("upload-form", "style"),
+        Output("upload-status", "children", allow_duplicate=True),
+        Output("upload-form", "style", allow_duplicate=True),
         Output("uploaded-files-list", "children"),
         Input("save-metadata", "n_clicks"),
         Input("cancel-metadata", "n_clicks"),
