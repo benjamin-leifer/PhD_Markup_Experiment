@@ -1,7 +1,7 @@
 import datetime
 import io
 from pathlib import Path
-from typing import List, Dict
+from typing import Dict, List
 
 from battery_analysis import user_tracking
 
@@ -9,17 +9,38 @@ import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
+try:  # pragma: no cover - database optional
+    from battery_analysis import models
+except Exception:  # pragma: no cover - allow running without DB
+    models = None
+
+
 UPLOAD_DIR = Path(__file__).resolve().parent / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 _uploaded_files: List[Dict] = []
 
-# Placeholder functions for database access.
-# These would normally interface with MongoDB via pymongo or mongoengine.
+# ---------------------------------------------------------------------------
+# Database helpers
+# ---------------------------------------------------------------------------
 
 
-def get_running_tests() -> List[Dict]:
-    """Return placeholder running test records."""
-    now = datetime.datetime.now()
+def db_connected() -> bool:
+    """Return True if the MongoDB backend is reachable."""
+    if models is None:
+        return False
+    try:  # pragma: no cover - requires database
+        models.Sample.objects.first()  # type: ignore[attr-defined]
+        return True
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Data retrieval with graceful fallback to demo data
+# ---------------------------------------------------------------------------
+
+
+def _placeholder_running(now: datetime.datetime) -> List[Dict]:
     return [
         {
             "cell_id": "Cell_001",
@@ -42,35 +63,133 @@ def get_running_tests() -> List[Dict]:
     ]
 
 
-def get_upcoming_tests() -> List[Dict]:
-    """Return placeholder upcoming test records."""
+def get_running_tests() -> List[Dict]:
+    """Return currently running tests from the database or example data."""
+    now = datetime.datetime.now()
+    if db_connected():  # pragma: no cover - requires database
+        try:
+            tests = models.TestResult.objects(validated=False).order_by("-date")  # type: ignore[attr-defined]
+            rows: List[Dict] = []
+            for test in tests:
+                try:
+                    sample = (
+                        test.sample.fetch()
+                        if hasattr(test.sample, "fetch")
+                        else test.sample
+                    )
+                    sample_name = getattr(sample, "name", str(sample.id))
+                    chemistry = getattr(sample, "chemistry", "")
+                except Exception:
+                    sample_name, chemistry = "Unknown", ""
+                cycle = (
+                    test.cycle_count
+                    if getattr(test, "cycle_count", None) is not None
+                    else len(getattr(test, "cycles", []) or [])
+                )
+                rows.append(
+                    {
+                        "cell_id": sample_name,
+                        "chemistry": chemistry or "Unknown",
+                        "test_type": getattr(test, "test_type", ""),
+                        "current_cycle": cycle,
+                        "last_timestamp": getattr(test, "date", now),
+                        "test_schedule": getattr(
+                            getattr(test, "protocol", None), "name", test.name or ""
+                        ),
+                        "status": "running",
+                    }
+                )
+            if rows:
+                return rows
+        except Exception:
+            pass
+    return _placeholder_running(now)
+
+
+def _placeholder_upcoming(now: datetime.datetime) -> List[Dict]:
     return [
         {
             "cell_id": "Cell_010",
-            "start_time": datetime.datetime.now() + datetime.timedelta(hours=2),
+            "start_time": now + datetime.timedelta(hours=2),
             "hardware": "Arbin_1",
             "notes": "Preconditioned",
         },
         {
             "cell_id": "Cell_011",
-            "start_time": datetime.datetime.now() + datetime.timedelta(hours=4),
+            "start_time": now + datetime.timedelta(hours=4),
             "hardware": "Arbin_2",
             "notes": "High temperature",
         },
     ]
 
 
+def get_upcoming_tests() -> List[Dict]:
+    """Return upcoming scheduled tests or example data."""
+    now = datetime.datetime.now()
+    if db_connected():  # pragma: no cover - requires database
+        try:
+            tests = models.TestResult.objects(date__gt=now).order_by("date")  # type: ignore[attr-defined]
+            rows: List[Dict] = []
+            for test in tests:
+                try:
+                    sample = (
+                        test.sample.fetch()
+                        if hasattr(test.sample, "fetch")
+                        else test.sample
+                    )
+                    sample_name = getattr(sample, "name", str(sample.id))
+                except Exception:
+                    sample_name = "Unknown"
+                rows.append(
+                    {
+                        "cell_id": sample_name,
+                        "start_time": getattr(test, "date", now),
+                        "hardware": getattr(test, "tester", ""),
+                        "notes": getattr(test, "notes", ""),
+                    }
+                )
+            if rows:
+                return rows
+        except Exception:
+            pass
+    return _placeholder_upcoming(now)
+
+
 def get_summary_stats() -> Dict:
-    """Return placeholder summary statistics."""
-    return {
-        "running": 2,
-        "completed_today": 5,
-        "failures": 0,
-    }
+    """Return summary statistics about tests."""
+    if db_connected():  # pragma: no cover - requires database
+        try:
+            running = models.TestResult.objects(validated=False).count()  # type: ignore[attr-defined]
+            today = datetime.datetime.combine(datetime.date.today(), datetime.time())
+            completed = models.TestResult.objects(date__gte=today, validated=True).count()  # type: ignore[attr-defined]
+            failures = models.TestResult.objects(notes__icontains="fail").count()  # type: ignore[attr-defined]
+            return {
+                "running": running,
+                "completed_today": completed,
+                "failures": failures,
+            }
+        except Exception:
+            pass
+    return {"running": 2, "completed_today": 5, "failures": 0}
 
 
 def get_test_metadata(cell_id: str) -> Dict:
-    """Return placeholder detailed metadata for a cell."""
+    """Return detailed metadata for ``cell_id``."""
+    if db_connected():  # pragma: no cover - requires database
+        try:
+            sample = models.Sample.objects(name=cell_id).first()  # type: ignore[attr-defined]
+            if sample:
+                formation = getattr(sample, "formation_date", None)
+                return {
+                    "cell_id": cell_id,
+                    "chemistry": getattr(sample, "chemistry", "Unknown"),
+                    "formation_date": (
+                        formation.strftime("%Y-%m-%d") if formation else "Unknown"
+                    ),
+                    "notes": getattr(sample, "notes", ""),
+                }
+        except Exception:
+            pass
     return {
         "cell_id": cell_id,
         "chemistry": "Gr|NMC",
@@ -80,7 +199,13 @@ def get_test_metadata(cell_id: str) -> Dict:
 
 
 def add_new_material(name: str, chemistry: str, notes: str) -> None:
-    """Placeholder for storing a new material entry."""
+    """Store a new material entry in the database or print a message."""
+    if db_connected():  # pragma: no cover - requires database
+        try:
+            models.Sample(name=name, chemistry=chemistry, notes=notes).save()  # type: ignore[attr-defined]
+            return
+        except Exception:
+            pass
     print(f"New material added: {name}, {chemistry}, {notes}")
 
 

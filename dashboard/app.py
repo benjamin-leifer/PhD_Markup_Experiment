@@ -311,6 +311,13 @@ def create_app(test_role: str | None = None) -> dash.Dash:
         )
 
     @app.callback(
+        Output("db-status", "children"), Input("refresh-interval", "n_intervals")
+    )
+    def refresh_db_status(_):
+        status = "Connected" if data_access.db_connected() else "Not Connected"
+        return f"Database: {status}"
+
+    @app.callback(
         Output("download-data", "data"),
         Input("download-csv", "n_clicks"),
         State("export-choice", "value"),
