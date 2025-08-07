@@ -33,6 +33,11 @@ EXPORT_DOWNLOAD = "trait-export-download"
 NORMALIZE_CHECKBOX = "trait-normalize"
 METRIC_RADIO = "overlay-metric"
 
+# Saved filter components
+FILTER_NAME_INPUT = "trait-filter-name"
+SAVE_FILTER_BUTTON = "trait-save-filter"
+SAVED_FILTER_DROPDOWN = "trait-saved-filters"
+
 
 def get_distinct_values(field: str) -> List[str]:
     """Return placeholder distinct values for ``field``."""
@@ -76,41 +81,74 @@ def filter_samples(
     ce_min: Optional[float] = None,
     ce_max: Optional[float] = None,
 ) -> List[Dict[str, Any]]:
-    """Return placeholder sample rows matching the given traits."""
+    """Return sample dictionaries matching the given traits.
 
-    sample_name = sample or "Sample_001"
-    rows = [
-        {
-            "name": sample_name,
-            "chemistry": chemistry or "NMC",
-            "manufacturer": manufacturer or "ABC Batteries",
-            "sample_obj": None,
-            "capacity": 1.0,
-            "resistance": 0.05,
-            "ce": 0.98,
-            "date": "2024-01-01",
-            "cycle_count": 50,
-        }
-    ]
+    The function attempts to query :mod:`battery_analysis`'s ``Sample`` model to
+    obtain real data. If the database is unavailable, lightweight demo rows are
+    returned instead so the dashboard still functions for documentation builds
+    and tests.
+    """
 
-    def _in_range(
-        val: Optional[float], lo: Optional[float], hi: Optional[float]
-    ) -> bool:
+    rows: List[Dict[str, Any]] = []
+    try:  # pragma: no cover - depends on MongoDB
+        from battery_analysis.models import Sample  # type: ignore
+
+        qs = Sample.objects  # type: ignore[attr-defined]
+        if chemistry:
+            qs = qs.filter(chemistry=chemistry)
+        if manufacturer:
+            qs = qs.filter(manufacturer=manufacturer)
+        if sample:
+            qs = qs.filter(name=sample)
+
+        samples = list(qs)
+        for s in samples:
+            rows.append(
+                {
+                    "name": getattr(s, "name", ""),
+                    "chemistry": getattr(s, "chemistry", ""),
+                    "manufacturer": getattr(s, "manufacturer", ""),
+                    "sample_obj": s,
+                    "capacity": getattr(s, "avg_final_capacity", None),
+                    "resistance": getattr(s, "median_internal_resistance", None),
+                    "ce": getattr(s, "avg_coulombic_eff", None),
+                    "date": getattr(s, "created_at", None),
+                    "cycle_count": getattr(s, "cycle_count", None),
+                }
+            )
+    except Exception:
+        sample_name = sample or "Sample_001"
+        rows = [
+            {
+                "name": sample_name,
+                "chemistry": chemistry or "NMC",
+                "manufacturer": manufacturer or "ABC Batteries",
+                "sample_obj": None,
+                "capacity": 1.0,
+                "resistance": 0.05,
+                "ce": 0.98,
+                "date": "2024-01-01",
+                "cycle_count": 50,
+            }
+        ]
+
+    def _in_range(val: Optional[float], lo: Optional[float], hi: Optional[float]) -> bool:
         if val is None:
-            return False
+            return True
         if lo is not None and val < lo:
             return False
         if hi is not None and val > hi:
             return False
         return True
 
-    filtered = []
+    filtered: List[Dict[str, Any]] = []
     for r in rows:
         if date_range:
             start, end = date_range
-            if start and r.get("date") < start:
+            date = r.get("date")
+            if start and date and date < start:
                 continue
-            if end and r.get("date") > end:
+            if end and date and date > end:
                 continue
         if not _in_range(r.get("cycle_count"), cycle_min, cycle_max):
             continue
@@ -212,14 +250,24 @@ def build_query(
 def _build_table(rows: List[Dict[str, Any]], normalized: bool) -> dash_table.DataTable:
     cap_header = "Capacity (mAh/cm²)" if normalized else "Capacity (mAh)"
     res_header = "Resistance (Ω·cm²)" if normalized else "Resistance (Ω)"
+
+    # calculate normalized metrics when requested
+    if normalized:
+        for r in rows:
+            sample = r.get("sample_obj")
+            if sample is not None:
+                r["capacity"] = norm_utils.normalize_capacity(sample)
+                r["resistance"] = norm_utils.normalize_impedance(sample)
+                r["ce"] = norm_utils.coulombic_efficiency_percent(sample)
+
     # round numeric values for display
     for r in rows:
         if r.get("capacity") is not None:
-            r["capacity"] = round(r["capacity"], 3)
+            r["capacity"] = round(float(r["capacity"]), 3)
         if r.get("resistance") is not None:
-            r["resistance"] = round(r["resistance"], 3)
+            r["resistance"] = round(float(r["resistance"]), 3)
         if r.get("ce") is not None:
-            r["ce"] = round(r["ce"], 1)
+            r["ce"] = round(float(r["ce"]), 1)
 
     columns = [
         {"name": "Name", "id": "name"},
@@ -245,8 +293,38 @@ def layout() -> html.Div:
     chem_opts = [{"label": c, "value": c} for c in get_distinct_values("chemistry")]
     manu_opts = [{"label": m, "value": m} for m in get_distinct_values("manufacturer")]
     sample_opts = [{"label": s, "value": s} for s in get_sample_names()]
+    saved_opts = [
+        {"label": f["name"], "value": f["name"]} for f in saved_filters.list_filters()
+    ]
     return html.Div(
         [
+            dbc.Row(
+                [
+                    dbc.Col(
+                        dcc.Dropdown(
+                            options=saved_opts,
+                            id=SAVED_FILTER_DROPDOWN,
+                            placeholder="Saved presets",
+                            clearable=True,
+                        ),
+                        width=3,
+                    ),
+                    dbc.Col(
+                        dcc.Input(
+                            id=FILTER_NAME_INPUT,
+                            placeholder="Preset name",
+                        ),
+                        width=3,
+                    ),
+                    dbc.Col(
+                        dbc.Button(
+                            "Save Preset", id=SAVE_FILTER_BUTTON, color="secondary"
+                        ),
+                        width="auto",
+                    ),
+                ],
+                className="mb-3",
+            ),
             dbc.Row(
                 [
                     dbc.Col(
@@ -443,3 +521,91 @@ def register_callbacks(app: dash.Dash) -> None:
                     r["ce"] = norm_utils.coulombic_efficiency_percent(sample)
         csv_str = export_handler.export_filtered_results(rows, format="csv")
         return dcc.send_string(csv_str, "filtered_results.csv")
+
+    @app.callback(
+        Output(SAVED_FILTER_DROPDOWN, "options"),
+        Output(SAVED_FILTER_DROPDOWN, "value"),
+        Input(SAVE_FILTER_BUTTON, "n_clicks"),
+        State(FILTER_NAME_INPUT, "value"),
+        State(CHEMISTRY_DROPDOWN, "value"),
+        State(MANUFACTURER_DROPDOWN, "value"),
+        State(SAMPLE_DROPDOWN, "value"),
+        State(DATE_RANGE, "start_date"),
+        State(DATE_RANGE, "end_date"),
+        State(CYCLE_MIN_INPUT, "value"),
+        State(CYCLE_MAX_INPUT, "value"),
+        State(CE_MIN_INPUT, "value"),
+        State(CE_MAX_INPUT, "value"),
+        prevent_initial_call=True,
+    )
+    def _save_filter(
+        n_clicks,
+        name,
+        chemistry,
+        manufacturer,
+        sample,
+        start_date,
+        end_date,
+        cycle_min,
+        cycle_max,
+        ce_min,
+        ce_max,
+    ):
+        if not name:
+            return dash.no_update, dash.no_update
+        filt = {
+            "chemistry": chemistry,
+            "manufacturer": manufacturer,
+            "sample": sample,
+            "start_date": start_date,
+            "end_date": end_date,
+            "cycle_min": cycle_min,
+            "cycle_max": cycle_max,
+            "ce_min": ce_min,
+            "ce_max": ce_max,
+        }
+        saved_filters.save_filter(name, filt)
+        options = [
+            {"label": f["name"], "value": f["name"]}
+            for f in saved_filters.list_filters()
+        ]
+        return options, name
+
+    @app.callback(
+        Output(CHEMISTRY_DROPDOWN, "value"),
+        Output(MANUFACTURER_DROPDOWN, "value"),
+        Output(SAMPLE_DROPDOWN, "value"),
+        Output(DATE_RANGE, "start_date"),
+        Output(DATE_RANGE, "end_date"),
+        Output(CYCLE_MIN_INPUT, "value"),
+        Output(CYCLE_MAX_INPUT, "value"),
+        Output(CE_MIN_INPUT, "value"),
+        Output(CE_MAX_INPUT, "value"),
+        Input(SAVED_FILTER_DROPDOWN, "value"),
+        prevent_initial_call=True,
+    )
+    def _load_filter(name):
+        if not name:
+            return (
+                dash.no_update,
+                dash.no_update,
+                dash.no_update,
+                dash.no_update,
+                dash.no_update,
+                dash.no_update,
+                dash.no_update,
+                dash.no_update,
+                dash.no_update,
+            )
+        filt = saved_filters.load_filter(name)
+        return (
+            filt.get("chemistry"),
+            filt.get("manufacturer"),
+            filt.get("sample"),
+            filt.get("start_date"),
+            filt.get("end_date"),
+            filt.get("cycle_min"),
+            filt.get("cycle_max"),
+            filt.get("ce_min"),
+            filt.get("ce_max"),
+        )

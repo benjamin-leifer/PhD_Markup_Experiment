@@ -186,11 +186,16 @@ def layout() -> html.Div:
             ),
             dcc.Input(id=CUSTOM_CIRCUIT_INPUT, placeholder="Custom Circuit"),
             dbc.Checklist(
-                options=[{"label": "Use Custom", "value": "use"}],
+                options=[
+                    {
+                        "label": "Use Custom",
+                        "value": "use",
+                        "disabled": not HAS_IMPEDANCE,
+                    }
+                ],
                 value=[],
                 id=USE_CUSTOM_CHECK,
                 switch=True,
-                disabled=not HAS_IMPEDANCE,
             ),
             dbc.Button(
                 "Fit Circuit",

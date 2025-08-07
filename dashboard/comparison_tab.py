@@ -23,14 +23,39 @@ EXPORT_BUTTON = "compare-export-btn"
 EXPORT_DOWNLOAD = "compare-export-download"
 
 
-def _generate_sample_data(sample: str) -> Dict[str, np.ndarray]:
-    """Return placeholder cycle data for ``sample``."""
-    rng = np.random.default_rng(abs(hash(sample)) % (2**32))
-    cycles = np.arange(1, 51)
-    capacity = 1.0 + 0.1 * rng.standard_normal(len(cycles))
-    ce = 0.98 + 0.01 * rng.standard_normal(len(cycles))
-    impedance = 100 + 5 * rng.standard_normal(len(cycles))
-    return {"cycle": cycles, "capacity": capacity, "ce": ce, "impedance": impedance}
+def _get_sample_data(sample: str) -> Dict[str, np.ndarray]:
+    """Return cycle data for ``sample``.
+
+    The function tries to pull real cycle data from the ``battery_analysis``
+    package. If that fails (e.g. database not available) deterministic demo data
+    is generated instead so that the dashboard remains functional.
+    """
+
+    try:  # pragma: no cover - depends on battery_analysis and database
+        from battery_analysis import analysis  # type: ignore  # noqa: F401
+        from battery_analysis.models import Sample  # type: ignore
+
+        s = Sample.objects.get(name=sample)  # type: ignore[attr-defined]
+        cycles = np.arange(1, getattr(s, "cycle_count", 0) or 1 + 1)
+        capacity = np.array(getattr(s, "capacity_trace", []))
+        ce = np.array(getattr(s, "ce_trace", []))
+        impedance = np.array(getattr(s, "impedance_trace", []))
+        if not len(cycles):
+            raise ValueError("no cycle data")
+        if len(capacity) != len(cycles):
+            capacity = np.full_like(cycles, np.nan, dtype=float)
+        if len(ce) != len(cycles):
+            ce = np.full_like(cycles, np.nan, dtype=float)
+        if len(impedance) != len(cycles):
+            impedance = np.full_like(cycles, np.nan, dtype=float)
+        return {"cycle": cycles, "capacity": capacity, "ce": ce, "impedance": impedance}
+    except Exception:
+        rng = np.random.default_rng(abs(hash(sample)) % (2**32))
+        cycles = np.arange(1, 51)
+        capacity = 1.0 + 0.1 * rng.standard_normal(len(cycles))
+        ce = 0.98 + 0.01 * rng.standard_normal(len(cycles))
+        impedance = 100 + 5 * rng.standard_normal(len(cycles))
+        return {"cycle": cycles, "capacity": capacity, "ce": ce, "impedance": impedance}
 
 
 def layout() -> html.Div:
@@ -90,7 +115,7 @@ def register_callbacks(app: dash.Dash) -> None:
             fig.update_layout(template="plotly_white", xaxis_title="Cycle")
             return fig
         for name in samples:
-            data = _generate_sample_data(name)
+            data = _get_sample_data(name)
             y = data[metric] if metric in data else data["capacity"]
             if metric == "norm_capacity":
                 y = data["capacity"] / data["capacity"][0]
@@ -122,7 +147,7 @@ def register_callbacks(app: dash.Dash) -> None:
             return dash.no_update
         records: List[Dict[str, Any]] = []
         for name in samples:
-            data = _generate_sample_data(name)
+            data = _get_sample_data(name)
             y = data[metric] if metric in data else data["capacity"]
             if metric == "norm_capacity":
                 y = data["capacity"] / data["capacity"][0]
