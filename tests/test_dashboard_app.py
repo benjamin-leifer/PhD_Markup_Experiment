@@ -69,3 +69,7 @@ def test_basic_callbacks():
     update_results = cb["trait-results.children"]["callback"].__wrapped__
     result = update_results(1, None, None, None, None, None, None, None, None, None, [])
     assert result is not None
+
+    db_status = cb["db-status.children"]["callback"].__wrapped__
+    status_text = db_status(0)
+    assert "Database:" in status_text
