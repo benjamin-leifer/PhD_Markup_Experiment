@@ -130,6 +130,24 @@ def test_get_cycle_data_include_raw():
             self.avg_coulombic_eff = 0.9
             self.cycles = [DummyCycle()]
 
+        def get_cycle_detail(self, cycle_index):
+            if cycle_index != 1:
+                return {}
+            return {
+                "charge": {
+                    "voltage": [3.6, 3.7],
+                    "current": [0.1, 0.1],
+                    "capacity": [0.0, 0.5],
+                    "time": [0.0, 1.0],
+                },
+                "discharge": {
+                    "voltage": [3.7, 3.6],
+                    "current": [-0.1, -0.1],
+                    "capacity": [0.5, 0.0],
+                    "time": [1.0, 2.0],
+                },
+            }
+
     dummy_test = DummyTest()
 
     # Patch the objects manager so get_cycle_data can find our dummy test
@@ -150,39 +168,14 @@ def test_get_cycle_data_include_raw():
     original_manager = getattr(models.TestResult, "objects", None)
     models.TestResult.objects = DummyManager(dummy_test)
 
-    # Patch detailed data retrieval to return arrays
-    from battery_analysis.utils import detailed_data_manager
-
-    def fake_get_detailed_cycle_data(test_id, cycle_index):
-        return {
-            1: {
-                "charge": {
-                    "voltage": [3.6, 3.7],
-                    "current": [0.1, 0.1],
-                    "capacity": [0.0, 0.5],
-                    "time": [0.0, 1.0],
-                },
-                "discharge": {
-                    "voltage": [3.7, 3.6],
-                    "current": [-0.1, -0.1],
-                    "capacity": [0.5, 0.0],
-                    "time": [1.0, 2.0],
-                },
-            }
-        }
-
-    original_get = detailed_data_manager.get_detailed_cycle_data
-    detailed_data_manager.get_detailed_cycle_data = fake_get_detailed_cycle_data
-
     try:
         data = analysis.get_cycle_data("T1", include_raw=True)
     finally:
-        # Restore manager and patched function
+        # Restore manager
         if original_manager is not None:
             models.TestResult.objects = original_manager
         else:
             delattr(models.TestResult, "objects")
-        detailed_data_manager.get_detailed_cycle_data = original_get
 
     assert data["cycles"][0]["cycle_index"] == 1
     assert "raw" in data["cycles"][0]

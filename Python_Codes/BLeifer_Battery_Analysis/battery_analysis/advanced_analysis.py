@@ -86,15 +86,10 @@ def get_voltage_capacity_data(test_id, cycle_number=None):
     # 1)  Try detailed data stored in GridFS
     # ------------------------------------------------------------------ #
     try:
-        from battery_analysis.utils.detailed_data_manager import (
-            get_detailed_cycle_data,
-        )
+        test = models.TestResult.objects(id=test_id).first()
+        cycle_data = test.get_cycle_detail(cycle_number) if test else None
 
-        detailed_data = get_detailed_cycle_data(test_id, cycle_number)
-
-        if detailed_data and cycle_number in detailed_data:
-            cycle_data = detailed_data[cycle_number]
-
+        if cycle_data:
             if (
                 "charge" in cycle_data
                 and "voltage" in cycle_data["charge"]

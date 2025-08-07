@@ -8,9 +8,7 @@ import plotly.graph_objects as go
 from dash import Input, Output, State, dcc, html
 import dash_bootstrap_components as dbc
 
-from battery_analysis.utils.detailed_data_manager import (
-    get_detailed_cycle_data,
-)
+from battery_analysis.models import TestResult
 
 
 def layout(test_options: Optional[List[dict]] = None) -> html.Div:
@@ -79,7 +77,10 @@ def register_callbacks(app) -> None:
     def _update_cycle_options(test_id: Optional[str]) -> List[dict]:
         if not test_id:
             return []
-        data = get_detailed_cycle_data(test_id)
+        test = TestResult.objects(id=test_id).first()
+        if not test:
+            return []
+        data = test.get_cycle_detail()
         options: List[dict] = []
         for idx in sorted(data.keys()):
             options.append({"label": f"Cycle {idx}", "value": idx})
@@ -95,11 +96,13 @@ def register_callbacks(app) -> None:
         if not test_id or cycle_index is None:
             return go.Figure(), go.Figure()
 
-        data = get_detailed_cycle_data(test_id, cycle_index)
-        if cycle_index not in data:
+        test = TestResult.objects(id=test_id).first()
+        if not test:
             return go.Figure(), go.Figure()
 
-        cycle_data = data[cycle_index]
+        cycle_data = test.get_cycle_detail(cycle_index)
+        if not cycle_data:
+            return go.Figure(), go.Figure()
         charge = cycle_data.get("charge", {})
         discharge = cycle_data.get("discharge", {})
 

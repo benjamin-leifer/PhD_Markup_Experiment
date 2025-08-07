@@ -447,13 +447,7 @@ def get_cycle_data(test_id, include_raw=False):
 
             if not raw:
                 try:
-                    from battery_analysis.utils.detailed_data_manager import (
-                        get_detailed_cycle_data,
-                    )
-
-                    detailed = get_detailed_cycle_data(test_id, cycle.cycle_index)
-                    if detailed and cycle.cycle_index in detailed:
-                        raw = detailed[cycle.cycle_index]
+                    raw = test.get_cycle_detail(cycle.cycle_index)
                 except Exception as exc:  # pragma: no cover - optional
                     logging.debug(
                         f"Error loading detailed data for cycle {cycle.cycle_index}: {exc}"
