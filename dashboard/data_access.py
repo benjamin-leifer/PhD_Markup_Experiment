@@ -1,5 +1,6 @@
 import datetime
 import io
+import os
 from pathlib import Path
 from typing import Dict, List
 
@@ -11,13 +12,16 @@ from reportlab.pdfgen import canvas
 
 try:  # pragma: no cover - database optional
     from battery_analysis import models
+    from battery_analysis.utils.db import connect_with_fallback
 except Exception:  # pragma: no cover - allow running without DB
     models = None
+    connect_with_fallback = None
 
 
 UPLOAD_DIR = Path(__file__).resolve().parent / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 _uploaded_files: List[Dict] = []
+_DB_CONNECTED: bool | None = None
 
 # ---------------------------------------------------------------------------
 # Database helpers
@@ -26,13 +30,27 @@ _uploaded_files: List[Dict] = []
 
 def db_connected() -> bool:
     """Return True if the MongoDB backend is reachable."""
-    if models is None:
+    global _DB_CONNECTED
+    if _DB_CONNECTED is not None:
+        return _DB_CONNECTED
+    if models is None or connect_with_fallback is None:
+        _DB_CONNECTED = False
         return False
-    try:  # pragma: no cover - requires database
-        models.Sample.objects.first()  # type: ignore[attr-defined]
-        return True
-    except Exception:
-        return False
+    host = os.getenv("BATTERY_DB_HOST", "localhost")
+    port = int(os.getenv("BATTERY_DB_PORT", "27017"))
+    db_name = os.getenv("BATTERY_DB_NAME", "battery_test_db")
+    connected = connect_with_fallback(
+        db_name=db_name, host=host, port=port, ask_if_fails=False
+    )
+    if connected:
+        try:  # pragma: no cover - requires database
+            models.Sample.objects.first()  # type: ignore[attr-defined]
+            _DB_CONNECTED = True
+            return True
+        except Exception:
+            pass
+    _DB_CONNECTED = False
+    return False
 
 
 # ---------------------------------------------------------------------------
