@@ -1,7 +1,6 @@
 # Prevent import issues by adding parent directory to path
 import sys
 import os
-import importlib
 
 # Use the Qt backend so popped out plots include Matplotlib's
 # native customization tools.
@@ -17,12 +16,9 @@ if package_root not in sys.path:
 
 # First import cycle_summary since it has no dependencies
 print("Importing cycle_summary...")
-from battery_analysis.models.cycle_summary import CycleSummary
 
 # Now import the models with circular dependencies
 print("Importing sample and test_result...")
-from battery_analysis.models.sample import Sample
-from battery_analysis.models.testresult import TestResult
 
 try:  # pragma: no cover - optional component
     from battery_analysis.cycle_detail_viewer import CycleDetailViewer
@@ -36,12 +32,10 @@ print("Registered models:", _document_registry.keys())
 
 # Now import the main models module to finalize setup
 print("Importing main models module...")
-import battery_analysis.models
 
 # Double-check registration
 print("Final registered models:", _document_registry.keys())
 
-import battery_analysis.models
 import os
 import sys
 import tkinter as tk
@@ -55,8 +49,6 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from battery_analysis.gui.custom_toolbar import CustomToolbar
 from battery_analysis.utils import popout_figure
 
-import numpy as np
-import pandas as pd
 
 # Force-load all models early to register them with MongoEngine
 
@@ -66,7 +58,6 @@ sys.path.insert(0, package_root)
 
 # Import package modules
 from battery_analysis import utils, models, analysis, report
-from battery_analysis.parsers import parse_file
 from battery_analysis.utils import data_update
 
 try:
@@ -1069,7 +1060,7 @@ class DataUploadTab(ttk.Frame):
                 return
 
             # Get the sample from the database
-            sample = models.Sample.objects(name=sample_name).first()
+            sample = models.Sample.get_by_name(sample_name)
 
             if not sample:
                 messagebox.showerror(
@@ -1089,7 +1080,7 @@ class DataUploadTab(ttk.Frame):
                 return
 
             # Check if the sample already exists
-            existing_sample = models.Sample.objects(name=sample_name).first()
+            existing_sample = models.Sample.get_by_name(sample_name)
             if existing_sample:
                 confirm = messagebox.askyesno(
                     "Sample Exists",
@@ -1300,7 +1291,7 @@ class DataUploadTab(ttk.Frame):
                 # Look up the sample
                 matched_sample = "No match"
                 if sample_code:
-                    sample = models.Sample.objects(name=sample_code).first()
+                    sample = models.Sample.get_by_name(sample_code)
                     if not sample:
                         samples = models.Sample.objects(name__contains=sample_code)
                         if samples:
@@ -1369,7 +1360,7 @@ class DataUploadTab(ttk.Frame):
                     sample = None
                     if sample_code:
                         # Try exact match on name
-                        sample = models.Sample.objects(name=sample_code).first()
+                        sample = models.Sample.get_by_name(sample_code)
 
                         # If no exact match, try searching in the name field
                         if not sample:
@@ -1543,7 +1534,7 @@ class DataUploadTab(ttk.Frame):
                     sample = None
                     if sample_code:
                         # Try exact match on name
-                        sample = models.Sample.objects(name=sample_code).first()
+                        sample = models.Sample.get_by_name(sample_code)
 
                         # If no exact match, try searching in the name field
                         if not sample:
@@ -1593,7 +1584,7 @@ class DataUploadTab(ttk.Frame):
                     if update_strategy == "auto":
                         # Use automatic update detection
                         self.main_app.log_message(
-                            f"Using auto-update detection for file"
+                            "Using auto-update detection for file"
                         )
                         test_result, was_update = data_update.process_file_with_update(
                             file_path, sample
@@ -1855,7 +1846,7 @@ class AnalysisTab(ttk.Frame):
 
         try:
             # Get the sample from the database
-            sample = models.Sample.objects(name=sample_name).first()
+            sample = models.Sample.get_by_name(sample_name)
 
             if not sample:
                 messagebox.showerror(
@@ -1897,7 +1888,7 @@ class AnalysisTab(ttk.Frame):
 
         try:
             # Get the sample from the database
-            sample = models.Sample.objects(name=sample_name).first()
+            sample = models.Sample.get_by_name(sample_name)
 
             if not sample:
                 messagebox.showerror(
@@ -1942,7 +1933,7 @@ class AnalysisTab(ttk.Frame):
             # Update the views
             self.update_summary()
 
-            self.main_app.log_message(f"Data updated from external source")
+            self.main_app.log_message("Data updated from external source")
 
     def update_summary(self):
         """Update the summary view with current data."""

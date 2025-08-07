@@ -44,7 +44,9 @@ def _get_sample_data(sample: str) -> Dict[str, np.ndarray]:
         from battery_analysis import analysis  # type: ignore  # noqa: F401
         from battery_analysis.models import Sample  # type: ignore
 
-        s = Sample.objects.get(name=sample)  # type: ignore[attr-defined]
+        s = Sample.get_by_name(sample)  # type: ignore[attr-defined]
+        if not s:
+            raise ValueError("sample not found")
         cycles = np.arange(1, getattr(s, "cycle_count", 0) or 1 + 1)
         capacity = np.array(getattr(s, "capacity_trace", []))
         ce = np.array(getattr(s, "ce_trace", []))

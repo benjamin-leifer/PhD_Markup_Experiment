@@ -233,7 +233,7 @@ def get_test_metadata(cell_id: str) -> Dict:
     """Return detailed metadata for ``cell_id``."""
     if db_connected():  # pragma: no cover - requires database
         try:
-            sample = models.Sample.objects(name=cell_id).first()  # type: ignore[attr-defined]
+            sample = models.Sample.get_by_name(cell_id)  # type: ignore[attr-defined]
             if sample:
                 formation = getattr(sample, "formation_date", None)
                 return {
