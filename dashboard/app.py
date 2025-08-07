@@ -134,7 +134,6 @@ def create_app() -> dash.Dash:
                 dbc.Row([dbc.Col(tabs, width=12)]),
                 layout_components.metadata_modal(),
                 layout_components.export_modal(),
-                layout_components.upload_metadata_modal(),
                 status_bar,
             ],
             fluid=True,
@@ -228,11 +227,12 @@ def create_app() -> dash.Dash:
         return dcc.send_bytes(pdf_bytes, filename)
 
     @app.callback(
-        Output("upload-metadata-modal", "is_open"),
+        Output("upload-form", "style"),
         Output("meta-sample-code", "value"),
         Output("meta-chemistry", "value"),
         Output("meta-notes", "value"),
         Output("upload-info", "data"),
+        Output("upload-status", "children"),
         Input("upload-data", "contents"),
         State("upload-data", "filename"),
         prevent_initial_call=True,
@@ -240,51 +240,78 @@ def create_app() -> dash.Dash:
     def handle_upload(contents, filename):
         if contents is None:
             raise dash.exceptions.PreventUpdate
-        content_type, content_string = contents.split(",")
-        decoded = base64.b64decode(content_string)
-        path = data_access.store_temp_upload(filename, decoded)
-        cycles, metadata = parse_file(path)
-        info = {
-            "filename": filename,
-            "path": path,
-            "cycles": cycles,
-            "metadata": metadata,
-        }
-        return True, metadata.get("sample_code", ""), metadata.get("chemistry", ""), metadata.get("notes", ""), info
+        try:
+            content_type, content_string = contents.split(",")
+            decoded = base64.b64decode(content_string)
+            path = data_access.store_temp_upload(filename, decoded)
+            cycles, metadata = parse_file(path)
+            info = {
+                "filename": filename,
+                "path": path,
+                "cycles": cycles,
+                "metadata": metadata,
+            }
+            style = {}
+            return (
+                style,
+                metadata.get("sample_code", ""),
+                metadata.get("chemistry", ""),
+                metadata.get("notes", ""),
+                info,
+                dash.no_update,
+            )
+        except Exception as err:  # pragma: no cover - simple error handling
+            alert = dbc.Alert(
+                f"Failed to parse {filename}: {err}", color="danger", dismissable=True
+            )
+            return {"display": "none"}, "", "", "", None, alert
 
     @app.callback(
         Output("upload-status", "children"),
-        Output("upload-metadata-modal", "is_open"),
+        Output("upload-form", "style"),
         Output("uploaded-files-list", "children"),
         Input("save-metadata", "n_clicks"),
         Input("cancel-metadata", "n_clicks"),
-        State("upload-metadata-modal", "is_open"),
         State("meta-sample-code", "value"),
         State("meta-chemistry", "value"),
         State("meta-notes", "value"),
         State("upload-info", "data"),
         prevent_initial_call=True,
     )
-    def save_metadata(save_clicks, cancel_clicks, is_open, sample_code, chemistry, notes, info):
+    def save_metadata(save_clicks, cancel_clicks, sample_code, chemistry, notes, info):
         ctx = dash.callback_context
         if not ctx.triggered:
             raise dash.exceptions.PreventUpdate
         trigger = ctx.triggered[0]["prop_id"].split(".")[0]
         if trigger == "save-metadata" and info:
-            metadata = info.get("metadata", {}) or {}
-            metadata.update(
-                {"sample_code": sample_code, "chemistry": chemistry, "notes": notes}
-            )
-            data_access.register_upload(
-                info["filename"], info["path"], info["cycles"], metadata
-            )
-            files = data_access.get_uploaded_files()
-            items = [html.Li(f["filename"]) for f in files]
-            status = dbc.Alert(
-                f"Saved {info['filename']}", color="success", dismissable=True
-            )
-            return status, False, items
-        return dash.no_update, False, dash.no_update
+            try:
+                metadata = info.get("metadata", {}) or {}
+                metadata.update(
+                    {
+                        "sample_code": sample_code or "",
+                        "chemistry": chemistry or "",
+                        "notes": notes or "",
+                    }
+                )
+                data_access.register_upload(
+                    info["filename"], info["path"], info["cycles"], metadata
+                )
+                files = data_access.get_uploaded_files()
+                items = [html.Li(f["filename"]) for f in files]
+                status = dbc.Alert(
+                    f"Saved {info['filename']}", color="success", dismissable=True
+                )
+                return status, {"display": "none"}, items
+            except Exception as err:  # pragma: no cover - simple error handling
+                alert = dbc.Alert(
+                    f"Error saving metadata: {err}", color="danger", dismissable=True
+                )
+                return alert, dash.no_update, dash.no_update
+        return (
+            dbc.Alert("Upload canceled", color="secondary", dismissable=True),
+            {"display": "none"},
+            dash.no_update,
+        )
 
     @app.callback(
         Output("flagged-container", "children"),
