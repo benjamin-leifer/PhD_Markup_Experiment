@@ -23,6 +23,7 @@ from . import (
     missing_data_tab,
 )
 from . import auth
+from . import preferences
 
 
 def create_app(test_role: str | None = None) -> dash.Dash:
@@ -42,11 +43,18 @@ def create_app(test_role: str | None = None) -> dash.Dash:
     auth.register_callbacks(app)
 
     def dashboard_layout(user_role: str) -> html.Div:
+        prefs = preferences.load_preferences()
         running = data_access.get_running_tests()
         upcoming = data_access.get_upcoming_tests()
         stats = data_access.get_summary_stats()
         flags = cell_flagger.get_flags()
         navbar = dbc.NavbarSimple(
+            dbc.Switch(
+                id="theme-toggle",
+                label="Dark mode",
+                value=prefs.get("theme", "light") == "dark",
+                className="ms-2",
+            ),
             brand="Battery Test Dashboard",
             color="primary",
             dark=True,
@@ -81,50 +89,61 @@ def create_app(test_role: str | None = None) -> dash.Dash:
                         layout_components.upcoming_tests_table(upcoming),
                     ],
                     label="Overview",
+                    value="overview",
                 ),
                 dcc.Tab(
                     layout_components.new_material_form(),
                     label="New Material",
+                    value="new-material",
                 ),
                 dcc.Tab(
                     layout_components.data_import_layout(),
                     label="Data Import",
                     disabled=not is_admin,
+                    value="data-import",
                 ),
                 dcc.Tab(
                     layout_components.export_button(),
                     label="Export",
                     disabled=not is_admin,
+                    value="export",
                 ),
                 dcc.Tab(
                     comparison_tab.layout(),
                     label="Comparison",
+                    value="comparison",
                 ),
                 dcc.Tab(
                     advanced_analysis_tab.layout(),
                     label="Advanced Analysis",
                     disabled=not is_admin,
+                    value="advanced-analysis",
                 ),
                 dcc.Tab(
                     cycle_detail_tab.layout(),
                     label="Cycle Detail",
+                    value="cycle-detail",
                 ),
                 dcc.Tab(
                     eis_tab.layout(),
                     label="EIS",
+                    value="eis",
                 ),
                 dcc.Tab(
                     document_flow_tab.layout(),
                     label="Document Status",
+                    value="document-status",
                 ),
                 dcc.Tab(
                     missing_data_tab.layout(),
                     label="Missing Data",
+                    value="missing-data",
                 ),
                 dcc.Tab(
                     trait_filter_tab.layout(),
                     label="Trait Filter",
                     disabled=not is_admin,
+                    value="trait-filter",
                 ),
                 dcc.Tab(
                     html.Div(
@@ -132,9 +151,11 @@ def create_app(test_role: str | None = None) -> dash.Dash:
                         id="flagged-container",
                     ),
                     label="Flags",
+                    value="flags",
                 ),
             ],
             id="tabs",
+            value=prefs.get("default_tab", "overview"),
         )
         return dbc.Container(
             [
@@ -166,8 +187,17 @@ def create_app(test_role: str | None = None) -> dash.Dash:
         )
 
     def serve_layout() -> html.Div:
+        prefs = preferences.load_preferences()
+        theme_href = (
+            dbc.themes.DARKLY if prefs.get("theme") == "dark" else dbc.themes.BOOTSTRAP
+        )
         return html.Div(
-            [dcc.Store(id="user-role", data=test_role), html.Div(id="page-content")]
+            [
+                dcc.Store(id="user-role", data=test_role),
+                dcc.Store(id="preferences", storage_type="local", data=prefs),
+                html.Link(rel="stylesheet", href=theme_href, id="theme"),
+                html.Div(id="page-content"),
+            ]
         )
 
     app.layout = serve_layout
@@ -177,6 +207,24 @@ def create_app(test_role: str | None = None) -> dash.Dash:
         if not role:
             return auth.layout()
         return dashboard_layout(role)
+
+    @app.callback(Output("theme", "href"), Input("preferences", "data"))
+    def apply_theme(prefs):
+        theme = (prefs or {}).get("theme", "light")
+        return dbc.themes.DARKLY if theme == "dark" else dbc.themes.BOOTSTRAP
+
+    @app.callback(
+        Output("preferences", "data"),
+        Input("theme-toggle", "value"),
+        Input("tabs", "value"),
+        State("preferences", "data"),
+    )
+    def update_prefs(dark_mode, tab, data):
+        prefs = data or {}
+        prefs["theme"] = "dark" if dark_mode else "light"
+        prefs["default_tab"] = tab
+        preferences.save_preferences(prefs)
+        return prefs
 
     @app.callback(
         Output("metadata-modal", "is_open"),
