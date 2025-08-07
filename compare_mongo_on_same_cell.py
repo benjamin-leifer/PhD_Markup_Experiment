@@ -121,8 +121,8 @@ def compare_tests_on_same_plot(
                              fontsize=10, ha="center", color="black")
                     annotated.add(cycle)
 
-    for cycle in [1.5, 4.5, 7.5, 10.5, 13.5, 16.5, 19.5]:
-        ax1.axvline(x=cycle, color="black", linestyle="--")
+    # for cycle in [1.5, 4.5, 7.5, 10.5, 13.5, 16.5, 19.5]:
+    #     ax1.axvline(x=cycle, color="black", linestyle="--")
 
     ax1.set_xlabel("Cycle Number")
     ax1.set_xlim(x_bounds)
@@ -234,9 +234,11 @@ def main() -> None:
         "codes",
         nargs="*",  # now optional
         default=[
-            ['FT02', 'FT03','FT04','FT05'],
-            ['FU01','FU02', 'FU03','FU04','FU05','FS01', 'FS02',],
-            ['GB01', 'GB02', 'GB03', 'GB04', 'GB06','GB07',],# Example default codes
+            #['EU02', 'EU03'],
+            #['FT02', 'FT03','FT04','FT05'],
+            #['FU01','FU02', 'FU03','FU04','FU05','FS01', 'FS02',],
+            #['FU01', 'FU04', 'FS02']
+            #['GB01', 'GB02', 'GB03', 'GB04', 'GB06','GB07',],# Example default codes
             #["FM01", "FM02", "FM03"],  # Example default codes
             #["FM04", "FM05", "FM06"],
             #["FK01", "FK02", "FK03"],
@@ -296,6 +298,34 @@ def main() -> None:
         electrolyte_lookup=electrolyte_lookup,
     )
 
+    for group_idx, cell_codes in enumerate(args.codes):
+            # Generate and save the mean ± std plot
+            plot_mean_capacity_with_std(
+                [cell_codes],
+                normalized=args.normalized,
+                save_str=f"{args.save}_group_{group_idx + 1}_mean" if args.save else None,
+                electrolyte_lookup=electrolyte_lookup,
+            )
+
+            # Find tests for the current group
+            tests: List[models.TestResult] = []
+            for code in cell_codes:
+                results = find_tests_by_cell_code(code)
+                if not results:
+                    logging.warning("No tests found for code %s", code)
+                tests.extend(results)
+
+            if not tests:
+                logging.warning("No matching tests found for group %d", group_idx + 1)
+                continue
+
+            # Generate and save the discharge capacity/CE vs. cycle number plot
+            compare_tests_on_same_plot(
+                tests,
+                normalized=args.normalized,
+                save_str=f"{args.save}_group_{group_idx + 1}" if args.save else None,
+                electrolyte_lookup=electrolyte_lookup,
+            )
 
 if __name__ == "__main__":
     main()

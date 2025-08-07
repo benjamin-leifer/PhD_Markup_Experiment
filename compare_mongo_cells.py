@@ -117,7 +117,13 @@ def find_tests_by_cell_code(code: str) -> List[models.TestResult]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Plot MongoDB cycling data by cell code")
-    parser.add_argument("codes", nargs="+", help="Cell codes to search for, e.g. AA01")
+    parser.add_argument("codes",
+                        default =[
+                            ['FU01', 'FU02', 'FU03', 'FU04', 'FU05', 'FS01', 'FS02',]
+                            ['GB01', 'GB02', 'GB03', 'GB04', 'GB06', 'GB07',]
+                            ['FT01', 'FT02', 'FT03', 'FT04', 'FT05', ]
+                        ],
+                        nargs="+", help="Cell codes to search for, e.g. AA01")
     parser.add_argument("--db", default="battery_test_db", help="Database name")
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int, default=27017)

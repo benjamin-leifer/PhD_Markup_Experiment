@@ -12,7 +12,14 @@ import dash
 from dash import dcc, html
 import dash_bootstrap_components as dbc
 
-from . import cycle_detail_viewer
+try:
+    # Package context
+    from . import cycle_detail_viewer
+except ImportError:                     # pragma: no cover
+    # Fallback when executed as a standalone script
+    import importlib
+    cycle_detail_viewer = importlib.import_module("cycle_detail_viewer")
+
 
 
 def create_app() -> dash.Dash:
