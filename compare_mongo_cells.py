@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 from mongoengine import connect
 
 from battery_analysis import models
+from Mongodb_implementation import get_client
 
 
 CycleData = Tuple[List[int], List[float], List[float], List[float]]
@@ -125,14 +126,19 @@ def main() -> None:
                         ],
                         nargs="+", help="Cell codes to search for, e.g. AA01")
     parser.add_argument("--db", default="battery_test_db", help="Database name")
-    parser.add_argument("--host", default="localhost")
-    parser.add_argument("--port", type=int, default=27017)
     parser.add_argument("--normalized", action="store_true", help="Normalize capacity")
     parser.add_argument("--save", help="File prefix for saving the plot")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    connect(args.db, host=args.host, port=args.port)
+    client = get_client()
+    uri = getattr(client, "_configured_uri", None)
+    if uri:
+        connect(args.db, host=uri)
+    else:
+        host = getattr(client, "_configured_host", "localhost")
+        port = getattr(client, "_configured_port", 27017)
+        connect(args.db, host=host, port=port)
 
     tests: List[models.TestResult] = []
     for code in args.codes:
