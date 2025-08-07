@@ -349,7 +349,7 @@ def export_modal() -> dbc.Modal:
 
 
 def data_import_layout() -> html.Div:
-    """Layout for the Data Import tab with file upload and status display."""
+    """Layout for the Data Import tab with file upload and metadata form."""
     return html.Div(
         [
             dcc.Upload(
@@ -368,38 +368,23 @@ def data_import_layout() -> html.Div:
                     "margin": "10px",
                 },
             ),
+            dbc.Form(
+                [
+                    dbc.Label("Sample Code"),
+                    dbc.Input(id="meta-sample-code"),
+                    dbc.Label("Chemistry"),
+                    dbc.Input(id="meta-chemistry"),
+                    dbc.Label("Notes"),
+                    dbc.Textarea(id="meta-notes"),
+                    dbc.Button("Save", id="save-metadata", color="primary", className="me-2"),
+                    dbc.Button("Cancel", id="cancel-metadata", color="secondary"),
+                ],
+                id="upload-form",
+                style={"display": "none"},
+            ),
             dcc.Store(id="upload-info"),
             html.Div(id="upload-status"),
             html.Ul(id="uploaded-files-list"),
         ]
-    )
-
-
-def upload_metadata_modal() -> dbc.Modal:
-    """Modal dialog for editing metadata after a file upload."""
-    return dbc.Modal(
-        [
-            dbc.ModalHeader(dbc.ModalTitle("File Metadata")),
-            dbc.ModalBody(
-                dbc.Form(
-                    [
-                        dbc.Label("Sample Code"),
-                        dbc.Input(id="meta-sample-code"),
-                        dbc.Label("Chemistry"),
-                        dbc.Input(id="meta-chemistry"),
-                        dbc.Label("Notes"),
-                        dbc.Textarea(id="meta-notes"),
-                    ]
-                )
-            ),
-            dbc.ModalFooter(
-                [
-                    dbc.Button("Save", id="save-metadata", color="primary"),
-                    dbc.Button("Cancel", id="cancel-metadata", color="secondary"),
-                ]
-            ),
-        ],
-        id="upload-metadata-modal",
-        is_open=False,
     )
 
