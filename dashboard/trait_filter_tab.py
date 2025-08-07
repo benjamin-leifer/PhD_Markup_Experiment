@@ -13,7 +13,7 @@ from dash import dcc, html, dash_table
 import dash_bootstrap_components as dbc
 from dash import Input, Output, State
 
-from . import saved_filters, plot_overlay, export_handler
+from . import saved_filters, export_handler
 import normalization_utils as norm_utils
 
 # Component IDs used in callbacks
@@ -32,6 +32,9 @@ EXPORT_BUTTON = "trait-export-btn"
 EXPORT_DOWNLOAD = "trait-export-download"
 NORMALIZE_CHECKBOX = "trait-normalize"
 METRIC_RADIO = "overlay-metric"
+# Components for cross-tab communication
+RESULTS_TABLE = "trait-results-table"
+SELECTION_STORE = "trait-selected-sample"
 
 # Saved filter components
 FILTER_NAME_INPUT = "trait-filter-name"
@@ -132,7 +135,9 @@ def filter_samples(
             }
         ]
 
-    def _in_range(val: Optional[float], lo: Optional[float], hi: Optional[float]) -> bool:
+    def _in_range(
+        val: Optional[float], lo: Optional[float], hi: Optional[float]
+    ) -> bool:
         if val is None:
             return True
         if lo is not None and val < lo:
@@ -279,10 +284,13 @@ def _build_table(rows: List[Dict[str, Any]], normalized: bool) -> dash_table.Dat
     ]
 
     return dash_table.DataTable(
+        id=RESULTS_TABLE,
         columns=columns,
         data=rows,
         filter_action="native",
         sort_action="native",
+        row_selectable="single",
+        cell_selectable=False,
         page_size=10,
         style_table={"overflowX": "auto"},
         style_cell={"textAlign": "left"},
@@ -298,6 +306,7 @@ def layout() -> html.Div:
     ]
     return html.Div(
         [
+            dcc.Store(id=SELECTION_STORE),
             dbc.Row(
                 [
                     dbc.Col(
@@ -570,6 +579,21 @@ def register_callbacks(app: dash.Dash) -> None:
             for f in saved_filters.list_filters()
         ]
         return options, name
+
+    @app.callback(
+        Output(SELECTION_STORE, "data"),
+        Input(RESULTS_TABLE, "selected_rows"),
+        State(RESULTS_TABLE, "data"),
+        prevent_initial_call=True,
+    )
+    def _update_store(selected_rows, table_data):
+        if not selected_rows or not table_data:
+            return dash.no_update
+        idx = selected_rows[0]
+        if idx >= len(table_data):
+            return dash.no_update
+        row = table_data[idx]
+        return {"sample": row.get("name")}
 
     @app.callback(
         Output(CHEMISTRY_DROPDOWN, "value"),

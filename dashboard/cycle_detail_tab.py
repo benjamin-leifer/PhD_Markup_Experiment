@@ -16,6 +16,7 @@ try:  # pragma: no cover - depends on optional packages
         get_detailed_cycle_data as _get_detailed_cycle_data,
     )
 except Exception:  # pragma: no cover - fallback for demo environments
+
     def _get_detailed_cycle_data(
         test_id: str, cycle_index: Optional[int] = None
     ) -> Dict[int, Dict[str, Dict[str, np.ndarray]]]:
@@ -74,6 +75,7 @@ POP_BUTTON = "cd-popout"
 GRAPH = "cd-graph"
 MODAL = "cd-modal"
 MODAL_GRAPH = "cd-modal-graph"
+SELECTION_STORE = "trait-selected-sample"
 
 
 def layout() -> html.Div:
@@ -127,6 +129,21 @@ def layout() -> html.Div:
 
 def register_callbacks(app: dash.Dash) -> None:
     """Register Dash callbacks for the cycle detail tab."""
+
+    @app.callback(
+        Output(SAMPLE_DROPDOWN, "value"),
+        Input(SELECTION_STORE, "data"),
+        State(SAMPLE_DROPDOWN, "options"),
+        prevent_initial_call=True,
+    )
+    def _prefill_sample(data, options):
+        if not data or not data.get("sample"):
+            return dash.no_update
+        sample_name = data["sample"]
+        for opt in options:
+            if opt.get("label") == sample_name or opt.get("value") == sample_name:
+                return opt.get("value")
+        return dash.no_update
 
     @app.callback(Output(TEST_DROPDOWN, "options"), Input(SAMPLE_DROPDOWN, "value"))
     def _update_tests(sample_id: Optional[str]) -> List[Dict[str, str]]:
@@ -186,7 +203,9 @@ def register_callbacks(app: dash.Dash) -> None:
         )
         return fig, fig
 
-    @app.callback(Output(MODAL, "is_open"), Input(POP_BUTTON, "n_clicks"), State(MODAL, "is_open"))
+    @app.callback(
+        Output(MODAL, "is_open"), Input(POP_BUTTON, "n_clicks"), State(MODAL, "is_open")
+    )
     def _toggle_modal(n_clicks: Optional[int], is_open: bool) -> bool:
         if n_clicks:
             return not is_open
