@@ -139,6 +139,7 @@ def create_app() -> dash.Dash:
                 dbc.Row([dbc.Col(tabs, width=12)]),
                 layout_components.metadata_modal(),
                 layout_components.export_modal(),
+                dcc.Interval(id="refresh-interval", interval=60 * 1000, n_intervals=0),
                 status_bar,
             ],
             fluid=True,
@@ -200,6 +201,20 @@ def create_app() -> dash.Dash:
         if open_clicks or close_clicks:
             return not is_open
         return is_open
+
+    @app.callback(
+        Output("running-tests-table", "children"),
+        Output("upcoming-tests-table", "children"),
+        Input("refresh-interval", "n_intervals"),
+        prevent_initial_call=True,
+    )
+    def refresh_test_tables(_):
+        running = data_access.get_running_tests()
+        upcoming = data_access.get_upcoming_tests()
+        return (
+            layout_components.running_tests_table(running).children,
+            layout_components.upcoming_tests_table(upcoming).children,
+        )
 
     @app.callback(
         Output("download-data", "data"),
@@ -323,14 +338,17 @@ def create_app() -> dash.Dash:
         Input({"type": "flag-review", "index": dash.ALL}, "n_clicks"),
         Input({"type": "flag-retest", "index": dash.ALL}, "n_clicks"),
         Input({"type": "clear-flag", "index": dash.ALL}, "n_clicks"),
+        Input("refresh-interval", "n_intervals"),
         prevent_initial_call=True,
     )
-    def update_flags(review_clicks, retest_clicks, clear_clicks):
+    def update_flags(review_clicks, retest_clicks, clear_clicks, _):
         ctx = dash.callback_context
         if not ctx.triggered:
             raise dash.exceptions.PreventUpdate
-        prop_id = ctx.triggered[0]["prop_id"].split(".")[0]
-        comp_id = json.loads(prop_id)
+        prop_id = ctx.triggered[0]["prop_id"]
+        if prop_id == "refresh-interval.n_intervals":
+            return layout_components.flagged_table(cell_flagger.get_flags())
+        comp_id = json.loads(prop_id.split(".")[0])
         sample_id = comp_id["index"]
         if comp_id["type"] == "flag-review":
             cell_flagger.flag_sample(sample_id, "manual review")
