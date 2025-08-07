@@ -136,6 +136,7 @@ def layout() -> html.Div:
                 color="secondary",
                 disabled=not HAS_EIS,
             ),
+            dcc.Loading(html.Div(id="eis-processing")),
         ],
         className="mb-2",
     )
@@ -224,7 +225,7 @@ def layout() -> html.Div:
             plot_opts,
             circuit_div,
             dcc.Store(id=DATA_STORE),
-            dcc.Graph(id=GRAPH_COMPONENT),
+            dcc.Loading(dcc.Graph(id=GRAPH_COMPONENT)),
         ]
     )
 
@@ -281,12 +282,15 @@ def register_callbacks(app: dash.Dash) -> None:
 
     @app.callback(
         Output(DATA_STORE, "data", allow_duplicate=True),
+        Output("eis-processing", "children"),
         Input(PROCESS_BUTTON, "n_clicks"),
         State(DATA_STORE, "data"),
         State(FMIN_INPUT, "value"),
         State(FMAX_INPUT, "value"),
         State(INDUCTIVE_CHECK, "value"),
+        running=[(Output(PROCESS_BUTTON, "disabled"), True, False)],
         prevent_initial_call=True,
+        background=True,
     )
     def _process_data(n_clicks, data, fmin, fmax, inductive_vals):
         if not n_clicks or data is None or eis is None:
@@ -307,13 +311,14 @@ def register_callbacks(app: dash.Dash) -> None:
                 "Z_imag": z_imag.tolist(),
             }
         )
-        return data
+        return data, ""
 
     @app.callback(
         Output(GRAPH_COMPONENT, "figure"),
         Input(DATA_STORE, "data"),
         Input(PLOT_TYPE, "value"),
         prevent_initial_call=True,
+        background=True,
     )
     def _update_graph(data, plot_type):
         if not data or not HAS_EIS:

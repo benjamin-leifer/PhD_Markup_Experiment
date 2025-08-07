@@ -27,10 +27,17 @@ from . import auth
 
 def create_app(test_role: str | None = None) -> dash.Dash:
     """Create and configure the Dash application."""
+    import diskcache
+    from dash.background_callback import DiskcacheManager
+
+    cache = diskcache.Cache("./cache")
+    background_callback_manager = DiskcacheManager(cache)
+
     app = dash.Dash(
         __name__,
         external_stylesheets=[dbc.themes.BOOTSTRAP],
         suppress_callback_exceptions=True,
+        background_callback_manager=background_callback_manager,
     )
     auth.register_callbacks(app)
 
@@ -48,7 +55,9 @@ def create_app(test_role: str | None = None) -> dash.Dash:
         status_bar = dbc.Navbar(
             dbc.Container(
                 [
-                    html.Span("Status: Ready", id="status-text", className="navbar-text"),
+                    html.Span(
+                        "Status: Ready", id="status-text", className="navbar-text"
+                    ),
                     html.Span(
                         "Database: Not Connected",
                         id="db-status",
