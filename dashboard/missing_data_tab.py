@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import List, Dict
 
-from dash import html
+from dash import html, dcc, Input, Output, State
+import dash
 import dash_bootstrap_components as dbc
 
 ALERT_CONTAINER = "missing-data-alerts"
+DATA_STORE = "missing-data-store"
 
 
 def _get_missing_data() -> List[Dict[str, object]]:
@@ -39,30 +41,52 @@ def _get_missing_data() -> List[Dict[str, object]]:
 
 def layout() -> html.Div:
     """Return layout for the missing data tab."""
-    alerts = []
-    for rec in _get_missing_data():
-        msg = ", ".join(rec["missing"])
-        alerts.append(
-            dbc.Alert(
-                [
-                    html.H6(f"Test {rec['test_id']}", className="mb-1"),
-                    html.P(f"Missing components: {msg}", className="mb-1"),
-                    dbc.Button(
-                        "Resolve",
-                        color="link",
-                        href=f"/resolve/{rec['test_id']}",
-                        external_link=True,
-                    ),
-                ],
-                color="warning",
-                className="mb-2",
+    return html.Div(
+        [dcc.Store(id=DATA_STORE, data=_get_missing_data()), html.Div(id=ALERT_CONTAINER)]
+    )
+
+
+def register_callbacks(app: dash.Dash) -> None:
+    """Register callbacks for resolving missing data alerts."""
+
+    @app.callback(Output(ALERT_CONTAINER, "children"), Input(DATA_STORE, "data"))
+    def _render_alerts(data: List[Dict[str, object]]):
+        if not data:
+            return [dbc.Alert("No missing data detected", color="success")]
+        alerts = []
+        for rec in data:
+            msg = ", ".join(rec["missing"])
+            alerts.append(
+                dbc.Alert(
+                    [
+                        html.H6(f"Test {rec['test_id']}", className="mb-1"),
+                        html.P(f"Missing components: {msg}", className="mb-1"),
+                        dbc.Button(
+                            "Mark Resolved",
+                            id={"type": "resolve-btn", "index": rec["test_id"]},
+                            color="link",
+                        ),
+                    ],
+                    color="warning",
+                    className="mb-2",
+                )
             )
-        )
-    if not alerts:
-        alerts = [dbc.Alert("No missing data detected", color="success")]
-    return html.Div(alerts, id=ALERT_CONTAINER)
+        return alerts
 
+    @app.callback(
+        Output(DATA_STORE, "data"),
+        Input({"type": "resolve-btn", "index": dash.dependencies.ALL}, "n_clicks"),
+        State(DATA_STORE, "data"),
+        prevent_initial_call=True,
+    )
+    def _resolve_issue(n_clicks, data: List[Dict[str, object]]):
+        ctx = dash.callback_context
+        if not ctx.triggered:
+            return data
+        triggered = ctx.triggered[0]["prop_id"].split(".")[0]
+        import json
 
-def register_callbacks(app):  # pragma: no cover - no callbacks yet
-    """Placeholder for future callbacks."""
+        index = json.loads(triggered)["index"]
+        return [rec for rec in data if rec.get("test_id") != index]
+
     return None

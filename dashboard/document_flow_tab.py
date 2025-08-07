@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import List, Dict
 
 from dash import html, dash_table
-import dash_bootstrap_components as dbc
 
 STATUS_TABLE = "doc-status-table"
 
@@ -28,15 +27,31 @@ def _get_document_statuses() -> List[Dict[str, str]]:
                     "document": doc.__name__,
                     "count": count,
                     "status": "Available" if count else "Missing",
+                    "action": f"[Remediate](/docs/{doc.__name__.lower()})" if count == 0 else "",
                 }
             )
         return statuses
     except Exception:
         # Fallback demo data
         return [
-            {"document": "Sample", "count": 1, "status": "Available"},
-            {"document": "TestResult", "count": 1, "status": "Available"},
-            {"document": "CycleSummary", "count": 0, "status": "Missing"},
+            {
+                "document": "Sample",
+                "count": 1,
+                "status": "Available",
+                "action": "",
+            },
+            {
+                "document": "TestResult",
+                "count": 1,
+                "status": "Available",
+                "action": "",
+            },
+            {
+                "document": "CycleSummary",
+                "count": 0,
+                "status": "Missing",
+                "action": "[Remediate](/docs/cyclesummary)",
+            },
         ]
 
 
@@ -49,14 +64,19 @@ def layout() -> html.Div:
             {"name": "Document", "id": "document"},
             {"name": "Records", "id": "count"},
             {"name": "Status", "id": "status"},
+            {"name": "Action", "id": "action", "presentation": "markdown"},
         ],
         data=data,
+        markdown_options={"link_target": "_blank"},
         style_table={"overflowX": "auto"},
+        style_data_conditional=[
+            {
+                "if": {"filter_query": '{status} = "Missing"'},
+                "backgroundColor": "#f8d7da",
+            }
+        ],
     )
-    return html.Div([
-        html.H4("Document Status"),
-        table,
-    ])
+    return html.Div([html.H4("Document Status"), table])
 
 
 def register_callbacks(app):  # pragma: no cover - no callbacks yet
