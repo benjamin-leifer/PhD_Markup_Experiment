@@ -110,6 +110,33 @@ def _load_offline_manifest() -> Dict[str, Any]:
     return {"tests": [], "upcoming": [], "summary": {}}
 
 
+def get_cell_dataset(cell_code: str):
+    """Return the :class:`CellDataset` for ``cell_code``.
+
+    Attempts to retrieve an existing dataset from the database. If none is
+    found, the dataset is built from the available ``TestResult`` records using
+    :func:`battery_analysis.utils.cell_dataset_builder.update_cell_dataset`.
+    Returns ``None`` when the database is unreachable or no data exist.
+    """
+
+    if not cell_code or not db_connected():
+        return None
+
+    try:  # pragma: no cover - depends on MongoDB
+        dataset = models.CellDataset.objects(cell_code=cell_code).first()  # type: ignore[attr-defined]
+        if dataset:
+            return dataset
+    except Exception:
+        pass
+
+    try:  # pragma: no cover - dataset construction requires DB
+        from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
+
+        return update_cell_dataset(cell_code)
+    except Exception:
+        return None
+
+
 def get_running_tests() -> List[Dict]:
     """Return currently running tests from the database or example data."""
     now = datetime.datetime.now()
