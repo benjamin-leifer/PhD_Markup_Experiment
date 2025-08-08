@@ -58,6 +58,27 @@ pytest -q
 
 The package requires a running MongoDB instance for data storage.
 
+## Updating cell datasets
+
+Use the ``update_cell_dataset_cli.py`` script to keep processed datasets in
+sync with newly ingested ``TestResult`` documents.
+
+- Refresh a single cell's dataset::
+
+    python update_cell_dataset_cli.py --cell CN123
+
+- Refresh datasets for all cells::
+
+    python update_cell_dataset_cli.py --all
+
+- Show the number of distinct cell codes without updating::
+
+    python update_cell_dataset_cli.py --count
+
+After new data are added for a cell, run ``update_cell_dataset_cli.py --cell
+<CODE>`` to rebuild its dataset. This command can also be scheduled in a CI job
+or a cron task to ensure datasets remain current.
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
