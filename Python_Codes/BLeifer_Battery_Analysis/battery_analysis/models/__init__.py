@@ -20,6 +20,7 @@ try:  # pragma: no cover - behaviour depends on environment
         from .testresult import TestResult, CycleDetailData  # type: ignore
         from .raw_file import RawDataFile  # type: ignore
         from .test_protocol import TestProtocol  # type: ignore
+        from .cell_dataset import CellDataset  # type: ignore
     except ImportError:  # pragma: no cover - allow running as script
         import importlib
 
@@ -29,6 +30,7 @@ try:  # pragma: no cover - behaviour depends on environment
         CycleDetailData = importlib.import_module("testresult").CycleDetailData  # type: ignore
         RawDataFile = importlib.import_module("raw_file").RawDataFile  # type: ignore
         TestProtocol = importlib.import_module("test_protocol").TestProtocol  # type: ignore
+        CellDataset = importlib.import_module("cell_dataset").CellDataset  # type: ignore
 
     __all__ = [
         "Sample",
@@ -37,6 +39,7 @@ try:  # pragma: no cover - behaviour depends on environment
         "RawDataFile",
         "CycleDetailData",
         "TestProtocol",
+        "CellDataset",
     ]
 except Exception:  # pragma: no cover - executed when mongoengine is missing
     # Provide very small dataclass implementations used in tests
@@ -81,6 +84,35 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         created_by: str | None = None
         last_modified_by: str | None = None
         notes_log: list = dc_field(default_factory=list)
+        default_dataset: "CellDataset | None" = None
+
+    @dataclass
+    class CellDataset:  # type: ignore
+        cell_code: str
+        sample: Sample | None = None
+        tests: list = dc_field(default_factory=list)
+        combined_cycles: list = dc_field(default_factory=list)
+
+        @classmethod
+        def build_from_tests(cls, test_results):
+            tests = list(test_results)
+            if not tests:
+                raise ValueError("test_results must not be empty")
+            dataset = cls(
+                cell_code=getattr(tests[0], "cell_code", None),
+                sample=getattr(tests[0], "sample", None),
+            )
+            for tr in tests:
+                dataset.append_test(tr)
+            if dataset.sample is not None:
+                dataset.sample.default_dataset = dataset
+            return dataset
+
+        def append_test(self, test_result):
+            self.tests.append(test_result)
+            cycles = getattr(test_result, "cycles", None) or []
+            self.combined_cycles.extend(cycles)
+            return self
 
     class RawDataFile:  # type: ignore
         pass
@@ -101,4 +133,5 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         "RawDataFile",
         "CycleDetailData",
         "TestProtocol",
+        "CellDataset",
     ]
