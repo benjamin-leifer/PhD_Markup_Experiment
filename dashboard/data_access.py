@@ -111,28 +111,18 @@ def _load_offline_manifest() -> Dict[str, Any]:
 
 
 def get_cell_dataset(cell_code: str):
-    """Return the :class:`CellDataset` for ``cell_code``.
+    """Return the :class:`CellDataset` for ``cell_code`` if it exists.
 
-    Attempts to retrieve an existing dataset from the database. If none is
-    found, the dataset is built from the available ``TestResult`` records using
-    :func:`battery_analysis.utils.cell_dataset_builder.update_cell_dataset`.
-    Returns ``None`` when the database is unreachable or no data exist.
+    The function simply looks up the ``CellDataset`` by ``cell_code`` and
+    returns ``None`` when the dataset is missing or the database is
+    unavailable.
     """
 
-    if not cell_code or not db_connected():
+    if not cell_code or models is None or not db_connected():
         return None
 
     try:  # pragma: no cover - depends on MongoDB
-        dataset = models.CellDataset.objects(cell_code=cell_code).first()  # type: ignore[attr-defined]
-        if dataset:
-            return dataset
-    except Exception:
-        pass
-
-    try:  # pragma: no cover - dataset construction requires DB
-        from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
-
-        return update_cell_dataset(cell_code)
+        return models.CellDataset.objects.get(cell_code=cell_code)  # type: ignore[attr-defined]
     except Exception:
         return None
 
