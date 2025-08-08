@@ -30,10 +30,10 @@ FILES: List[str] = [
     # ---------- your dQ/dV & charge-curve input files ----------
     #"BL-LL-FZ01_RT_C_20_Charge_02_CP_C04.mpt",
     #"BL-LL-GA01_RT_C_20_Charge_02_CP_C02.mpt",
-    #"BL-LL-GA02_RT_C_20_Form_HighFid_Channel_64_Wb_1.xlsx",
-    #"BL-LL-FZ02_RT_C_20_Form_HighFid_Channel_63_Wb_1.xlsx",
-    #"BL-LL-FW02_RT_C_20_Form_HighFid_Channel_60_Wb_1.xlsx",
-    #"BL-LL-FX02_RT_C_20_Form_HighFid_Channel_61_Wb_1.xlsx",
+    "BL-LL-GA02_RT_C_20_Form_HighFid_Channel_64_Wb_1.xlsx",
+    "BL-LL-FZ02_RT_C_20_Form_HighFid_Channel_63_Wb_1.xlsx",
+    "BL-LL-FW02_RT_C_20_Form_HighFid_Channel_60_Wb_1.xlsx",
+    "BL-LL-FX02_RT_C_20_Form_HighFid_Channel_61_Wb_1.xlsx",
 ]
 
 # active-material masses (mg) if you want normalised units
@@ -43,12 +43,12 @@ MASS_MG = {id_: 0.02496886674 / 1000  # mg → g
 MASS_G = {
     #"GD01": 0.02496886674,   # example masses
     #"GC01": 0.02496886674,
-    "GC02": 0.02496886674*10000,
+    #"GC02": 0.02496886674*10000,
     #"GD02": 0.02496886674*10000,
     #"GJ06": 0.02496886674*10000,
     #"GK06": 0.02496886674*10000,
-    "GL01": 0.02496886674*10000,
-    "GM01": 0.02496886674*10000,
+    #"GL01": 0.02496886674*10000,
+    #"GM01": 0.02496886674*10000,
 
 }
 

@@ -179,7 +179,7 @@ def plot_mean_capacity_with_std(
     """
     electrolyte_lookup = electrolyte_lookup or {}
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(5, 3))
 
     for group_idx, cell_codes in enumerate(grouped_cell_codes):
         group_charge_caps = []
@@ -237,7 +237,11 @@ def main() -> None:
             #['EU02', 'EU03'],
             #['FT02', 'FT03','FT04','FT05'],
             #['FU01','FU02', 'FU03','FU04','FU05','FS01', 'FS02',],
-            #['FU01', 'FU04', 'FS02']
+            ['FU01', 'FU04', ],#MF91
+            ['GB01', 'GB02', ],#DTFV1411
+            ['FT04', 'FT05', ], #DTFV1422
+            ['GJ04', ], #DTFV1452
+            ['GK05',], #DTFV1425
             #['GB01', 'GB02', 'GB03', 'GB04', 'GB06','GB07',],# Example default codes
             #["FM01", "FM02", "FM03"],  # Example default codes
             #["FM04", "FM05", "FM06"],
