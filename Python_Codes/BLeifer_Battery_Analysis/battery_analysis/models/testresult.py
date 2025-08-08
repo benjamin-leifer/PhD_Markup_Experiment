@@ -74,9 +74,9 @@ class TestResult(Document):
     def clean(self):
         """Custom validation and automatic protocol assignment."""
         if not self.cell_code and self.name:
-            match = re.search(r"CN\d+", self.name)
+            match = re.search(r"(CN\d+)", self.name)
             if match:
-                self.cell_code = match.group(0)
+                self.cell_code = match.group(1)
         if self.cycle_count is not None:
             cycles_len = len(self.cycles or [])
             if cycles_len != self.cycle_count:
