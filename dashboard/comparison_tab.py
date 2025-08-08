@@ -42,7 +42,7 @@ def _get_sample_data(sample: str) -> Dict[str, np.ndarray]:
 
     try:  # pragma: no cover - depends on battery_analysis and database
         from battery_analysis import analysis  # type: ignore  # noqa: F401
-        from battery_analysis.models import Sample  # type: ignore
+        from battery_analysis.models import Sample, TestResult  # type: ignore
         from .data_access import get_cell_dataset
 
         s = Sample.get_by_name(sample)  # type: ignore[attr-defined]
@@ -52,11 +52,30 @@ def _get_sample_data(sample: str) -> Dict[str, np.ndarray]:
         dataset = getattr(s, "default_dataset", None)
         if not dataset:
             dataset = get_cell_dataset(sample)
-        cycles = [c.cycle_index for c in getattr(dataset, "combined_cycles", [])]
+
+        cycles: List[int] = []
+        capacity: List[float] = []
+        ce: List[float] = []
+
+        if dataset and getattr(dataset, "combined_cycles", None):
+            for c in dataset.combined_cycles:
+                cycles.append(c.cycle_index)
+                capacity.append(c.discharge_capacity)
+                ce.append(c.coulombic_efficiency)
+        else:
+            tests = TestResult.objects(sample=s.id).order_by("date")  # type: ignore[attr-defined]
+            for t in tests:
+                summaries = getattr(t, "cycle_summaries", None)
+                if summaries is None:
+                    summaries = getattr(t, "cycles", [])
+                for c in summaries:
+                    cycles.append(getattr(c, "cycle_index", len(cycles) + 1))
+                    capacity.append(getattr(c, "discharge_capacity", np.nan))
+                    ce.append(getattr(c, "coulombic_efficiency", np.nan))
+
         if not cycles:
             raise ValueError("no cycle data")
-        capacity = [c.discharge_capacity for c in dataset.combined_cycles]
-        ce = [c.coulombic_efficiency for c in dataset.combined_cycles]
+
         cycles_arr = np.array(cycles, dtype=int)
         capacity_arr = np.array(capacity, dtype=float)
         ce_arr = np.array(ce, dtype=float)
