@@ -110,13 +110,12 @@ def update_cell_dataset(cell_code: str) -> CellDataset | None:
         sample = sample_ref.fetch() if hasattr(sample_ref, "fetch") else sample_ref
         dataset.sample = sample
 
-    dataset.tests.sort(key=lambda t: t.date)
+    dataset.tests.sort(key=lambda t: t.fetch().date if hasattr(t, "fetch") else t.date)
     dataset.save()
 
-    if getattr(sample, "default_dataset", None) != dataset:
-        sample.default_dataset = dataset
-        try:
-            sample.save()
-        except Exception:
-            pass
+    sample.default_dataset = dataset
+    try:
+        sample.save()
+    except Exception:
+        pass
     return dataset
