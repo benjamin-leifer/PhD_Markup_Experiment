@@ -43,23 +43,30 @@ def _get_sample_data(sample: str) -> Dict[str, np.ndarray]:
     try:  # pragma: no cover - depends on battery_analysis and database
         from battery_analysis import analysis  # type: ignore  # noqa: F401
         from battery_analysis.models import Sample  # type: ignore
+        from .data_access import get_cell_dataset
 
         s = Sample.get_by_name(sample)  # type: ignore[attr-defined]
         if not s:
             raise ValueError("sample not found")
-        cycles = np.arange(1, getattr(s, "cycle_count", 0) or 1 + 1)
-        capacity = np.array(getattr(s, "capacity_trace", []))
-        ce = np.array(getattr(s, "ce_trace", []))
-        impedance = np.array(getattr(s, "impedance_trace", []))
-        if not len(cycles):
+
+        dataset = getattr(s, "default_dataset", None)
+        if not dataset:
+            dataset = get_cell_dataset(sample)
+        cycles = [c.cycle_index for c in getattr(dataset, "combined_cycles", [])]
+        if not cycles:
             raise ValueError("no cycle data")
-        if len(capacity) != len(cycles):
-            capacity = np.full_like(cycles, np.nan, dtype=float)
-        if len(ce) != len(cycles):
-            ce = np.full_like(cycles, np.nan, dtype=float)
-        if len(impedance) != len(cycles):
-            impedance = np.full_like(cycles, np.nan, dtype=float)
-        return {"cycle": cycles, "capacity": capacity, "ce": ce, "impedance": impedance}
+        capacity = [c.discharge_capacity for c in dataset.combined_cycles]
+        ce = [c.coulombic_efficiency for c in dataset.combined_cycles]
+        cycles_arr = np.array(cycles, dtype=int)
+        capacity_arr = np.array(capacity, dtype=float)
+        ce_arr = np.array(ce, dtype=float)
+        impedance_arr = np.full_like(cycles_arr, np.nan, dtype=float)
+        return {
+            "cycle": cycles_arr,
+            "capacity": capacity_arr,
+            "ce": ce_arr,
+            "impedance": impedance_arr,
+        }
     except Exception:
         rng = np.random.default_rng(abs(hash(sample)) % (2**32))
         cycles = np.arange(1, 51)

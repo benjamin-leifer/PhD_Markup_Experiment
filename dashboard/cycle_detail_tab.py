@@ -60,6 +60,26 @@ def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
     """Return dropdown options for tests belonging to ``sample_id``."""
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis import models
+        from .data_access import get_cell_dataset
+
+        sample = models.Sample.objects(id=sample_id).first()  # type: ignore[attr-defined]
+        if not sample:
+            raise ValueError("sample not found")
+
+        dataset = getattr(sample, "default_dataset", None)
+        if not dataset:
+            dataset = get_cell_dataset(getattr(sample, "name", ""))
+
+        options: List[Dict[str, str]] = []
+        if dataset:
+            for t_ref in getattr(dataset, "tests", []):
+                try:
+                    t_obj = t_ref.fetch() if hasattr(t_ref, "fetch") else t_ref
+                    options.append({"label": t_obj.name, "value": str(t_obj.id)})
+                except Exception:
+                    pass
+        if options:
+            return options
 
         tests = models.TestResult.objects(sample=sample_id).only("name")  # type: ignore[attr-defined]
         return [{"label": t.name, "value": str(t.id)} for t in tests]
