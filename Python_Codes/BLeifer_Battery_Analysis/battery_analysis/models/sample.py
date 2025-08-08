@@ -19,6 +19,7 @@ class Sample(Document):
     electrolyte = fields.LazyReferenceField("self", required=False)
     # Remove CASCADE to break circular dependency
     tests = fields.ListField(fields.LazyReferenceField("TestResult"))
+    default_dataset = fields.ReferenceField("CellDataset", required=False)
 
     created_at = fields.DateTimeField(default=datetime.datetime.utcnow)
     updated_at = fields.DateTimeField(default=datetime.datetime.utcnow)
