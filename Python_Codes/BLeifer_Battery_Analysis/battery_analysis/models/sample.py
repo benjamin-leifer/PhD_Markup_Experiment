@@ -1,7 +1,7 @@
 # battery_analysis/models/sample.py
 
 import datetime
-from mongoengine import Document, fields
+from mongoengine import Document, fields, ReferenceField
 
 
 class Sample(Document):
@@ -19,7 +19,7 @@ class Sample(Document):
     electrolyte = fields.LazyReferenceField("self", required=False)
     # Remove CASCADE to break circular dependency
     tests = fields.ListField(fields.LazyReferenceField("TestResult"))
-    default_dataset = fields.ReferenceField("CellDataset", required=False)
+    default_dataset = ReferenceField("CellDataset")
 
     created_at = fields.DateTimeField(default=datetime.datetime.utcnow)
     updated_at = fields.DateTimeField(default=datetime.datetime.utcnow)
