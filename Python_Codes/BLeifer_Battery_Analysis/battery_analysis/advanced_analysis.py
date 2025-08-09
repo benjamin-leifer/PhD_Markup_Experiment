@@ -1636,3 +1636,82 @@ def josh_request_dq_dv(
     dfdq["dQdV_sm"] = dfdq["dQdV"].rolling(51, center=True, min_periods=1).mean()
     dfdq["dQdV_sm"] = np.clip(dfdq["dQdV_sm"], 0, None)
     return dfdq[["V", "dQdV_sm"]]
+
+
+def compute_dqdv_difference(capacity1, voltage1, capacity2, voltage2, *, smooth=True):
+    """Compute dQ/dV for two charge cycles and their difference.
+
+    Parameters
+    ----------
+    capacity1, voltage1 : array-like
+        Capacity and voltage data for the first charge cycle.
+    capacity2, voltage2 : array-like
+        Capacity and voltage data for the second charge cycle.
+    smooth : bool, default True
+        Apply Savitzky–Golay smoothing when computing each spectrum.
+
+    Returns
+    -------
+    tuple
+        (result_dict, fig) where ``result_dict`` contains ``cycle1``,
+        ``cycle2`` and ``difference`` entries with ``voltage`` and ``dqdv``
+        arrays, and ``fig`` is a Matplotlib figure showing all three spectra.
+    """
+
+    v1, dqdv1 = compute_dqdv(capacity1, voltage1, smooth=smooth)
+    v2, dqdv2 = compute_dqdv(capacity2, voltage2, smooth=smooth)
+
+    v_min = max(v1.min(), v2.min())
+    v_max = min(v1.max(), v2.max())
+    if v_min >= v_max:
+        raise ValueError("Voltage ranges do not overlap")
+
+    num = min(len(v1), len(v2))
+    v_common = np.linspace(v_min, v_max, num)
+    dqdv1_i = np.interp(v_common, v1, dqdv1)
+    dqdv2_i = np.interp(v_common, v2, dqdv2)
+    diff = dqdv2_i - dqdv1_i
+
+    fig, ax = plt.subplots()
+    ax.plot(v1, dqdv1, label="Charge 1")
+    ax.plot(v2, dqdv2, label="Charge 2")
+    ax.plot(v_common, diff, label="Difference", linestyle="--")
+    ax.set_xlabel("Voltage (V)")
+    ax.set_ylabel("dQ/dV")
+    ax.legend()
+
+    result = {
+        "cycle1": {"voltage": v1.tolist(), "dqdv": dqdv1.tolist()},
+        "cycle2": {"voltage": v2.tolist(), "dqdv": dqdv2.tolist()},
+        "difference": {"voltage": v_common.tolist(), "dqdv": diff.tolist()},
+    }
+    return result, fig
+
+
+def dqdv_difference_spectrum(test_id, cycle1=1, cycle2=2, *, smooth=True):
+    """Compute and plot the dQ/dV difference spectrum between two cycles.
+
+    Parameters
+    ----------
+    test_id : ObjectId | str
+        ID of the :class:`~battery_analysis.models.TestResult` document.
+    cycle1, cycle2 : int, default 1 and 2
+        Charge cycles to compare.
+    smooth : bool, default True
+        Apply Savitzky–Golay smoothing when computing each spectrum.
+
+    Returns
+    -------
+    tuple
+        (result_dict, fig) as returned by :func:`compute_dqdv_difference`.
+    """
+
+    cycle1_data = get_cycle_voltage_capacity_data(test_id, cycle1)
+    cycle2_data = get_cycle_voltage_capacity_data(test_id, cycle2)
+
+    v1 = cycle1_data["charge"]["voltage"]
+    q1 = cycle1_data["charge"]["capacity"]
+    v2 = cycle2_data["charge"]["voltage"]
+    q2 = cycle2_data["charge"]["capacity"]
+
+    return compute_dqdv_difference(q1, v1, q2, v2, smooth=smooth)
