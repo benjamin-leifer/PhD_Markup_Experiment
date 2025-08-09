@@ -97,3 +97,29 @@ python -m dashboard
 
 The app currently uses placeholder data but is structured for MongoDB integration
 via the functions in `dashboard/data_access.py`.
+
+### Ad hoc script workflow
+
+Early experiments and one-off analyses can be dropped into
+`dashboard/adhoc_scripts`. Each file should export a `layout()` function that
+returns Dash components so the script can be loaded through the "Ad hoc
+Analysis" tab.
+
+Scripts that prove useful for regular work can be promoted to a dedicated tab in
+the dashboard. Consider promoting a script when it:
+
+* is stable and maintained,
+* is useful to multiple users or sessions, and
+* fits naturally alongside the existing dashboard views.
+
+To promote a script:
+
+1. Move or rename the file from `dashboard/adhoc_scripts` to the `dashboard`
+   package, giving it a descriptive name such as `my_feature_tab.py`.
+2. Ensure the module defines `layout()` and `register_callbacks()` functions.
+3. Update `dashboard/app.py` to import the new module and call its
+   `register_callbacks` function.
+4. Remove the old ad hoc script if it is no longer needed.
+
+Following this process keeps experimental ideas available while providing a
+clear path for integrating mature tools into the main dashboard.
