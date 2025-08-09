@@ -202,8 +202,8 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                             dcc.Dropdown(
                                 id="current-user",
                                 options=[
-                                    {"label": "User 1", "value": "user1"},
-                                    {"label": "User 2", "value": "user2"},
+                                    {"label": u, "value": u}
+                                    for u in data_access.get_available_users()
                                 ],
                                 placeholder="Select User",
                             ),
@@ -231,6 +231,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
             [
                 dcc.Store(id="user-role", data=test_role),
                 dcc.Store(id="preferences", storage_type="local", data=prefs),
+                dcc.Store(id="current-user-store", storage_type="local"),
                 html.Link(rel="stylesheet", href=theme_href, id="theme"),
                 html.Div(id="page-content"),
             ]
@@ -480,16 +481,26 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
             cell_flagger.clear_flag(sample_id)
         return layout_components.flagged_table(cell_flagger.get_flags())
 
-    @app.callback(Output("user-set-out", "children"), Input("current-user", "value"))
-    def set_user(user):
-        if user:
+    @app.callback(Output("current-user", "value"), Input("current-user-store", "data"))
+    def load_user(stored):
+        return stored
+
+    @app.callback(
+        Output("current-user-store", "data"),
+        Output("user-set-out", "children"),
+        Input("current-user", "value"),
+        State("current-user-store", "data"),
+    )
+    def set_user(user, stored):
+        chosen = user or stored
+        if chosen:
             try:
                 from battery_analysis import user_tracking
 
-                user_tracking.set_current_user(user)
+                user_tracking.set_current_user(chosen)
             except Exception:
                 pass
-        return ""
+        return (user if user is not None else stored, "")
 
     trait_filter_tab.register_callbacks(app)
     comparison_tab.register_callbacks(app)

@@ -27,6 +27,31 @@ _uploaded_files: List[Dict] = []
 _DB_CONNECTED: bool | None = None
 
 # ---------------------------------------------------------------------------
+# User helpers
+# ---------------------------------------------------------------------------
+
+
+def get_available_users() -> List[str]:
+    """Return available usernames for the dashboard.
+
+    The function attempts to retrieve the list from
+    :mod:`battery_analysis.user_tracking`. When that package does not expose
+    a helper or an error occurs, a small placeholder list is returned so the
+    UI remains usable in offline or test environments.
+    """
+
+    for attr in ("get_available_users", "get_users", "available_users"):
+        getter = getattr(user_tracking, attr, None)
+        if callable(getter):
+            try:
+                users = list(getter())
+                if users:
+                    return users
+            except Exception:
+                pass
+    return ["user1", "user2"]
+
+# ---------------------------------------------------------------------------
 # Database helpers
 # ---------------------------------------------------------------------------
 
