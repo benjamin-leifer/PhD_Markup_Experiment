@@ -6,6 +6,7 @@ which is too large to store efficiently in the main MongoDB documents.
 """
 
 import logging
+from bson import ObjectId
 from battery_analysis.models import TestResult, CycleDetailData
 from .db import ensure_connection
 import io
@@ -115,6 +116,9 @@ def get_detailed_cycle_data(test_id, cycle_index=None):
     """
     Retrieve detailed cycle data from GridFS.
 
+    If ``test_id`` is not a valid :class:`bson.ObjectId`, the function logs a
+    message and returns an empty dict without querying the database.
+
     Args:
         test_id: ID of the TestResult document
         cycle_index: Specific cycle to retrieve (if None, retrieves all available)
@@ -125,6 +129,9 @@ def get_detailed_cycle_data(test_id, cycle_index=None):
     logging.info(
         f"Attempting to retrieve GridFS data for test {test_id}, cycle {cycle_index}"
     )
+    if not ObjectId.is_valid(test_id):
+        logging.warning(f"Invalid test id {test_id}")
+        return {}
     if not ensure_connection():
         logging.error("Database connection not available")
         return {}
