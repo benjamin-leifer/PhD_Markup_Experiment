@@ -360,12 +360,79 @@ def main_2_mean_std_logS(root_dir):
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
+    plt.gca().invert_xaxis()
     plt.show()
     fig_path = os.path.join(figures_dir, "arrhenius_plot_all_groups_mean_std_logS.png")
     plt.savefig(fig_path, dpi=300)
     plt.close()
 
+
+def main_2_best_cell_logS(root_dir):
+    """
+    For each group, find the cell with the highest mean conductivity,
+    and plot its log10(conductivity [S/cm]) vs. 1000/T.
+    """
+    figures_dir = os.path.join(root_dir, "figures")
+    os.makedirs(figures_dir, exist_ok=True)
+
+    eis_files = collect_eis_files_by_temperature(root_dir)
+    parsed_data = []
+
+    for mpt_file, temp_C in eis_files:
+        if "PEIS" not in mpt_file.name:
+            continue
+
+        try:
+            df = pd.read_csv(mpt_file, skiprows=65, delimiter='\t', encoding='ISO-8859-1', names=column_names)
+            df = df[["Frequency (Hz)", "Zre (Ohm)", "-Zim (Ohm)"]].dropna()
+            if df["Zre (Ohm)"].min() < 0 or df.empty:
+                continue
+            Rb = estimate_Rb(df)
+            T_K = temp_C + 273.15
+            conductivity = thickness_cm / (Rb * area_cm2) * 1000  # mS/cm
+
+            filename = mpt_file.name
+            _, cell_code = extract_metadata(filename)
+            if cell_code is None or cell_code in ["GG01", "GF01"]:
+                continue
+
+            parsed_data.append((cell_code, temp_C, T_K, conductivity, filename))
+        except Exception:
+            continue
+
+    df_results = pd.DataFrame(parsed_data, columns=["Cell Code", "T_C", "T_K", "Conductivity_mS_cm", "Filename"])
+    df_results["1000/T"] = 1000 / df_results["T_K"]
+    df_results = df_results.sort_values(["Cell Code", "1000/T"])
+    df_results["Group"] = df_results["Cell Code"].str[:2]
+
+    colors = plt.cm.tab10.colors
+    plt.figure(figsize=(10, 7))
+    for idx, (group, group_df) in enumerate(df_results.groupby("Group")):
+        # Find best cell by highest mean conductivity
+        pivot = group_df.pivot_table(index="1000/T", columns="Cell Code", values="Conductivity_mS_cm")
+        best_cell = pivot.mean().idxmax()
+        if best_cell == "GE03":
+            best_cell = "GE01"
+        best_curve = pivot[best_cell].dropna()
+        best_curve_S_cm = best_curve / 1000  # Convert mS/cm to S/cm
+
+        plt.plot(best_curve.index, np.log10(best_curve_S_cm),
+                 color=colors[idx % len(colors)], label=f"{group} best: {best_cell}")
+
+    plt.xlabel("1000 / T (K⁻¹)")
+    plt.ylabel("log$_{10}$(Conductivity [S/cm])")
+    plt.title("Arrhenius Plot: Best Cell per Group (log scale)")
+    #plt.grid(True)
+    plt.tick_params(axis='both', which='major', direction='in')
+    plt.legend()
+    plt.tight_layout()
+    plt.gca().invert_xaxis()
+    plt.show()
+    fig_path = os.path.join(figures_dir, "arrhenius_plot_best_cell_per_group_logS.png")
+    plt.savefig(fig_path, dpi=300)
+    plt.close()
+
 if __name__ == "__main__":
     root_dir = r"C:\Users\benja\Downloads\DQ_DV Work\Lab Arbin_DQ_DV_2025_07_15\07\Ionic Conductivity\2025_07_27"
-    main_2_mean_std_logS(root_dir)
+    main_2_best_cell_logS(root_dir)
     #main_2(root_dir)
