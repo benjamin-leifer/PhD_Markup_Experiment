@@ -8,6 +8,13 @@ dataset is available, the dashboard falls back to the raw `TestResult`
 records, ensuring the views remain populated even for cells without a
 precomputed dataset.
 
+### User selection
+
+The **Current User** dropdown now retrieves its options from
+`battery_analysis.user_tracking`. The chosen username is stored in the
+browser's local storage so that reloading the application restores the
+previous selection automatically.
+
 ### Ad hoc scripts
 
 Prototype analyses belong in the `adhoc_scripts` directory. Each script should
