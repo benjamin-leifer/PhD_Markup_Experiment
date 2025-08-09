@@ -16,6 +16,7 @@ try:
     from . import (
         trait_filter_tab,
         advanced_analysis_tab,
+        ad_hoc_analysis_tab,
         cycle_detail_tab,
         eis_tab,
         comparison_tab,
@@ -32,6 +33,7 @@ except ImportError:  # pragma: no cover - allow running as script
     layout_components = importlib.import_module("layout")
     trait_filter_tab = importlib.import_module("trait_filter_tab")
     advanced_analysis_tab = importlib.import_module("advanced_analysis_tab")
+    ad_hoc_analysis_tab = importlib.import_module("ad_hoc_analysis_tab")
     cycle_detail_tab = importlib.import_module("cycle_detail_tab")
     eis_tab = importlib.import_module("eis_tab")
     comparison_tab = importlib.import_module("comparison_tab")
@@ -133,6 +135,11 @@ def create_app(test_role: str | None = None) -> dash.Dash:
                     label="Advanced Analysis",
                     disabled=not is_admin,
                     value="advanced-analysis",
+                ),
+                dcc.Tab(
+                    ad_hoc_analysis_tab.layout(),
+                    label="Ad Hoc Analysis",
+                    value="ad-hoc",
                 ),
                 dcc.Tab(
                     cycle_detail_tab.layout(),
@@ -473,6 +480,7 @@ def create_app(test_role: str | None = None) -> dash.Dash:
     trait_filter_tab.register_callbacks(app)
     comparison_tab.register_callbacks(app)
     advanced_analysis_tab.register_callbacks(app)
+    ad_hoc_analysis_tab.register_callbacks(app)
     cycle_detail_tab.register_callbacks(app)
     eis_tab.register_callbacks(app)
     document_flow_tab.register_callbacks(app)
