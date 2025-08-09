@@ -141,7 +141,8 @@ def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
         tests = models.TestResult.objects(sample=sample_id).only("name")  # type: ignore[attr-defined]
         return [{"label": t.name, "value": str(t.id)} for t in tests]
     except Exception:
-        return [{"label": f"{sample_id}-TestA", "value": str(ObjectId())}]
+        test_id = str(ObjectId())
+        return [{"label": f"{sample_id}-TestA", "value": test_id}]
 
 
 def layout() -> html.Div:
