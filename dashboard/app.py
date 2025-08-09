@@ -43,8 +43,18 @@ except ImportError:  # pragma: no cover - allow running as script
     preferences = importlib.import_module("preferences")
 
 
-def create_app(test_role: str | None = None) -> dash.Dash:
-    """Create and configure the Dash application."""
+def create_app(test_role: str | None = None, enable_login: bool = False) -> dash.Dash:
+    """Create and configure the Dash application.
+
+    Parameters
+    ----------
+    test_role:
+        Optional explicit role to start the app with.
+    enable_login:
+        If ``True`` the login page is shown and users must authenticate. When
+        ``False`` (the default) the application skips the login page and starts
+        with an admin role.
+    """
     import diskcache
     from dash.background_callback import DiskcacheManager
 
@@ -57,7 +67,11 @@ def create_app(test_role: str | None = None) -> dash.Dash:
         suppress_callback_exceptions=True,
         background_callback_manager=background_callback_manager,
     )
-    auth.register_callbacks(app)
+
+    if enable_login:
+        auth.register_callbacks(app)
+    else:
+        test_role = test_role or "admin"
 
     def dashboard_layout(user_role: str) -> html.Div:
         prefs = preferences.load_preferences()
@@ -226,9 +240,9 @@ def create_app(test_role: str | None = None) -> dash.Dash:
 
     @app.callback(Output("page-content", "children"), Input("user-role", "data"))
     def display_page(role):
-        if not role:
+        if enable_login and not role:
             return auth.layout()
-        return dashboard_layout(role)
+        return dashboard_layout(role or "admin")
 
     @app.callback(Output("theme", "href"), Input("preferences", "data"))
     def apply_theme(prefs):
