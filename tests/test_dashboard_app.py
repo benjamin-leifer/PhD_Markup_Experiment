@@ -29,7 +29,7 @@ TAB_LABELS = [
 
 def test_all_tabs_render():
     """The app layout renders and includes all tab labels for an admin user."""
-    app = create_app(test_role="admin")
+    app = create_app()
     render = app.callback_map["page-content.children"]["callback"].__wrapped__
     layout = render("admin")
     html_str = str(layout)
@@ -39,7 +39,7 @@ def test_all_tabs_render():
 
 def test_basic_callbacks():
     """Each tab's primary callback executes without error."""
-    app = create_app(test_role="admin")
+    app = create_app()
     cb = app.callback_map
 
     toggle = cb["export-modal.is_open"]["callback"].__wrapped__
