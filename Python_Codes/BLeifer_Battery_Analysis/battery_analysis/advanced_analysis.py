@@ -81,6 +81,21 @@ def get_voltage_capacity_data(test_id, cycle_number=None):
     import os
     import pandas as pd
     from battery_analysis import models
+    from mongoengine import connect
+    from mongoengine.connection import ConnectionFailure, get_connection
+
+    # Ensure a MongoEngine connection exists before querying
+    try:
+        get_connection()
+    except ConnectionFailure:
+        db_name = os.getenv("BATTERY_DB_NAME", "battery_test_db")
+        try:
+            connect(db_name, alias="default")
+        except Exception as exc:  # pragma: no cover - unexpected connection failures
+            raise RuntimeError(
+                "No MongoDB connection. Call mongoengine.connect('<db_name>', alias='default') "
+                "before using get_voltage_capacity_data."
+            ) from exc
 
     # ------------------------------------------------------------------ #
     # 1)  Try detailed data stored in GridFS
