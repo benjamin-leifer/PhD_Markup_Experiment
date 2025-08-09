@@ -12,6 +12,7 @@ from dash import dcc, html
 import dash_bootstrap_components as dbc
 from dash import Input, Output, State
 import plotly.graph_objects as go
+from bson import ObjectId
 
 try:  # pragma: no cover - depends on optional packages
     from battery_analysis.utils.detailed_data_manager import (
@@ -85,8 +86,8 @@ def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
         return [{"label": t.name, "value": str(t.id)} for t in tests]
     except Exception:
         return [
-            {"label": f"{sample_id}-TestA", "value": f"{sample_id}-testA"},
-            {"label": f"{sample_id}-TestB", "value": f"{sample_id}-testB"},
+            {"label": f"{sample_id}-TestA", "value": str(ObjectId())},
+            {"label": f"{sample_id}-TestB", "value": str(ObjectId())},
         ]
 
 
