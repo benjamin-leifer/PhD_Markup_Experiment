@@ -10,9 +10,14 @@ import dash_bootstrap_components as dbc
 from dash import Input, Output, State
 from plotly import graph_objs as go
 import numpy as np
+import pandas as pd
 import base64
 import tempfile
 import io
+try:  # pragma: no cover - optional dependency
+    from scipy.signal import savgol_filter
+except Exception:  # pragma: no cover - gracefully handle missing SciPy
+    savgol_filter = None  # type: ignore
 
 try:  # pragma: no cover - optional dependencies
     from battery_analysis import advanced_analysis, MISSING_ADVANCED_PACKAGES
@@ -58,6 +63,60 @@ EXPORT_BUTTON = "aa-export-btn"
 EXPORT_DOWNLOAD = "aa-export-download"
 RESULT_GRAPH = "aa-graph"
 RESULT_TEXT = "aa-results"
+
+
+def compute_dqdv_pitt(
+    voltage: np.ndarray,
+    capacity: np.ndarray,
+    *,
+    smooth: bool = True,
+    bin_width: float = 0.003,
+    window_pre: int = 301,
+    poly_pre: int = 3,
+    window_post: int = 21,
+    poly_post: int = 2,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute dQ/dV using the patched PITT protocol.
+
+    This implementation follows the approach in
+    ``Dq_DV_PITT_Integration_patched.py`` by binning voltage data and
+    applying Savitzky–Golay smoothing before and after differentiation.
+    """
+
+    df = pd.DataFrame({"V": np.asarray(voltage), "QmAh": np.asarray(capacity)})
+    df = df.dropna().sort_values("V")
+    if df.empty:
+        raise ValueError("No valid voltage/capacity data")
+
+    # Fixed-width binning of voltage
+    df = df.assign(_vbin=np.round(df["V"] / bin_width) * bin_width)
+    df_bin = (
+        df.groupby("_vbin", as_index=False)["QmAh"].mean()
+        .rename(columns={"_vbin": "V"})
+        .sort_values("V")
+    )
+
+    def _savgol(y: np.ndarray, window: int, poly: int) -> np.ndarray:
+        if savgol_filter is None or window <= 1:
+            return y
+        if window % 2 == 0:
+            window -= 1
+        window = min(window, len(y) - (len(y) % 2 == 0))
+        if window < poly + 2 + (poly % 2 == 0):
+            window = poly + 2 + (poly % 2 == 0)
+        return savgol_filter(y, window, poly)
+
+    v = df_bin["V"].to_numpy()
+    q = df_bin["QmAh"].to_numpy() / 1000.0  # mAh → Ah
+    order = np.argsort(v)
+    v, q = v[order], q[order]
+    q_sm = _savgol(q, window_pre, poly_pre) if smooth else q
+    dq = np.diff(q_sm)
+    dv = np.diff(v)
+    v_mid = 0.5 * (v[:-1] + v[1:])
+    dqdv = np.divide(dq, dv, out=np.full_like(dq, np.nan), where=dv != 0)
+    dqdv = _savgol(dqdv, window_post, poly_post) if smooth else dqdv
+    return v_mid, dqdv
 
 
 def _get_sample_options() -> List[Dict[str, str]]:
@@ -172,7 +231,7 @@ def layout() -> html.Div:
                         dcc.Input(
                             id=WINDOW_INPUT,
                             type="number",
-                            value=11,
+                            value=301,
                             placeholder="Window",
                             style={"width": "6em"},
                         ),
@@ -422,12 +481,11 @@ def register_callbacks(app: dash.Dash) -> None:
                 voltage, capacity = advanced_analysis.get_voltage_capacity_data(
                     test_id, cycle
                 )
-                v_mid, dqdv = advanced_analysis.compute_dqdv(
-                    capacity,
+                v_mid, dqdv = compute_dqdv_pitt(
                     voltage,
+                    capacity,
                     smooth=smooth,
-                    window_size=window or 11,
-                    polyorder=3,
+                    window_pre=window or 301,
                 )
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(x=v_mid, y=dqdv, mode="lines", name="dQ/dV"))
