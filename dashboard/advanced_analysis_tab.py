@@ -14,6 +14,8 @@ import pandas as pd
 import base64
 import tempfile
 import io
+from bson import ObjectId
+
 try:  # pragma: no cover - optional dependency
     from scipy.signal import savgol_filter
 except Exception:  # pragma: no cover - gracefully handle missing SciPy
@@ -91,7 +93,8 @@ def compute_dqdv_pitt(
     # Fixed-width binning of voltage
     df = df.assign(_vbin=np.round(df["V"] / bin_width) * bin_width)
     df_bin = (
-        df.groupby("_vbin", as_index=False)["QmAh"].mean()
+        df.groupby("_vbin", as_index=False)["QmAh"]
+        .mean()
         .rename(columns={"_vbin": "V"})
         .sort_values("V")
     )
@@ -138,7 +141,7 @@ def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
         tests = models.TestResult.objects(sample=sample_id).only("name")  # type: ignore[attr-defined]
         return [{"label": t.name, "value": str(t.id)} for t in tests]
     except Exception:
-        return [{"label": "Test_A", "value": "testA"}]
+        return [{"label": f"{sample_id}-TestA", "value": str(ObjectId())}]
 
 
 def layout() -> html.Div:
@@ -190,9 +193,7 @@ def layout() -> html.Div:
                     width="auto",
                 ),
                 dbc.Col(
-                    dbc.Button(
-                        "Export Plot", id=EXPORT_BUTTON, color="secondary"
-                    ),
+                    dbc.Button("Export Plot", id=EXPORT_BUTTON, color="secondary"),
                     width="auto",
                 ),
                 (
