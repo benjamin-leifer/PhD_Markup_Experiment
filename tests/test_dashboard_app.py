@@ -39,7 +39,7 @@ def test_all_tabs_render():
         assert label in html_str
 
 
-def test_basic_callbacks():
+def test_basic_callbacks(monkeypatch):
     """Each tab's primary callback executes without error."""
     create_app = pytest.importorskip("dashboard.app").create_app
     app = create_app()
@@ -54,7 +54,20 @@ def test_basic_callbacks():
     assert styles[0] == {"display": "block"}
 
     update_tests = cb["cd-test.options"]["callback"].__wrapped__
-    assert update_tests("sample1")
+
+    from battery_analysis.models import Sample, TestResult
+    import mongomock
+    from mongoengine import connect, disconnect
+    disconnect()
+    connect("testdb", mongo_client_class=mongomock.MongoClient, alias="default")
+    sample = Sample(name="S1").save()
+    test = TestResult(sample=sample, tester="Arbin", name="T1").save()
+    import dashboard.data_access as data_access
+    monkeypatch.setattr(data_access, "get_cell_dataset", lambda _code: None)
+
+    options = update_tests(str(sample.id))
+    assert options == [{"label": test.name, "value": str(test.id)}]
+    disconnect()
 
     update_graph = cb["compare-graph.figure"]["callback"].__wrapped__
     fig = update_graph(None, "capacity")
