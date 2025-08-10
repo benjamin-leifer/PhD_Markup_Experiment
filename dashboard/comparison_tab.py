@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import List, Dict, Any, Optional, Tuple
 
 import io
+import logging
 
 import numpy as np
 import pandas as pd
@@ -23,21 +24,29 @@ EXPORT_BUTTON = "compare-export-btn"
 EXPORT_DOWNLOAD = "compare-export-download"
 EXPORT_IMG_BUTTON = "compare-export-img-btn"
 EXPORT_IMG_DOWNLOAD = "compare-export-img-download"
+ERROR_ALERT = "compare-error-alert"
+
+logger = logging.getLogger(__name__)
 
 
-def _get_sample_options() -> List[Dict[str, str]]:
-    """Return dropdown options for available samples."""
+def _get_sample_options() -> Tuple[List[Dict[str, str]], Optional[str]]:
+    """Return dropdown options for available samples and an error message."""
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis import models
 
         samples = models.Sample.objects.only("name")  # type: ignore[attr-defined]
-        return [{"label": s.name, "value": str(s.id)} for s in samples]
-    except Exception:
-        return [{"label": "Sample_001", "value": "sample1"}]
+        return [{"label": s.name, "value": str(s.id)} for s in samples], None
+    except Exception as exc:
+        logger.exception("Failed to load sample options")
+        return [{"label": "Sample_001", "value": "sample1"}], (
+            f"Could not load sample options: {exc}"
+        )
 
 
-def _get_sample_data(sample_id: str) -> Tuple[str, Dict[str, np.ndarray]]:
-    """Return (sample name, cycle data) for ``sample_id``.
+def _get_sample_data(
+    sample_id: str,
+) -> Tuple[str, Dict[str, np.ndarray], Optional[str]]:
+    """Return (sample name, cycle data, error message) for ``sample_id``.
 
     The function tries to pull real cycle data from the ``battery_analysis``
     package. If that fails (e.g. database not available) deterministic demo data
@@ -84,32 +93,48 @@ def _get_sample_data(sample_id: str) -> Tuple[str, Dict[str, np.ndarray]]:
         capacity_arr = np.array(capacity, dtype=float)
         ce_arr = np.array(ce, dtype=float)
         impedance_arr = np.full_like(cycles_arr, np.nan, dtype=float)
-        return sample_name, {
-            "cycle": cycles_arr,
-            "capacity": capacity_arr,
-            "ce": ce_arr,
-            "impedance": impedance_arr,
-        }
-    except Exception:
+        return (
+            sample_name,
+            {
+                "cycle": cycles_arr,
+                "capacity": capacity_arr,
+                "ce": ce_arr,
+                "impedance": impedance_arr,
+            },
+            None,
+        )
+    except Exception as exc:
+        logger.exception("Failed to load data for sample %s", sample_id)
         sample_name = str(sample_id)
         rng = np.random.default_rng(abs(hash(sample_name)) % (2**32))
         cycles = np.arange(1, 51)
         capacity = 1.0 + 0.1 * rng.standard_normal(len(cycles))
         ce = 0.98 + 0.01 * rng.standard_normal(len(cycles))
         impedance = 100 + 5 * rng.standard_normal(len(cycles))
-        return sample_name, {
-            "cycle": cycles,
-            "capacity": capacity,
-            "ce": ce,
-            "impedance": impedance,
-        }
+        return (
+            sample_name,
+            {
+                "cycle": cycles,
+                "capacity": capacity,
+                "ce": ce,
+                "impedance": impedance,
+            },
+            f"Could not load data for {sample_id}: {exc}",
+        )
 
 
 def layout() -> html.Div:
     """Return the layout for the comparison tab."""
-    sample_opts = _get_sample_options()
+    sample_opts, error_msg = _get_sample_options()
     return html.Div(
         [
+            dbc.Alert(
+                error_msg,
+                color="warning",
+                is_open=bool(error_msg),
+                id=ERROR_ALERT,
+                className="mb-3",
+            ),
             dbc.Row(
                 [
                     dbc.Col(
@@ -163,6 +188,8 @@ def register_callbacks(app: dash.Dash) -> None:
 
     @app.callback(
         Output(GRAPH, "figure"),
+        Output(ERROR_ALERT, "children"),
+        Output(ERROR_ALERT, "is_open"),
         Input(SAMPLE_DROPDOWN, "value"),
         Input(METRIC_RADIO, "value"),
     )
@@ -170,9 +197,12 @@ def register_callbacks(app: dash.Dash) -> None:
         fig = go.Figure()
         if not samples:
             fig.update_layout(template="plotly_white", xaxis_title="Cycle")
-            return fig
+            return fig, dash.no_update, dash.no_update
+        errors: List[str] = []
         for sample_id in samples:
-            name, data = _get_sample_data(sample_id)
+            name, data, err = _get_sample_data(sample_id)
+            if err:
+                errors.append(err)
             y = data[metric] if metric in data else data["capacity"]
             if metric == "norm_capacity":
                 y = data["capacity"] / data["capacity"][0]
@@ -188,7 +218,8 @@ def register_callbacks(app: dash.Dash) -> None:
             xaxis_title="Cycle",
             yaxis_title=y_labels.get(metric, metric),
         )
-        return fig
+        error_msg = "; ".join(errors)
+        return fig, error_msg, bool(error_msg)
 
     @app.callback(
         Output(EXPORT_DOWNLOAD, "data"),
@@ -202,7 +233,7 @@ def register_callbacks(app: dash.Dash) -> None:
             return dash.no_update
         records: List[Dict[str, Any]] = []
         for sample_id in samples:
-            name, data = _get_sample_data(sample_id)
+            name, data, _ = _get_sample_data(sample_id)
             y = data[metric] if metric in data else data["capacity"]
             if metric == "norm_capacity":
                 y = data["capacity"] / data["capacity"][0]
