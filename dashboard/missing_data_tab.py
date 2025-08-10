@@ -132,8 +132,18 @@ def register_callbacks(app: dash.Dash) -> None:
         prevent_initial_call=True,
     )
     def _open_modal(active_cell, rows):
+        """Display the modal for the selected test row.
+
+        The DataTable stores the missing components as a comma separated
+        string; this callback converts that representation back into a list and
+        builds the modal body dynamically.  Returning ``dash.no_update`` for
+        all outputs when another column is clicked keeps the current modal
+        state intact.
+        """
+
         if not active_cell or active_cell.get("column_id") != "resolve":
             return dash.no_update, dash.no_update, dash.no_update
+
         row = rows[active_cell["row"]]
         missing_list = (
             [m.strip() for m in row["missing"].split(",")]
@@ -154,6 +164,15 @@ def register_callbacks(app: dash.Dash) -> None:
         prevent_initial_call=True,
     )
     def _resolve_issue(n_clicks, selected, data: List[Dict[str, object]], values):
+        """Validate user input and persist component assignments.
+
+        The callback creates or fetches component objects using
+        :mod:`battery_analysis.models`, attaches them to the selected test's
+        :class:`~battery_analysis.models.Sample`, and updates the table to hide
+        resolved tests.  Any exceptions bubble up as an error message within
+        the modal so users receive immediate feedback.
+        """
+
         if not n_clicks or not selected:
             return data, False, dash.no_update
 
@@ -172,6 +191,7 @@ def register_callbacks(app: dash.Dash) -> None:
             if not test:
                 raise RuntimeError("Test not found")
             sample = test.sample.fetch() if hasattr(test.sample, "fetch") else test.sample
+
             for field, name in provided.items():
                 model_cls = getattr(models, field.capitalize())
                 query = model_cls.objects(name=name)  # type: ignore[attr-defined]
@@ -181,6 +201,7 @@ def register_callbacks(app: dash.Dash) -> None:
                     if hasattr(obj, "save"):
                         obj.save()
                 setattr(sample, field, obj)
+
             if hasattr(sample, "save"):
                 sample.save()
         except Exception as exc:
