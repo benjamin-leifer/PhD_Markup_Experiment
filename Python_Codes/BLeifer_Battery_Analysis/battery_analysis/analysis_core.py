@@ -514,3 +514,48 @@ def compute_metrics(cycles_summary):
     }
 
     return metrics
+
+
+def summarize_detailed_cycles(detailed_cycles):
+    """Build lightweight cycle summaries from detailed cycle data.
+
+    The detailed cycle mapping typically contains voltage/current/capacity
+    arrays for each cycle under ``charge``/``charge_data`` and
+    ``discharge``/``discharge_data`` keys.  This function reduces that
+    structure to the minimum fields required by :class:`CycleSummary`, namely
+    charge/discharge capacities and coulombic efficiency.
+
+    Parameters
+    ----------
+    detailed_cycles : dict
+        Mapping of cycle index to detailed data dictionaries.
+
+    Returns
+    -------
+    list[dict]
+        List of per-cycle summary dictionaries that can be consumed by
+        :func:`create_test_result` or similar utilities.
+    """
+
+    summaries = []
+    if not detailed_cycles:
+        return summaries
+
+    for idx, data in sorted(detailed_cycles.items()):
+        charge_segment = data.get("charge") or data.get("charge_data") or {}
+        discharge_segment = data.get("discharge") or data.get("discharge_data") or {}
+
+        charge_cap = max(charge_segment.get("capacity", []) or [0])
+        discharge_cap = max(discharge_segment.get("capacity", []) or [0])
+        ce = discharge_cap / charge_cap if charge_cap else 0
+
+        summaries.append(
+            {
+                "cycle_index": int(idx),
+                "charge_capacity": float(charge_cap),
+                "discharge_capacity": float(discharge_cap),
+                "coulombic_efficiency": float(ce),
+            }
+        )
+
+    return summaries

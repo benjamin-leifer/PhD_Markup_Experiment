@@ -9,6 +9,7 @@ from battery_analysis.analysis_core import (
     update_sample_properties,
     compare_samples,
     get_cycle_data,
+    summarize_detailed_cycles,
 )
 
 # Import from cycle_data_analysis.py
@@ -53,6 +54,7 @@ __all__ = [
     "update_sample_properties",
     "compare_samples",
     "get_cycle_data",
+    "summarize_detailed_cycles",
     "get_cycle_voltage_vs_capacity",
     "calculate_differential_capacity",
     "plot_cycle_voltage_capacity",
