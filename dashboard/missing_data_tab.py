@@ -25,7 +25,9 @@ def _get_missing_data() -> List[Dict[str, object]]:
 
         records: List[Dict[str, object]] = []
         for test in models.TestResult.objects():  # type: ignore[attr-defined]
-            sample = test.sample.fetch() if hasattr(test.sample, "fetch") else test.sample
+            sample = (
+                test.sample.fetch() if hasattr(test.sample, "fetch") else test.sample
+            )
             missing = [
                 f
                 for f in ("anode", "cathode", "separator", "electrolyte")
@@ -68,7 +70,9 @@ def _build_modal_body(
             dbc.FormGroup(
                 [
                     dbc.Label(field.capitalize()),
-                    dbc.Input(id={"type": "missing-component", "field": field}, value=value),
+                    dbc.Input(
+                        id={"type": "missing-component", "field": field}, value=value
+                    ),
                 ]
             )
         )
@@ -96,7 +100,9 @@ def layout() -> html.Div:
                     dbc.ModalHeader(dbc.ModalTitle("Resolve Missing Data")),
                     dbc.ModalBody(id=f"{MODAL_ID}-body"),
                     dbc.ModalFooter(
-                        dbc.Button("Mark Resolved", id="confirm-resolve", color="primary")
+                        dbc.Button(
+                            "Mark Resolved", id="confirm-resolve", color="primary"
+                        )
                     ),
                 ],
                 id=MODAL_ID,
@@ -123,6 +129,7 @@ def register_callbacks(app: dash.Dash) -> None:
                 }
             )
         return rows
+
     @app.callback(
         Output(MODAL_ID, "is_open"),
         Output(SELECTED_TEST_STORE, "data"),
@@ -155,8 +162,8 @@ def register_callbacks(app: dash.Dash) -> None:
 
     @app.callback(
         Output(DATA_STORE, "data"),
-        Output(MODAL_ID, "is_open"),
-        Output(f"{MODAL_ID}-body", "children"),
+        Output(MODAL_ID, "is_open", allow_duplicate=True),
+        Output(f"{MODAL_ID}-body", "children", allow_duplicate=True),
         Input("confirm-resolve", "n_clicks"),
         State(SELECTED_TEST_STORE, "data"),
         State(DATA_STORE, "data"),
@@ -190,7 +197,9 @@ def register_callbacks(app: dash.Dash) -> None:
             test = models.TestResult.objects(id=selected["test_id"]).first()
             if not test:
                 raise RuntimeError("Test not found")
-            sample = test.sample.fetch() if hasattr(test.sample, "fetch") else test.sample
+            sample = (
+                test.sample.fetch() if hasattr(test.sample, "fetch") else test.sample
+            )
 
             for field, name in provided.items():
                 model_cls = getattr(models, field.capitalize())
