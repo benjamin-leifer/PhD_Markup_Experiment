@@ -505,6 +505,11 @@ def register_callbacks(app: dash.Dash) -> None:
                 test = models.TestResult.objects(id=test_id).first()
                 if not test:
                     return go.Figure(), "Test not found"
+                if len(test.cycles) < 10:
+                    err = (
+                        f"Need at least 10 cycles for fade analysis, found {len(test.cycles)}"
+                    )
+                    return go.Figure(), err
                 cycle_nums = [c.cycle_index for c in test.cycles]
                 discharge_caps = [c.discharge_capacity for c in test.cycles]
                 result = advanced_analysis.capacity_fade_analysis(test_id)
