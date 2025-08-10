@@ -41,3 +41,11 @@ To promote a script:
 These steps provide a clear path from experimentation to fully integrated
 dashboard features.
 
+### Interactive tables
+
+The **Running Tests** and **Upcoming Tests** views now use Dash's
+`DataTable` component. Columns can be sorted by clicking the headers and
+filtered using the built-in filter boxes. Each row retains the flag dropdown
+for marking samples for review or retest, making the tables more powerful while
+remaining familiar to existing users.
+
