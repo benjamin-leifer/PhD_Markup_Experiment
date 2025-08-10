@@ -270,14 +270,14 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         Input("running-tests-table", "active_cell"),
         Input("close-metadata", "n_clicks"),
         State("metadata-modal", "is_open"),
+        State("running-tests-table", "data"),
     )
-    def display_metadata(active_cell, close_clicks, is_open):
+    def display_metadata(active_cell, close_clicks, is_open, rows):
         # If a table cell is clicked, show metadata modal
         if active_cell and active_cell.get("row") is not None:
             row = active_cell["row"]
-            tests = data_access.get_running_tests()
-            if row < len(tests):
-                cell_id = tests[row]["cell_id"]
+            if rows and row < len(rows):
+                cell_id = rows[row]["cell_id"]
                 meta = data_access.get_test_metadata(cell_id)
                 body = html.Div(
                     [
@@ -320,8 +320,8 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         return is_open
 
     @app.callback(
-        Output("running-tests-table", "children"),
-        Output("upcoming-tests-table", "children"),
+        Output("running-tests-table", "data"),
+        Output("upcoming-tests-table", "data"),
         Input("refresh-interval", "n_intervals"),
         prevent_initial_call=True,
     )
@@ -329,8 +329,8 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         running = data_access.get_running_tests()
         upcoming = data_access.get_upcoming_tests()
         return (
-            layout_components.running_tests_table(running).children,
-            layout_components.upcoming_tests_table(upcoming).children,
+            layout_components.running_tests_table(running).data,
+            layout_components.upcoming_tests_table(upcoming).data,
         )
 
     @app.callback(

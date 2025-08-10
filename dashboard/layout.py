@@ -1,7 +1,7 @@
 """Dash layout components for the battery dashboard."""
 
 import dash_bootstrap_components as dbc
-from dash import html, dcc
+from dash import html, dcc, dash_table
 from typing import List, Dict
 
 
@@ -89,127 +89,99 @@ def summary_layout(stats: Dict) -> dbc.Row:
     return dbc.Row(cards, className="mb-4")
 
 
-def running_tests_table(tests: List[Dict]) -> dbc.Table:
-    """Table of running tests."""
-    header = html.Thead(
-        html.Tr(
-            [
-                html.Th("Cell ID"),
-                html.Th("Chemistry"),
-                html.Th("Test Type"),
-                html.Th("Current Cycle"),
-                html.Th("Last Timestamp"),
-                html.Th("Schedule"),
-                html.Th("Status"),
-                html.Th("Actions"),
-            ]
-        )
-    )
-    rows = []
+def running_tests_table(tests: List[Dict]) -> dash_table.DataTable:
+    """Table of running tests using a ``DataTable`` component."""
+    data = []
     for t in tests:
-        rows.append(
-            html.Tr(
-                [
-                    html.Td(t["cell_id"]),
-                    html.Td(t["chemistry"]),
-                    html.Td(t["test_type"]),
-                    html.Td(t["current_cycle"]),
-                    html.Td(t["last_timestamp"].strftime("%Y-%m-%d %H:%M")),
-                    html.Td(t["test_schedule"]),
-                    html.Td(t["status"]),
-                    html.Td(
-                        dbc.DropdownMenu(
-                            [
-                                dbc.DropdownMenuItem(
-                                    "Flag for Review",
-                                    id={
-                                        "type": "flag-review",
-                                        "index": t["cell_id"],
-                                    },
-                                ),
-                                dbc.DropdownMenuItem(
-                                    "Flag for Retest",
-                                    id={
-                                        "type": "flag-retest",
-                                        "index": t["cell_id"],
-                                    },
-                                ),
-                            ],
-                            label="Flag",
-                            color="secondary",
-                            size="sm",
-                        )
-                    ),
-                ]
-            )
+        data.append(
+            {
+                "cell_id": t["cell_id"],
+                "chemistry": t["chemistry"],
+                "test_type": t["test_type"],
+                "current_cycle": t["current_cycle"],
+                "last_timestamp": t["last_timestamp"].strftime("%Y-%m-%d %H:%M"),
+                "test_schedule": t["test_schedule"],
+                "status": t["status"],
+                "actions": dbc.DropdownMenu(
+                    [
+                        dbc.DropdownMenuItem(
+                            "Flag for Review",
+                            id={"type": "flag-review", "index": t["cell_id"]},
+                        ),
+                        dbc.DropdownMenuItem(
+                            "Flag for Retest",
+                            id={"type": "flag-retest", "index": t["cell_id"]},
+                        ),
+                    ],
+                    label="Flag",
+                    color="secondary",
+                    size="sm",
+                ),
+            }
         )
-    body = html.Tbody(rows)
-    return dbc.Table(
-        [header, body],
+    return dash_table.DataTable(
         id="running-tests-table",
-        bordered=True,
-        hover=True,
-        responsive=True,
-        striped=True,
+        columns=[
+            {"name": "Cell ID", "id": "cell_id"},
+            {"name": "Chemistry", "id": "chemistry"},
+            {"name": "Test Type", "id": "test_type"},
+            {"name": "Current Cycle", "id": "current_cycle"},
+            {"name": "Last Timestamp", "id": "last_timestamp"},
+            {"name": "Schedule", "id": "test_schedule"},
+            {"name": "Status", "id": "status"},
+            {"name": "Actions", "id": "actions"},
+        ],
+        data=data,
+        sort_action="native",
+        filter_action="native",
+        style_table={"overflowX": "auto"},
+        className="table table-striped table-hover",
+        style_cell={"textAlign": "left"},
     )
 
 
-def upcoming_tests_table(tests: List[Dict]) -> dbc.Table:
-    """Table of upcoming tests."""
-    header = html.Thead(
-        html.Tr(
-            [
-                html.Th("Cell ID"),
-                html.Th("Start Time"),
-                html.Th("Hardware"),
-                html.Th("Notes"),
-                html.Th("Actions"),
-            ]
-        )
-    )
-    rows = []
+def upcoming_tests_table(tests: List[Dict]) -> dash_table.DataTable:
+    """Table of upcoming tests using a ``DataTable`` component."""
+    data = []
     for t in tests:
-        rows.append(
-            html.Tr(
-                [
-                    html.Td(t["cell_id"]),
-                    html.Td(t["start_time"].strftime("%Y-%m-%d %H:%M")),
-                    html.Td(t["hardware"]),
-                    html.Td(t["notes"]),
-                    html.Td(
-                        dbc.DropdownMenu(
-                            [
-                                dbc.DropdownMenuItem(
-                                    "Flag for Review",
-                                    id={
-                                        "type": "flag-review",
-                                        "index": t["cell_id"],
-                                    },
-                                ),
-                                dbc.DropdownMenuItem(
-                                    "Flag for Retest",
-                                    id={
-                                        "type": "flag-retest",
-                                        "index": t["cell_id"],
-                                    },
-                                ),
-                            ],
-                            label="Flag",
-                            color="secondary",
-                            size="sm",
-                        )
-                    ),
-                ]
-            )
+        data.append(
+            {
+                "cell_id": t["cell_id"],
+                "start_time": t["start_time"].strftime("%Y-%m-%d %H:%M"),
+                "hardware": t["hardware"],
+                "notes": t["notes"],
+                "actions": dbc.DropdownMenu(
+                    [
+                        dbc.DropdownMenuItem(
+                            "Flag for Review",
+                            id={"type": "flag-review", "index": t["cell_id"]},
+                        ),
+                        dbc.DropdownMenuItem(
+                            "Flag for Retest",
+                            id={"type": "flag-retest", "index": t["cell_id"]},
+                        ),
+                    ],
+                    label="Flag",
+                    color="secondary",
+                    size="sm",
+                ),
+            }
         )
-    body = html.Tbody(rows)
-    return dbc.Table(
-        [header, body],
+    return dash_table.DataTable(
         id="upcoming-tests-table",
-        bordered=True,
-        hover=True,
-        responsive=True,
-        striped=True,
+        columns=[
+            {"name": "Cell ID", "id": "cell_id"},
+            {"name": "Start Time", "id": "start_time"},
+            {"name": "Hardware", "id": "hardware"},
+            {"name": "Notes", "id": "notes"},
+            {"name": "Actions", "id": "actions"},
+        ],
+        data=data,
+        sort_action="native",
+        filter_action="native",
+        style_table={"overflowX": "auto"},
+        className="table table-striped table-hover",
+        style_cell={"textAlign": "left"},
     )
 
 
