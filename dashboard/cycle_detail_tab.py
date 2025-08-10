@@ -6,44 +6,15 @@ from typing import List, Dict, Optional
 
 import io
 
-import numpy as np
 import dash
 from dash import dcc, html
 import dash_bootstrap_components as dbc
 from dash import Input, Output, State
 import plotly.graph_objects as go
-from bson import ObjectId
 
-try:  # pragma: no cover - depends on optional packages
-    from battery_analysis.utils.detailed_data_manager import (
-        get_detailed_cycle_data as _get_detailed_cycle_data,
-    )
-except Exception:  # pragma: no cover - fallback for demo environments
-
-    def _get_detailed_cycle_data(
-        test_id: str, cycle_index: Optional[int] = None
-    ) -> Dict[int, Dict[str, Dict[str, np.ndarray]]]:
-        """Return placeholder detailed cycle data."""
-        rng = np.random.default_rng(abs(hash(test_id)) % (2**32))
-        cycles = range(1, 6)
-        data: Dict[int, Dict[str, Dict[str, np.ndarray]]] = {}
-        for idx in cycles:
-            capacity = np.linspace(0, 1.0, 50)
-            charge_voltage = 3.0 + 0.1 * rng.standard_normal(capacity.size)
-            discharge_voltage = 3.0 - 0.1 * rng.standard_normal(capacity.size)
-            data[idx] = {
-                "charge": {
-                    "capacity": capacity,
-                    "voltage": charge_voltage,
-                },
-                "discharge": {
-                    "capacity": capacity,
-                    "voltage": discharge_voltage,
-                },
-            }
-        if cycle_index is None:
-            return data
-        return {cycle_index: data.get(cycle_index, {})}
+from battery_analysis.utils.detailed_data_manager import (
+    get_detailed_cycle_data,
+)
 
 
 def _get_sample_options() -> List[Dict[str, str]]:
@@ -54,7 +25,7 @@ def _get_sample_options() -> List[Dict[str, str]]:
         samples = models.Sample.objects.only("name")  # type: ignore[attr-defined]
         return [{"label": s.name, "value": str(s.id)} for s in samples]
     except Exception:
-        return [{"label": "Sample_001", "value": "sample1"}]
+        return []
 
 
 def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
@@ -65,7 +36,7 @@ def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
 
         sample = models.Sample.objects(id=sample_id).first()  # type: ignore[attr-defined]
         if not sample:
-            raise ValueError("sample not found")
+            return []
 
         dataset = getattr(sample, "default_dataset", None)
         if not dataset:
@@ -85,10 +56,7 @@ def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
         tests = models.TestResult.objects(sample=sample_id).only("name")  # type: ignore[attr-defined]
         return [{"label": t.name, "value": str(t.id)} for t in tests]
     except Exception:
-        return [
-            {"label": f"{sample_id}-TestA", "value": str(ObjectId())},
-            {"label": f"{sample_id}-TestB", "value": str(ObjectId())},
-        ]
+        return []
 
 
 SAMPLE_DROPDOWN = "cd-sample"
@@ -185,7 +153,7 @@ def register_callbacks(app: dash.Dash) -> None:
     def _update_cycles(test_id: Optional[str]) -> List[Dict[str, int]]:
         if not test_id:
             return []
-        data = _get_detailed_cycle_data(test_id)
+        data = get_detailed_cycle_data(test_id)
         return [{"label": f"Cycle {idx}", "value": idx} for idx in sorted(data.keys())]
 
     @app.callback(
@@ -197,7 +165,7 @@ def register_callbacks(app: dash.Dash) -> None:
     def _update_figure(test_id: Optional[str], cycle_index: Optional[int]):
         if not test_id or cycle_index is None:
             return go.Figure(), go.Figure()
-        data = _get_detailed_cycle_data(test_id, cycle_index)
+        data = get_detailed_cycle_data(test_id, cycle_index)
         if cycle_index not in data:
             return go.Figure(), go.Figure()
         cycle_data = data[cycle_index]
