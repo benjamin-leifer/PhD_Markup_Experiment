@@ -8,11 +8,13 @@ import re
 
 # Update imports to avoid circular dependencies
 from battery_analysis import models, parsers
+from battery_analysis.utils.db import ensure_connection
 # Import directly from the analysis package
 from battery_analysis.analysis import (
     compute_metrics,
     update_sample_properties,
     create_test_result,
+    summarize_detailed_cycles,
 )
 
 
@@ -229,6 +231,14 @@ def process_file_with_update(file_path, sample):
         detailed_cycles = metadata.pop('detailed_cycles')
         logging.info(f"Extracted {len(detailed_cycles)} detailed cycle datasets")
 
+    # If parser did not return cycle summaries, build them from detailed data
+    if (
+        (not parsed_data or not isinstance(parsed_data, list))
+        or (parsed_data and 'discharge_capacity' not in parsed_data[0])
+    ) and detailed_cycles:
+        logging.info("Building cycle summaries from detailed data")
+        parsed_data = summarize_detailed_cycles(detailed_cycles)
+
     # Add file path to metadata
     if metadata is None:
         metadata = {}
@@ -274,3 +284,66 @@ def process_file_with_update(file_path, sample):
                 logging.error(f"Error storing detailed cycle data: {e}")
 
         return test_result, False
+
+
+def backfill_cycle_summaries(test_ids=None):
+    """Populate missing ``CycleSummary`` documents for existing tests.
+
+    Parameters
+    ----------
+    test_ids : iterable | None
+        Optional list of specific TestResult IDs to process. If ``None``, all
+        tests missing cycle summaries will be processed.
+
+    Returns
+    -------
+    int
+        Number of tests updated.
+    """
+
+    import pickle
+    from battery_analysis.utils.detailed_data_manager import get_detailed_cycle_data
+
+    if not ensure_connection():
+        logging.error("Database connection not available")
+        return 0
+
+    if test_ids:
+        tests = models.TestResult.objects(id__in=test_ids)
+    else:
+        tests = models.TestResult.objects(cycles__size=0)
+
+    updated = 0
+    for test in tests:
+        detailed = get_detailed_cycle_data(str(test.id))
+        if not detailed:
+            # If no cycle indices recorded on the test, gather directly
+            detailed = {}
+            for detail in models.CycleDetailData.objects(test_result=test.id):
+                try:
+                    charge = pickle.loads(detail.charge_data.read()) if detail.charge_data else {}
+                    discharge = (
+                        pickle.loads(detail.discharge_data.read())
+                        if detail.discharge_data
+                        else {}
+                    )
+                    detailed[detail.cycle_index] = {
+                        "charge": charge,
+                        "discharge": discharge,
+                    }
+                except Exception:
+                    continue
+        if not detailed:
+            continue
+        summaries = summarize_detailed_cycles(detailed)
+        if not summaries:
+            continue
+        test.cycles = [models.CycleSummary(**c) for c in summaries]
+        metrics = compute_metrics(summaries)
+        for key, value in metrics.items():
+            if hasattr(test, key):
+                setattr(test, key, value)
+        test.save()
+        updated += 1
+
+    return updated
