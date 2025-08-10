@@ -135,7 +135,6 @@ def running_tests_table(tests: List[Dict]) -> dash_table.DataTable:
         sort_action="native",
         filter_action="native",
         style_table={"overflowX": "auto"},
-        className="table table-striped table-hover",
         style_cell={"textAlign": "left"},
     )
 
@@ -180,7 +179,6 @@ def upcoming_tests_table(tests: List[Dict]) -> dash_table.DataTable:
         sort_action="native",
         filter_action="native",
         style_table={"overflowX": "auto"},
-        className="table table-striped table-hover",
         style_cell={"textAlign": "left"},
     )
 
