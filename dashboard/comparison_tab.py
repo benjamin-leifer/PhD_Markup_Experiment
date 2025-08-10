@@ -216,15 +216,40 @@ def register_callbacks(app: dash.Dash) -> None:
 
     @app.callback(
         Output(EXPORT_IMG_DOWNLOAD, "data"),
+        Output("notification-toast", "is_open", allow_duplicate=True),
+        Output("notification-toast", "children", allow_duplicate=True),
+        Output("notification-toast", "header", allow_duplicate=True),
+        Output("notification-toast", "icon", allow_duplicate=True),
         Input(EXPORT_IMG_BUTTON, "n_clicks"),
         State(GRAPH, "figure"),
         prevent_initial_call=True,
     )
     def _export_plot(n_clicks, fig_dict):
         if not fig_dict:
-            return dash.no_update
+            return (
+                dash.no_update,
+                dash.no_update,
+                dash.no_update,
+                dash.no_update,
+                dash.no_update,
+            )
         fig = go.Figure(fig_dict)
         buffer = io.BytesIO()
-        fig.write_image(buffer, format="png")
+        try:
+            fig.write_image(buffer, format="png")
+        except (ValueError, ImportError):
+            return (
+                dash.no_update,
+                True,
+                "Install the 'kaleido' package to enable image export.",
+                "Error",
+                "danger",
+            )
         buffer.seek(0)
-        return dcc.send_bytes(buffer.getvalue(), "comparison_plot.png")
+        return (
+            dcc.send_bytes(buffer.getvalue(), "comparison_plot.png"),
+            dash.no_update,
+            dash.no_update,
+            dash.no_update,
+            dash.no_update,
+        )

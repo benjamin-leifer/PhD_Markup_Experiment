@@ -58,11 +58,13 @@ def test_basic_callbacks(monkeypatch):
     from battery_analysis.models import Sample, TestResult
     import mongomock
     from mongoengine import connect, disconnect
+
     disconnect()
     connect("testdb", mongo_client_class=mongomock.MongoClient, alias="default")
     sample = Sample(name="S1").save()
     test = TestResult(sample=sample, tester="Arbin", name="T1").save()
     import dashboard.data_access as data_access
+
     monkeypatch.setattr(data_access, "get_cell_dataset", lambda _code: None)
 
     options = update_tests(str(sample.id))
@@ -220,3 +222,42 @@ def test_missing_data_resolve_flow(monkeypatch):
     resolve = cb[resolve_key]["callback"].__wrapped__
     new_data, modal_open, _body2 = resolve(1, selected, data, ["A1", "C1"])
     assert new_data == [] and modal_open is False
+
+
+def test_export_plot_prompts_kaleido(monkeypatch):
+    """Missing kaleido triggers a toast notification when exporting plots."""
+    import types
+    import importlib.util
+    import sys
+    from pathlib import Path
+    import dash
+    import plotly.graph_objs as go
+
+    root = Path(__file__).resolve().parents[1]
+    pkg = types.ModuleType("dashboard")
+    pkg.__path__ = [str(root / "dashboard")]
+    sys.modules["dashboard"] = pkg
+
+    spec = importlib.util.spec_from_file_location(
+        "dashboard.comparison_tab", root / "dashboard" / "comparison_tab.py"
+    )
+    comparison_tab = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(comparison_tab)
+
+    app = dash.Dash(__name__)
+    app.layout = comparison_tab.layout()
+    comparison_tab.register_callbacks(app)
+
+    export_key = next(
+        k for k in app.callback_map if "compare-export-img-download.data" in k
+    )
+    export_cb = app.callback_map[export_key]["callback"].__wrapped__
+
+    def boom(self, *args, **kwargs):
+        raise ValueError("no kaleido")
+
+    monkeypatch.setattr(go.Figure, "write_image", boom)
+
+    result = export_cb(1, go.Figure().to_dict())
+    assert result[0] is dash.no_update
+    assert result[1] is True and "kaleido" in result[2].lower()
