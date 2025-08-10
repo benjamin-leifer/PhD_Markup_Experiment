@@ -1,9 +1,8 @@
 import datetime
 import io
 import os
-import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Dict, List
 
 from battery_analysis import user_tracking
 
@@ -22,7 +21,6 @@ except Exception:  # pragma: no cover - allow running without DB
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
-TEST_DATA_FILE = BASE_DIR / "test_data" / "offline_dump.json"
 _uploaded_files: List[Dict] = []
 _DB_CONNECTED: bool | None = None
 
@@ -82,57 +80,8 @@ def db_connected() -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Data retrieval with graceful fallback to demo data
+# Data retrieval
 # ---------------------------------------------------------------------------
-
-
-def _placeholder_running(now: datetime.datetime) -> List[Dict]:
-    return [
-        {
-            "cell_id": "Cell_001",
-            "chemistry": "Gr|NMC",
-            "test_type": "Cycle Life",
-            "current_cycle": 120,
-            "last_timestamp": now,
-            "test_schedule": "1C charge/1C discharge",
-            "status": "running",
-        },
-        {
-            "cell_id": "Cell_002",
-            "chemistry": "LFP",
-            "test_type": "EIS",
-            "current_cycle": 5,
-            "last_timestamp": now,
-            "test_schedule": "EIS every 10 cycles",
-            "status": "paused",
-        },
-    ]
-
-
-def _load_offline_manifest() -> Dict[str, Any]:
-    """Load test data manifest from ``test_data/offline_dump.json``."""
-    if TEST_DATA_FILE.exists():
-        try:
-            with open(TEST_DATA_FILE, "r", encoding="utf-8") as fh:
-                data = json.load(fh)
-            for row in data.get("tests", []):
-                ts = row.get("last_timestamp")
-                if isinstance(ts, str):
-                    try:
-                        row["last_timestamp"] = datetime.datetime.fromisoformat(ts)
-                    except ValueError:
-                        pass
-            for row in data.get("upcoming", []):
-                ts = row.get("start_time")
-                if isinstance(ts, str):
-                    try:
-                        row["start_time"] = datetime.datetime.fromisoformat(ts)
-                    except ValueError:
-                        pass
-            return data
-        except Exception:
-            pass
-    return {"tests": [], "upcoming": [], "summary": {}}
 
 
 def get_cell_dataset(cell_code: str):
@@ -153,146 +102,104 @@ def get_cell_dataset(cell_code: str):
 
 
 def get_running_tests() -> List[Dict]:
-    """Return currently running tests from the database or example data."""
+    """Return currently running tests."""
     now = datetime.datetime.now()
-    if db_connected():  # pragma: no cover - requires database
+    if not db_connected():
+        return []
+    try:  # pragma: no cover - requires database
+        tests = models.TestResult.objects(validated=False).order_by("-date")  # type: ignore[attr-defined]
+    except Exception as exc:  # pragma: no cover - requires database
+        raise RuntimeError("Failed to query running tests") from exc
+    rows: List[Dict] = []
+    for test in tests:
         try:
-            tests = models.TestResult.objects(validated=False).order_by("-date")  # type: ignore[attr-defined]
-            rows: List[Dict] = []
-            for test in tests:
-                try:
-                    sample = (
-                        test.sample.fetch()
-                        if hasattr(test.sample, "fetch")
-                        else test.sample
-                    )
-                    sample_name = getattr(sample, "name", str(sample.id))
-                    chemistry = getattr(sample, "chemistry", "")
-                except Exception:
-                    sample_name, chemistry = "Unknown", ""
-                cycle = (
-                    test.cycle_count
-                    if getattr(test, "cycle_count", None) is not None
-                    else len(getattr(test, "cycles", []) or [])
-                )
-                rows.append(
-                    {
-                        "cell_id": sample_name,
-                        "chemistry": chemistry or "Unknown",
-                        "test_type": getattr(test, "test_type", ""),
-                        "current_cycle": cycle,
-                        "last_timestamp": getattr(test, "date", now),
-                        "test_schedule": getattr(
-                            getattr(test, "protocol", None), "name", test.name or ""
-                        ),
-                        "status": "running",
-                    }
-                )
-            if rows:
-                return rows
+            sample = test.sample.fetch() if hasattr(test.sample, "fetch") else test.sample
+            sample_name = getattr(sample, "name", str(sample.id))
+            chemistry = getattr(sample, "chemistry", "")
         except Exception:
-            pass
-    manifest = _load_offline_manifest()
-    if manifest["tests"]:
-        return manifest["tests"]
-    return _placeholder_running(now)
-
-
-def _placeholder_upcoming(now: datetime.datetime) -> List[Dict]:
-    return [
-        {
-            "cell_id": "Cell_010",
-            "start_time": now + datetime.timedelta(hours=2),
-            "hardware": "Arbin_1",
-            "notes": "Preconditioned",
-        },
-        {
-            "cell_id": "Cell_011",
-            "start_time": now + datetime.timedelta(hours=4),
-            "hardware": "Arbin_2",
-            "notes": "High temperature",
-        },
-    ]
+            sample_name, chemistry = "Unknown", ""
+        cycle = (
+            test.cycle_count
+            if getattr(test, "cycle_count", None) is not None
+            else len(getattr(test, "cycles", []) or [])
+        )
+        rows.append(
+            {
+                "cell_id": sample_name,
+                "chemistry": chemistry or "Unknown",
+                "test_type": getattr(test, "test_type", ""),
+                "current_cycle": cycle,
+                "last_timestamp": getattr(test, "date", now),
+                "test_schedule": getattr(
+                    getattr(test, "protocol", None), "name", test.name or ""
+                ),
+                "status": "running",
+            }
+        )
+    return rows
 
 
 def get_upcoming_tests() -> List[Dict]:
-    """Return upcoming scheduled tests or example data."""
+    """Return upcoming scheduled tests."""
     now = datetime.datetime.now()
-    if db_connected():  # pragma: no cover - requires database
+    if not db_connected():
+        return []
+    try:  # pragma: no cover - requires database
+        tests = models.TestResult.objects(date__gt=now).order_by("date")  # type: ignore[attr-defined]
+    except Exception as exc:  # pragma: no cover - requires database
+        raise RuntimeError("Failed to query upcoming tests") from exc
+    rows: List[Dict] = []
+    for test in tests:
         try:
-            tests = models.TestResult.objects(date__gt=now).order_by("date")  # type: ignore[attr-defined]
-            rows: List[Dict] = []
-            for test in tests:
-                try:
-                    sample = (
-                        test.sample.fetch()
-                        if hasattr(test.sample, "fetch")
-                        else test.sample
-                    )
-                    sample_name = getattr(sample, "name", str(sample.id))
-                except Exception:
-                    sample_name = "Unknown"
-                rows.append(
-                    {
-                        "cell_id": sample_name,
-                        "start_time": getattr(test, "date", now),
-                        "hardware": getattr(test, "tester", ""),
-                        "notes": getattr(test, "notes", ""),
-                    }
-                )
-            if rows:
-                return rows
+            sample = test.sample.fetch() if hasattr(test.sample, "fetch") else test.sample
+            sample_name = getattr(sample, "name", str(sample.id))
         except Exception:
-            pass
-    manifest = _load_offline_manifest()
-    if manifest["upcoming"]:
-        return manifest["upcoming"]
-    return _placeholder_upcoming(now)
+            sample_name = "Unknown"
+        rows.append(
+            {
+                "cell_id": sample_name,
+                "start_time": getattr(test, "date", now),
+                "hardware": getattr(test, "tester", ""),
+                "notes": getattr(test, "notes", ""),
+            }
+        )
+    return rows
 
 
 def get_summary_stats() -> Dict:
     """Return summary statistics about tests."""
-    if db_connected():  # pragma: no cover - requires database
-        try:
-            running = models.TestResult.objects(validated=False).count()  # type: ignore[attr-defined]
-            today = datetime.datetime.combine(datetime.date.today(), datetime.time())
-            completed = models.TestResult.objects(date__gte=today, validated=True).count()  # type: ignore[attr-defined]
-            failures = models.TestResult.objects(notes__icontains="fail").count()  # type: ignore[attr-defined]
-            return {
-                "running": running,
-                "completed_today": completed,
-                "failures": failures,
-            }
-        except Exception:
-            pass
-    manifest = _load_offline_manifest()
-    if manifest["summary"]:
-        return manifest["summary"]
-    return {"running": 2, "completed_today": 5, "failures": 0}
+    if not db_connected():
+        return {}
+    try:  # pragma: no cover - requires database
+        running = models.TestResult.objects(validated=False).count()  # type: ignore[attr-defined]
+        today = datetime.datetime.combine(datetime.date.today(), datetime.time())
+        completed = models.TestResult.objects(date__gte=today, validated=True).count()  # type: ignore[attr-defined]
+        failures = models.TestResult.objects(notes__icontains="fail").count()  # type: ignore[attr-defined]
+        return {
+            "running": running,
+            "completed_today": completed,
+            "failures": failures,
+        }
+    except Exception as exc:  # pragma: no cover - requires database
+        raise RuntimeError("Failed to query summary stats") from exc
 
 
 def get_test_metadata(cell_id: str) -> Dict:
     """Return detailed metadata for ``cell_id``."""
-    if db_connected():  # pragma: no cover - requires database
-        try:
-            sample = models.Sample.get_by_name(cell_id)  # type: ignore[attr-defined]
-            if sample:
-                formation = getattr(sample, "formation_date", None)
-                return {
-                    "cell_id": cell_id,
-                    "chemistry": getattr(sample, "chemistry", "Unknown"),
-                    "formation_date": (
-                        formation.strftime("%Y-%m-%d") if formation else "Unknown"
-                    ),
-                    "notes": getattr(sample, "notes", ""),
-                }
-        except Exception:
-            pass
+    if not db_connected():
+        raise RuntimeError("Database unavailable")
+    try:  # pragma: no cover - requires database
+        sample = models.Sample.get_by_name(cell_id)  # type: ignore[attr-defined]
+    except Exception as exc:  # pragma: no cover - requires database
+        raise RuntimeError(f"Failed to fetch metadata for {cell_id}") from exc
+    if not sample:
+        raise RuntimeError(f"Sample {cell_id} not found")
+    formation = getattr(sample, "formation_date", None)
     return {
         "cell_id": cell_id,
-        "chemistry": "Gr|NMC",
-        "formation_date": "2024-01-01",
-        "notes": "Example cell used for demo purposes.",
+        "chemistry": getattr(sample, "chemistry", "Unknown"),
+        "formation_date": formation.strftime("%Y-%m-%d") if formation else "Unknown",
+        "notes": getattr(sample, "notes", ""),
     }
 
 
