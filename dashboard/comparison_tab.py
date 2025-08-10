@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 import io
 
@@ -15,13 +15,6 @@ import dash_bootstrap_components as dbc
 from dash import Input, Output, State
 import plotly.graph_objs as go
 
-try:
-    from .trait_filter_tab import get_sample_names
-except ImportError:  # pragma: no cover - allow running as script
-    import importlib
-
-    get_sample_names = importlib.import_module("trait_filter_tab").get_sample_names
-
 # Component IDs
 SAMPLE_DROPDOWN = "compare-samples"
 METRIC_RADIO = "compare-metric"
@@ -32,8 +25,19 @@ EXPORT_IMG_BUTTON = "compare-export-img-btn"
 EXPORT_IMG_DOWNLOAD = "compare-export-img-download"
 
 
-def _get_sample_data(sample: str) -> Dict[str, np.ndarray]:
-    """Return cycle data for ``sample``.
+def _get_sample_options() -> List[Dict[str, str]]:
+    """Return dropdown options for available samples."""
+    try:  # pragma: no cover - depends on MongoDB
+        from battery_analysis import models
+
+        samples = models.Sample.objects.only("name")  # type: ignore[attr-defined]
+        return [{"label": s.name, "value": str(s.id)} for s in samples]
+    except Exception:
+        return [{"label": "Sample_001", "value": "sample1"}]
+
+
+def _get_sample_data(sample_id: str) -> Tuple[str, Dict[str, np.ndarray]]:
+    """Return (sample name, cycle data) for ``sample_id``.
 
     The function tries to pull real cycle data from the ``battery_analysis``
     package. If that fails (e.g. database not available) deterministic demo data
@@ -41,17 +45,17 @@ def _get_sample_data(sample: str) -> Dict[str, np.ndarray]:
     """
 
     try:  # pragma: no cover - depends on battery_analysis and database
-        from battery_analysis import analysis  # type: ignore  # noqa: F401
         from battery_analysis.models import Sample, TestResult  # type: ignore
         from .data_access import get_cell_dataset
 
-        s = Sample.get_by_name(sample)  # type: ignore[attr-defined]
+        s = Sample.objects(id=sample_id).first()  # type: ignore[attr-defined]
         if not s:
             raise ValueError("sample not found")
 
+        sample_name = getattr(s, "name", str(sample_id))
         dataset = getattr(s, "default_dataset", None)
         if not dataset:
-            dataset = get_cell_dataset(sample)
+            dataset = get_cell_dataset(sample_name)
 
         cycles: List[int] = []
         capacity: List[float] = []
@@ -80,24 +84,30 @@ def _get_sample_data(sample: str) -> Dict[str, np.ndarray]:
         capacity_arr = np.array(capacity, dtype=float)
         ce_arr = np.array(ce, dtype=float)
         impedance_arr = np.full_like(cycles_arr, np.nan, dtype=float)
-        return {
+        return sample_name, {
             "cycle": cycles_arr,
             "capacity": capacity_arr,
             "ce": ce_arr,
             "impedance": impedance_arr,
         }
     except Exception:
-        rng = np.random.default_rng(abs(hash(sample)) % (2**32))
+        sample_name = str(sample_id)
+        rng = np.random.default_rng(abs(hash(sample_name)) % (2**32))
         cycles = np.arange(1, 51)
         capacity = 1.0 + 0.1 * rng.standard_normal(len(cycles))
         ce = 0.98 + 0.01 * rng.standard_normal(len(cycles))
         impedance = 100 + 5 * rng.standard_normal(len(cycles))
-        return {"cycle": cycles, "capacity": capacity, "ce": ce, "impedance": impedance}
+        return sample_name, {
+            "cycle": cycles,
+            "capacity": capacity,
+            "ce": ce,
+            "impedance": impedance,
+        }
 
 
 def layout() -> html.Div:
     """Return the layout for the comparison tab."""
-    sample_opts = [{"label": s, "value": s} for s in get_sample_names()]
+    sample_opts = _get_sample_options()
     return html.Div(
         [
             dbc.Row(
@@ -161,8 +171,8 @@ def register_callbacks(app: dash.Dash) -> None:
         if not samples:
             fig.update_layout(template="plotly_white", xaxis_title="Cycle")
             return fig
-        for name in samples:
-            data = _get_sample_data(name)
+        for sample_id in samples:
+            name, data = _get_sample_data(sample_id)
             y = data[metric] if metric in data else data["capacity"]
             if metric == "norm_capacity":
                 y = data["capacity"] / data["capacity"][0]
@@ -191,8 +201,8 @@ def register_callbacks(app: dash.Dash) -> None:
         if not samples:
             return dash.no_update
         records: List[Dict[str, Any]] = []
-        for name in samples:
-            data = _get_sample_data(name)
+        for sample_id in samples:
+            name, data = _get_sample_data(sample_id)
             y = data[metric] if metric in data else data["capacity"]
             if metric == "norm_capacity":
                 y = data["capacity"] / data["capacity"][0]
