@@ -371,3 +371,26 @@ def data_import_layout() -> html.Div:
             html.Ul(id="uploaded-files-list"),
         ]
     )
+
+
+def toast_container() -> html.Div:
+    """Container used to display short-lived toast notifications."""
+
+    return html.Div(
+        dbc.Toast(
+            id="notification-toast",
+            header="",
+            is_open=False,
+            dismissable=True,
+            duration=4000,
+            icon="primary",
+        ),
+        id="toast-container",
+        style={
+            "position": "fixed",
+            "top": 66,
+            "right": 10,
+            "width": 350,
+            "zIndex": 2000,
+        },
+    )
