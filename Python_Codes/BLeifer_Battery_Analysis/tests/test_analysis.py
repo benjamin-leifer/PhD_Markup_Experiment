@@ -2,12 +2,36 @@
 
 import os
 import sys
+import types
 
 # Add the package root to sys.path so ``battery_analysis`` can be imported
 TESTS_DIR = os.path.dirname(__file__)
 PACKAGE_ROOT = os.path.abspath(os.path.join(TESTS_DIR, ".."))
 if PACKAGE_ROOT not in sys.path:
     sys.path.insert(0, PACKAGE_ROOT)
+
+# Provide stub modules for optional analysis dependencies
+def _stub(*args, **kwargs):
+    return None
+
+cycle_stub = types.ModuleType("cycle_data_analysis")
+cycle_stub.get_cycle_voltage_vs_capacity = _stub
+cycle_stub.calculate_differential_capacity = _stub
+cycle_stub.plot_cycle_voltage_capacity = _stub
+cycle_stub.plot_differential_capacity = _stub
+sys.modules.setdefault("cycle_data_analysis", cycle_stub)
+
+proto_stub = types.ModuleType("protocol_detection")
+proto_stub.is_last_cycle_complete = _stub
+proto_stub.calculate_cycle_crates = _stub
+proto_stub.summarize_protocol = _stub
+proto_stub.get_or_create_protocol = _stub
+proto_stub.detect_and_update_test_protocol = _stub
+sys.modules.setdefault("protocol_detection", proto_stub)
+
+# Additional stubs for optional subpackages referenced in __init__
+for _name in ["advanced_analysis", "plots", "eis", "outlier_analysis"]:
+    sys.modules.setdefault(_name, types.ModuleType(_name))
 
 from battery_analysis import analysis  # noqa: E402
 from mongoengine import connect, disconnect  # noqa: E402
@@ -41,6 +65,69 @@ def test_compute_metrics():
     assert abs(metrics["capacity_retention"] - expected_retention) < 1e-6
     # Average CE = (0.95 + 0.90)/2
     assert abs(metrics["avg_coulombic_eff"] - 0.925) < 1e-6
+
+
+def test_create_test_result_stores_cycle_summaries():
+    """``create_test_result`` should populate the cycles list."""
+    # Patch model classes with lightweight stand-ins to avoid database usage
+    dummy_cycles = []
+
+    class DummySample:
+        def __init__(self):
+            self.tests = []
+            self.name = "S1"
+
+        def save(self):
+            pass
+
+    class DummyCycleSummary:
+        def __init__(self, **kwargs):
+            dummy_cycles.append(kwargs)
+            self.__dict__.update(kwargs)
+
+    class DummyTestResult:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+
+        def save(self):
+            return self
+
+    sample = DummySample()
+
+    cycles = [
+        {
+            "cycle_index": 1,
+            "charge_capacity": 1.0,
+            "discharge_capacity": 0.9,
+            "coulombic_efficiency": 0.9,
+        },
+        {
+            "cycle_index": 2,
+            "charge_capacity": 1.0,
+            "discharge_capacity": 0.8,
+            "coulombic_efficiency": 0.8,
+        },
+    ]
+
+    # Patch analysis models and update_sample_properties
+    from battery_analysis import analysis_core as core
+
+    original_tr = core.models.TestResult
+    original_cs = core.models.CycleSummary
+    original_update = core.update_sample_properties
+    core.models.TestResult = DummyTestResult
+    core.models.CycleSummary = DummyCycleSummary
+    core.update_sample_properties = _stub
+    try:
+        test = analysis.create_test_result(sample, cycles, tester="Arbin")
+    finally:
+        core.models.TestResult = original_tr
+        core.models.CycleSummary = original_cs
+        core.update_sample_properties = original_update
+
+    assert len(test.cycles) == 2
+    assert test.cycles[0].discharge_capacity == 0.9
+    assert test.cycles[1].cycle_index == 2
 
 
 def test_inferred_property_propagation():

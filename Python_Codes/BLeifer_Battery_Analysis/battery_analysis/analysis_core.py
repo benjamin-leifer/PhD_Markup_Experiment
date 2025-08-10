@@ -10,12 +10,13 @@ import logging
 import datetime
 
 try:
-    from . import models, utils
+    from . import models, utils, parsers
 except ImportError:  # pragma: no cover - allow running as script
     import importlib
 
     models = importlib.import_module("models")
     utils = importlib.import_module("utils")
+    parsers = importlib.import_module("parsers")
 import pandas as pd
 
 
@@ -514,3 +515,61 @@ def compute_metrics(cycles_summary):
     }
 
     return metrics
+
+
+def backfill_cycle_summaries():
+    """Populate missing ``CycleSummary`` data for existing tests.
+
+    This utility searches for :class:`~battery_analysis.models.TestResult`
+    documents that do not contain any cycle summaries and attempts to
+    reconstruct them from the original raw data files referenced by the
+    ``file_path`` field. The parser corresponding to the file type is used to
+    extract per-cycle metrics which are then stored on the TestResult along
+    with updated overall metrics.
+    """
+
+    if not hasattr(models.TestResult, "objects"):
+        return []
+
+    updated_tests = []
+
+    for test in models.TestResult.objects(cycles__size=0):  # type: ignore[attr-defined]
+        path = getattr(test, "file_path", None)
+        if not path:
+            logging.warning("Skipping test %s without file_path", getattr(test, "id", "<unsaved>"))
+            continue
+
+        try:
+            cycles_summary, _ = parsers.parse_file(path)
+        except Exception as exc:  # pragma: no cover - defensive
+            logging.error("Could not parse %s: %s", path, exc)
+            continue
+
+        cycle_docs = []
+        for cycle in cycles_summary:
+            cycle_docs.append(
+                models.CycleSummary(
+                    cycle_index=cycle.get("cycle_index"),
+                    charge_capacity=cycle.get("charge_capacity", 0.0),
+                    discharge_capacity=cycle.get("discharge_capacity", 0.0),
+                    coulombic_efficiency=cycle.get("coulombic_efficiency", 0.0),
+                )
+            )
+
+        test.cycles = cycle_docs
+
+        metrics = compute_metrics(cycles_summary)
+        for key, value in metrics.items():
+            if hasattr(test, key):
+                setattr(test, key, value)
+
+        test.save()
+
+        try:
+            update_sample_properties(test.sample.fetch())
+        except Exception:  # pragma: no cover - sample may be missing
+            pass
+
+        updated_tests.append(test)
+
+    return updated_tests
