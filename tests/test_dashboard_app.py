@@ -3,6 +3,8 @@
 from pathlib import Path
 import sys
 import pytest
+import dash
+import base64
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = ROOT / "Python_Codes" / "BLeifer_Battery_Analysis"
@@ -74,3 +76,41 @@ def test_basic_callbacks():
     db_status = cb["db-status.children"]["callback"].__wrapped__
     status_text = db_status(0)
     assert "Database:" in status_text
+
+
+def test_upload_progress_message():
+    """Progress message shows during file parsing."""
+    create_app = pytest.importorskip("dashboard.app").create_app
+    app = create_app()
+    cb = app.callback_map
+    progress_key = next(
+        k
+        for k, v in cb.items()
+        if any(
+            i["id"] == "upload-data" and i["property"] == "loading_state"
+            for i in v["inputs"]
+        )
+    )
+    show_progress = cb[progress_key]["callback"].__wrapped__
+    assert show_progress({"is_loading": True}) == "Parsing file..."
+    assert show_progress({"is_loading": False}) is dash.no_update
+
+
+def test_handle_upload_clears_status(monkeypatch, tmp_path):
+    """Upload handler clears progress message on success."""
+    create_app = pytest.importorskip("dashboard.app").create_app
+    app = create_app()
+    cb = app.callback_map
+    handle_key = next(k for k in cb if "upload-form.style" in k)
+    handle_upload = cb[handle_key]["callback"].__wrapped__
+    import dashboard.app as appmod
+
+    monkeypatch.setattr(
+        appmod.data_access,
+        "store_temp_upload",
+        lambda filename, data: str(tmp_path / filename),
+    )
+    monkeypatch.setattr(appmod, "parse_file", lambda path: ([], {}))
+    content = "data:text/plain;base64," + base64.b64encode(b"hi").decode()
+    result = handle_upload(content, "x.txt")
+    assert result[-1] == ""

@@ -371,12 +371,22 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         return dcc.send_bytes(pdf_bytes, filename)
 
     @app.callback(
+        Output("upload-status", "children", allow_duplicate=True),
+        Input("upload-data", "loading_state"),
+        prevent_initial_call=True,
+    )
+    def show_upload_progress(loading_state):
+        if loading_state and loading_state.get("is_loading"):
+            return "Parsing file..."
+        return dash.no_update
+
+    @app.callback(
         Output("upload-form", "style"),
         Output("meta-sample-code", "value"),
         Output("meta-chemistry", "value"),
         Output("meta-notes", "value"),
         Output("upload-info", "data"),
-        Output("upload-status", "children"),
+        Output("upload-status", "children", allow_duplicate=True),
         Input("upload-data", "contents"),
         State("upload-data", "filename"),
         prevent_initial_call=True,
@@ -402,7 +412,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                 metadata.get("chemistry", ""),
                 metadata.get("notes", ""),
                 info,
-                dash.no_update,
+                "",
             )
         except Exception as err:  # pragma: no cover - simple error handling
             alert = dbc.Alert(

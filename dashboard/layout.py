@@ -324,39 +324,50 @@ def data_import_layout() -> html.Div:
     """Layout for the Data Import tab with file upload and metadata form."""
     return html.Div(
         [
-            dcc.Upload(
-                id="upload-data",
-                children=html.Div(
-                    ["Drag and Drop or ", html.A("Select Files")]
-                ),
-                style={
-                    "width": "100%",
-                    "height": "60px",
-                    "lineHeight": "60px",
-                    "borderWidth": "1px",
-                    "borderStyle": "dashed",
-                    "borderRadius": "5px",
-                    "textAlign": "center",
-                    "margin": "10px",
-                },
-            ),
-            dbc.Form(
-                [
-                    dbc.Label("Sample Code"),
-                    dbc.Input(id="meta-sample-code"),
-                    dbc.Label("Chemistry"),
-                    dbc.Input(id="meta-chemistry"),
-                    dbc.Label("Notes"),
-                    dbc.Textarea(id="meta-notes"),
-                    dbc.Button("Save", id="save-metadata", color="primary", className="me-2"),
-                    dbc.Button("Cancel", id="cancel-metadata", color="secondary"),
+            dcc.Loading(
+                id="upload-loading",
+                children=[
+                    dcc.Upload(
+                        id="upload-data",
+                        children=html.Div(
+                            ["Drag and Drop or ", html.A("Select Files")]
+                        ),
+                        style={
+                            "width": "100%",
+                            "height": "60px",
+                            "lineHeight": "60px",
+                            "borderWidth": "1px",
+                            "borderStyle": "dashed",
+                            "borderRadius": "5px",
+                            "textAlign": "center",
+                            "margin": "10px",
+                        },
+                    ),
+                    dbc.Form(
+                        [
+                            dbc.Label("Sample Code"),
+                            dbc.Input(id="meta-sample-code"),
+                            dbc.Label("Chemistry"),
+                            dbc.Input(id="meta-chemistry"),
+                            dbc.Label("Notes"),
+                            dbc.Textarea(id="meta-notes"),
+                            dbc.Button(
+                                "Save",
+                                id="save-metadata",
+                                color="primary",
+                                className="me-2",
+                            ),
+                            dbc.Button(
+                                "Cancel", id="cancel-metadata", color="secondary"
+                            ),
+                        ],
+                        id="upload-form",
+                        style={"display": "none"},
+                    ),
                 ],
-                id="upload-form",
-                style={"display": "none"},
             ),
             dcc.Store(id="upload-info"),
             html.Div(id="upload-status"),
             html.Ul(id="uploaded-files-list"),
         ]
     )
-

@@ -49,3 +49,10 @@ filtered using the built-in filter boxes. Each row retains the flag dropdown
 for marking samples for review or retest, making the tables more powerful while
 remaining familiar to existing users.
 
+### Upload progress indicator
+
+The Data Import tab now wraps the upload and metadata form in a loading
+spinner. When a file is selected, a "Parsing file..." message appears until the
+upload is processed so users receive immediate feedback during long-running
+parsing operations.
+
