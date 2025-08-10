@@ -1,6 +1,7 @@
 import os
 import sys
 import matplotlib
+import pytest
 
 matplotlib.use("Agg")
 
@@ -43,3 +44,9 @@ def test_overlay_returns_figure():
     assert isinstance(fig, matplotlib.figure.Figure)
     fig = plot_overlay.plot_overlay(samples, metric="impedance_vs_cycle")
     assert isinstance(fig, matplotlib.figure.Figure)
+
+
+def test_missing_data_raises_error():
+    samples = [{"name": "S1", "voltage": [3.0], "electrolyte": {"additive": "A"}}]
+    with pytest.raises(ValueError):
+        plot_overlay.plot_overlay(samples)

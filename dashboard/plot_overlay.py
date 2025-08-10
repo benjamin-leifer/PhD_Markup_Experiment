@@ -47,6 +47,11 @@ def plot_overlay(
     **plot_kwargs:
         Additional keyword arguments forwarded to
         :meth:`matplotlib.axes.Axes.plot`.
+
+    Raises
+    ------
+    ValueError
+        If the required data for the chosen metric is missing from a sample.
     """
 
     if ax is None:
@@ -68,9 +73,7 @@ def plot_overlay(
             x = sample.get("capacity")
             y = sample.get("voltage")
             if x is None or y is None:
-                # Generate demo data if not present
-                x = np.linspace(0, 1, 50)
-                y = 3.0 + 0.2 * np.sin(2 * np.pi * x) + 0.05 * np.random.randn(50)
+                raise ValueError("Sample lacks capacity/voltage data")
             ax.plot(
                 x,
                 y,
@@ -84,8 +87,9 @@ def plot_overlay(
             x = sample.get("cycle_index")
             y = sample.get("coulombic_efficiency")
             if x is None or y is None:
-                x = np.arange(1, 11)
-                y = 0.95 + 0.01 * np.random.randn(len(x))
+                raise ValueError(
+                    "Sample lacks cycle index/coulombic efficiency data"
+                )
             ax.plot(
                 x,
                 y,
@@ -99,8 +103,7 @@ def plot_overlay(
             x = sample.get("cycle_index")
             y = sample.get("impedance")
             if x is None or y is None:
-                x = np.arange(1, 11)
-                y = 100 + 5 * np.random.randn(len(x))
+                raise ValueError("Sample lacks cycle index/impedance data")
             ax.plot(
                 x,
                 y,
