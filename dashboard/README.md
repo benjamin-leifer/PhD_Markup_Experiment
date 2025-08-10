@@ -56,3 +56,10 @@ spinner. When a file is selected, a "Parsing file..." message appears until the
 upload is processed so users receive immediate feedback during long-running
 parsing operations.
 
+### Toast notifications
+
+Success and error messages are now delivered through Bootstrap toast
+notifications. These messages appear in the upper-right corner of the screen
+with an appropriate header and icon, then automatically dismiss after a short
+interval.
+

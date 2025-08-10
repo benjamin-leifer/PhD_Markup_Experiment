@@ -219,6 +219,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                 layout_components.metadata_modal(),
                 layout_components.export_modal(),
                 dcc.Interval(id="refresh-interval", interval=60 * 1000, n_intervals=0),
+                layout_components.toast_container(),
                 status_bar,
             ],
             fluid=True,
@@ -387,6 +388,10 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         Output("meta-notes", "value"),
         Output("upload-info", "data"),
         Output("upload-status", "children", allow_duplicate=True),
+        Output("notification-toast", "is_open", allow_duplicate=True),
+        Output("notification-toast", "children", allow_duplicate=True),
+        Output("notification-toast", "header", allow_duplicate=True),
+        Output("notification-toast", "icon", allow_duplicate=True),
         Input("upload-data", "contents"),
         State("upload-data", "filename"),
         prevent_initial_call=True,
@@ -413,17 +418,33 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                 metadata.get("notes", ""),
                 info,
                 "",
+                True,
+                f"Parsed {filename}",
+                "Success",
+                "success",
             )
         except Exception as err:  # pragma: no cover - simple error handling
-            alert = dbc.Alert(
-                f"Failed to parse {filename}: {err}", color="danger", dismissable=True
+            return (
+                {"display": "none"},
+                "",
+                "",
+                "",
+                None,
+                "",
+                True,
+                f"Failed to parse {filename}: {err}",
+                "Error",
+                "danger",
             )
-            return {"display": "none"}, "", "", "", None, alert
 
     @app.callback(
         Output("upload-status", "children", allow_duplicate=True),
         Output("upload-form", "style", allow_duplicate=True),
         Output("uploaded-files-list", "children"),
+        Output("notification-toast", "is_open", allow_duplicate=True),
+        Output("notification-toast", "children", allow_duplicate=True),
+        Output("notification-toast", "header", allow_duplicate=True),
+        Output("notification-toast", "icon", allow_duplicate=True),
         Input("save-metadata", "n_clicks"),
         Input("cancel-metadata", "n_clicks"),
         State("meta-sample-code", "value"),
@@ -452,19 +473,33 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                 )
                 files = data_access.get_uploaded_files()
                 items = [html.Li(f["filename"]) for f in files]
-                status = dbc.Alert(
-                    f"Saved {info['filename']}", color="success", dismissable=True
+                return (
+                    "",
+                    {"display": "none"},
+                    items,
+                    True,
+                    f"Saved {info['filename']}",
+                    "Success",
+                    "success",
                 )
-                return status, {"display": "none"}, items
             except Exception as err:  # pragma: no cover - simple error handling
-                alert = dbc.Alert(
-                    f"Error saving metadata: {err}", color="danger", dismissable=True
+                return (
+                    "",
+                    dash.no_update,
+                    dash.no_update,
+                    True,
+                    f"Error saving metadata: {err}",
+                    "Error",
+                    "danger",
                 )
-                return alert, dash.no_update, dash.no_update
         return (
-            dbc.Alert("Upload canceled", color="secondary", dismissable=True),
+            "",
             {"display": "none"},
             dash.no_update,
+            True,
+            "Upload canceled",
+            "Info",
+            "secondary",
         )
 
     @app.callback(
