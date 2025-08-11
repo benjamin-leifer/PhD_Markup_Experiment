@@ -231,7 +231,7 @@ def test_missing_data_resolve_flow(monkeypatch):
 
 
 def test_missing_data_suggestions(monkeypatch):
-    """Suggested values appear and confirming them resolves the row."""
+    """Suggested values pre-populate fields and confirming them resolves the row."""
     import importlib.util
     import types
     import sys
