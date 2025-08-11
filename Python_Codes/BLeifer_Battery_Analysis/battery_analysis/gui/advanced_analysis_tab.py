@@ -830,9 +830,22 @@ class AdvancedAnalysisTab(ttk.Frame):
         )
 
         try:
+            # Gather options
+            try:
+                eol_percent = float(self.eol_entry.get())
+            except Exception:
+                eol_percent = 80.0
+            models = []
+            if self.linear_var.get():
+                models.append("linear")
+            if self.power_var.get():
+                models.append("power")
+            if self.exp_var.get():
+                models.append("exponential")
+
             # Run capacity fade analysis
             self.current_fade_analysis = advanced_analysis.capacity_fade_analysis(
-                test_id
+                test_id, eol_percent=eol_percent, models=models
             )
 
             # Plot the results
