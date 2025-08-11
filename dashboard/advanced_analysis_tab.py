@@ -63,6 +63,7 @@ JOSH_MASS = "aa-josh-mass"
 RUN_BUTTON = "aa-run"
 EXPORT_BUTTON = "aa-export-btn"
 EXPORT_DOWNLOAD = "aa-export-download"
+MPL_POPOUT_BUTTON = "aa-mpl-popout-btn"
 RESULT_GRAPH = "aa-graph"
 RESULT_TEXT = "aa-results"
 
@@ -195,6 +196,14 @@ def layout() -> html.Div:
                 ),
                 dbc.Col(
                     dbc.Button("Export Plot", id=EXPORT_BUTTON, color="secondary"),
+                    width="auto",
+                ),
+                dbc.Col(
+                    dbc.Button(
+                        "Open in Matplotlib",
+                        id=MPL_POPOUT_BUTTON,
+                        color="secondary",
+                    ),
                     width="auto",
                 ),
                 (
@@ -506,9 +515,7 @@ def register_callbacks(app: dash.Dash) -> None:
                 if not test:
                     return go.Figure(), "Test not found"
                 if len(test.cycles) < 10:
-                    err = (
-                        f"Need at least 10 cycles for fade analysis, found {len(test.cycles)}"
-                    )
+                    err = f"Need at least 10 cycles for fade analysis, found {len(test.cycles)}"
                     return go.Figure(), err
                 cycle_nums = [c.cycle_index for c in test.cycles]
                 discharge_caps = [c.discharge_capacity for c in test.cycles]
@@ -725,3 +732,27 @@ def register_callbacks(app: dash.Dash) -> None:
         fig.write_image(buffer, format="png")
         buffer.seek(0)
         return dcc.send_bytes(buffer.getvalue(), "advanced_analysis.png")
+
+    @app.callback(
+        Output(MPL_POPOUT_BUTTON, "n_clicks"),
+        Input(MPL_POPOUT_BUTTON, "n_clicks"),
+        State(RESULT_GRAPH, "figure"),
+        prevent_initial_call=True,
+    )
+    def _popout_matplotlib(n_clicks, fig_dict):
+        import matplotlib.pyplot as plt
+
+        if not n_clicks or not fig_dict:
+            raise dash.exceptions.PreventUpdate
+
+        plt.figure()
+        for trace in fig_dict.get("data", []):
+            if trace.get("type") == "scatter":
+                plt.plot(
+                    trace.get("x", []),
+                    trace.get("y", []),
+                    label=trace.get("name"),
+                )
+        plt.legend()
+        plt.show()
+        return 0

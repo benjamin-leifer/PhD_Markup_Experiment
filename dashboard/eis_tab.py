@@ -42,6 +42,7 @@ CUSTOM_CIRCUIT_INPUT = "eis-custom-circuit"
 USE_CUSTOM_CHECK = "eis-use-custom"
 FIT_BUTTON = "eis-fit"
 GRAPH_COMPONENT = "eis-graph"
+MPL_POPOUT_BUTTON = "eis-mpl-popout-btn"
 
 
 def _get_sample_options() -> List[Dict[str, str]]:
@@ -224,6 +225,11 @@ def layout() -> html.Div:
             preprocess_div,
             plot_opts,
             circuit_div,
+            dbc.Button(
+                "Open in Matplotlib",
+                id=MPL_POPOUT_BUTTON,
+                color="secondary",
+            ),
             dcc.Store(id=DATA_STORE),
             dcc.Loading(dcc.Graph(id=GRAPH_COMPONENT)),
         ]
@@ -357,6 +363,30 @@ def register_callbacks(app: dash.Dash) -> None:
         else:
             fig.update_layout(template="plotly_white")
         return fig
+
+    @app.callback(
+        Output(MPL_POPOUT_BUTTON, "n_clicks"),
+        Input(MPL_POPOUT_BUTTON, "n_clicks"),
+        State(GRAPH_COMPONENT, "figure"),
+        prevent_initial_call=True,
+    )
+    def _popout_matplotlib(n_clicks, fig_dict):
+        import matplotlib.pyplot as plt
+
+        if not n_clicks or not fig_dict:
+            raise dash.exceptions.PreventUpdate
+
+        plt.figure()
+        for trace in fig_dict.get("data", []):
+            if trace.get("type") == "scatter":
+                plt.plot(
+                    trace.get("x", []),
+                    trace.get("y", []),
+                    label=trace.get("name"),
+                )
+        plt.legend()
+        plt.show()
+        return 0
 
 
 def make_bode_plot(freq, mag, phase):
