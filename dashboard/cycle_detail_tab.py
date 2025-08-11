@@ -65,6 +65,7 @@ CYCLE_DROPDOWN = "cd-cycle"
 POP_BUTTON = "cd-popout"
 EXPORT_BUTTON = "cd-export-btn"
 EXPORT_DOWNLOAD = "cd-export-download"
+MPL_POPOUT_BUTTON = "cd-mpl-popout-btn"
 GRAPH = "cd-graph"
 MODAL = "cd-modal"
 MODAL_GRAPH = "cd-modal-graph"
@@ -106,6 +107,14 @@ def layout() -> html.Div:
                     ),
                     dbc.Col(
                         dbc.Button("Pop-out", id=POP_BUTTON),
+                        md="auto",
+                    ),
+                    dbc.Col(
+                        dbc.Button(
+                            "Open in Matplotlib",
+                            id=MPL_POPOUT_BUTTON,
+                            color="secondary",
+                        ),
                         md="auto",
                     ),
                     dcc.Download(id=EXPORT_DOWNLOAD),
@@ -223,6 +232,30 @@ def register_callbacks(app: dash.Dash) -> None:
         fig.write_image(buffer, format="png")
         buffer.seek(0)
         return dcc.send_bytes(buffer.getvalue(), "cycle_detail.png")
+
+    @app.callback(
+        Output(MPL_POPOUT_BUTTON, "n_clicks"),
+        Input(MPL_POPOUT_BUTTON, "n_clicks"),
+        State(GRAPH, "figure"),
+        prevent_initial_call=True,
+    )
+    def _popout_matplotlib(n_clicks, fig_dict):
+        import matplotlib.pyplot as plt
+
+        if not n_clicks or not fig_dict:
+            raise dash.exceptions.PreventUpdate
+
+        plt.figure()
+        for trace in fig_dict.get("data", []):
+            if trace.get("type") == "scatter":
+                plt.plot(
+                    trace.get("x", []),
+                    trace.get("y", []),
+                    label=trace.get("name"),
+                )
+        plt.legend()
+        plt.show()
+        return 0
 
 
 __all__ = ["layout", "register_callbacks"]
