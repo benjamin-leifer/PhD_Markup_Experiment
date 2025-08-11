@@ -102,20 +102,9 @@ def running_tests_table(tests: List[Dict]) -> dash_table.DataTable:
                 "last_timestamp": t["last_timestamp"].strftime("%Y-%m-%d %H:%M"),
                 "test_schedule": t["test_schedule"],
                 "status": t["status"],
-                "actions": dbc.DropdownMenu(
-                    [
-                        dbc.DropdownMenuItem(
-                            "Flag for Review",
-                            id={"type": "flag-review", "index": t["cell_id"]},
-                        ),
-                        dbc.DropdownMenuItem(
-                            "Flag for Retest",
-                            id={"type": "flag-retest", "index": t["cell_id"]},
-                        ),
-                    ],
-                    label="Flag",
-                    color="secondary",
-                    size="sm",
+                "actions": (
+                    f"[Flag for Review](#/flag-review/{t['cell_id']}) | "
+                    f"[Flag for Retest](#/flag-retest/{t['cell_id']})"
                 ),
             }
         )
@@ -129,7 +118,7 @@ def running_tests_table(tests: List[Dict]) -> dash_table.DataTable:
             {"name": "Last Timestamp", "id": "last_timestamp"},
             {"name": "Schedule", "id": "test_schedule"},
             {"name": "Status", "id": "status"},
-            {"name": "Actions", "id": "actions"},
+            {"name": "Actions", "id": "actions", "presentation": "markdown"},
         ],
         data=data,
         sort_action="native",
@@ -149,20 +138,9 @@ def upcoming_tests_table(tests: List[Dict]) -> dash_table.DataTable:
                 "start_time": t["start_time"].strftime("%Y-%m-%d %H:%M"),
                 "hardware": t["hardware"],
                 "notes": t["notes"],
-                "actions": dbc.DropdownMenu(
-                    [
-                        dbc.DropdownMenuItem(
-                            "Flag for Review",
-                            id={"type": "flag-review", "index": t["cell_id"]},
-                        ),
-                        dbc.DropdownMenuItem(
-                            "Flag for Retest",
-                            id={"type": "flag-retest", "index": t["cell_id"]},
-                        ),
-                    ],
-                    label="Flag",
-                    color="secondary",
-                    size="sm",
+                "actions": (
+                    f"[Flag for Review](#/flag-review/{t['cell_id']}) | "
+                    f"[Flag for Retest](#/flag-retest/{t['cell_id']})"
                 ),
             }
         )
@@ -173,7 +151,7 @@ def upcoming_tests_table(tests: List[Dict]) -> dash_table.DataTable:
             {"name": "Start Time", "id": "start_time"},
             {"name": "Hardware", "id": "hardware"},
             {"name": "Notes", "id": "notes"},
-            {"name": "Actions", "id": "actions"},
+            {"name": "Actions", "id": "actions", "presentation": "markdown"},
         ],
         data=data,
         sort_action="native",
