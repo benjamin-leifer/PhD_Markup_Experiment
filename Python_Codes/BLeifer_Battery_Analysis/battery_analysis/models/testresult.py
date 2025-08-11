@@ -68,7 +68,16 @@ class TestResult(Document):
 
     meta = {
         "collection": "test_results",
-        "indexes": ["sample", "name", "cell_code", "date"],
+        "indexes": [
+            "sample",
+            "name",
+            "cell_code",
+            "date",
+            "sample.anode",
+            "sample.cathode",
+            "sample.separator",
+            "sample.electrolyte",
+        ],
     }
 
     def clean(self):
