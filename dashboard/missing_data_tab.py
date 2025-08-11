@@ -43,6 +43,46 @@ def _get_missing_data() -> List[Dict[str, object]]:
         ]
 
 
+def _suggest_values(test_id: str, missing: List[str]) -> Dict[str, str]:
+    """Return best-guess values for ``missing`` components of ``test_id``.
+
+    The implementation queries the :mod:`battery_analysis` models and uses
+    :func:`similarity_suggestions.suggest_similar_samples` to locate comparable
+    samples.  Any attribute names found on those samples are offered as initial
+    values.  Failures to access the database simply result in an empty mapping
+    so the interface remains functional in offline contexts.
+    """
+
+    guesses: Dict[str, str] = {}
+    try:  # pragma: no cover - requires database
+        from battery_analysis import models
+        from similarity_suggestions import suggest_similar_samples
+
+        test = models.TestResult.objects(id=test_id).first()  # type: ignore[attr-defined]
+        if not test:
+            return {}
+        sample = test.sample.fetch() if hasattr(test.sample, "fetch") else test.sample
+
+        suggestions = suggest_similar_samples(str(sample.id))
+        for suggestion in suggestions:
+            other = models.Sample.objects(id=suggestion["sample_id"]).first()  # type: ignore[attr-defined]
+            if not other:
+                continue
+            for field in missing:
+                if field in guesses:
+                    continue
+                obj = getattr(other, field, None)
+                name = getattr(obj, "name", None)
+                if name:
+                    guesses[field] = name
+            if len(guesses) == len(missing):
+                break
+    except Exception:
+        return {}
+
+    return guesses
+
+
 def _build_modal_body(
     missing: List[str],
     values: Optional[Dict[str, str]] = None,
@@ -55,7 +95,8 @@ def _build_modal_body(
     missing:
         List of component field names that require user input.
     values:
-        Optional mapping of field name to the current value.  Used when
+        Optional mapping of field name to the current value or suggested
+        default.  Used both for initial rendering with best guesses and when
         re-rendering the modal after a validation error.
     error:
         Optional error message to display at the top of the modal body.
@@ -158,8 +199,14 @@ def register_callbacks(app: dash.Dash) -> None:
             if isinstance(row["missing"], str)
             else row["missing"]
         )
-        body = _build_modal_body(missing_list)
-        return True, {"test_id": row["test_id"], "missing": missing_list}, body
+        suggestions = _suggest_values(row["test_id"], missing_list)
+        body = _build_modal_body(missing_list, suggestions)
+        selected = {
+            "test_id": row["test_id"],
+            "missing": missing_list,
+            "suggestions": suggestions,
+        }
+        return True, selected, body
 
     @app.callback(
         Output(DATA_STORE, "data"),
@@ -185,7 +232,11 @@ def register_callbacks(app: dash.Dash) -> None:
             return data, False, dash.no_update
 
         missing: List[str] = selected.get("missing", [])
-        provided = {m: v for m, v in zip(missing, values or [])}
+        suggested = selected.get("suggestions", {})
+        provided = {
+            m: (v if v and str(v).strip() else suggested.get(m, ""))
+            for m, v in zip(missing, values or [])
+        }
 
         if not all(v and str(v).strip() for v in provided.values()):
             body = _build_modal_body(missing, provided, "All fields are required")
