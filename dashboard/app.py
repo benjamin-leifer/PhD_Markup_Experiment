@@ -1,13 +1,21 @@
 """Dash application for battery test monitoring."""
 
-import dash
-from dash import html, dcc
-import dash_bootstrap_components as dbc
-from dash import Input, Output, State
-import json
+# Automatically configure dependencies so the dashboard works out of the box
 import base64
+import json
 
-from battery_analysis.parsers import parse_file
+import dash
+import dash_bootstrap_components as dbc
+from dash import Input, Output, State, dcc, html
+
+try:  # pragma: no cover - runtime helper is simple
+    from .runtime_setup import configure as _configure_runtime
+except ImportError:  # pragma: no cover - allow running as script
+    from runtime_setup import configure as _configure_runtime
+
+_configure_runtime()
+
+from battery_analysis.parsers import parse_file  # noqa: E402
 
 try:
     from . import cell_flagger
