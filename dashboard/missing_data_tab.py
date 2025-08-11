@@ -23,8 +23,20 @@ def _get_missing_data() -> List[Dict[str, object]]:
     try:  # pragma: no cover - requires database
         from battery_analysis import models
 
+        coll = models.TestResult._get_collection()  # type: ignore[attr-defined]
+        for field in ("sample.anode", "sample.cathode", "sample.separator", "sample.electrolyte"):
+            coll.create_index(field)
+
+        query = {
+            "$or": [
+                {"sample.anode": None},
+                {"sample.cathode": None},
+                {"sample.separator": None},
+                {"sample.electrolyte": None},
+            ]
+        }
         records: List[Dict[str, object]] = []
-        for test in models.TestResult.objects():  # type: ignore[attr-defined]
+        for test in models.TestResult.objects(__raw__=query).only("id", "cell_code", "sample"):  # type: ignore[attr-defined]
             sample = (
                 test.sample.fetch() if hasattr(test.sample, "fetch") else test.sample
             )
@@ -125,7 +137,7 @@ def layout() -> html.Div:
     """Return layout for the missing data tab."""
     return html.Div(
         [
-            dcc.Store(id=DATA_STORE, data=_get_missing_data()),
+            dcc.Store(id=DATA_STORE, data=[]),
             dcc.Store(id=SELECTED_TEST_STORE),
             dash_table.DataTable(
                 id=TABLE_ID,
@@ -156,6 +168,17 @@ def layout() -> html.Div:
 
 def register_callbacks(app: dash.Dash) -> None:
     """Register callbacks for resolving missing data alerts."""
+
+    @app.callback(
+        Output(DATA_STORE, "data", allow_duplicate=True),
+        Input("tabs", "value"),
+        State(DATA_STORE, "data"),
+        prevent_initial_call=True,
+    )
+    def _load_data(active_tab, data):
+        if active_tab == "missing-data" and not data:
+            return _get_missing_data()
+        return dash.no_update
 
     @app.callback(Output(TABLE_ID, "data"), Input(DATA_STORE, "data"))
     def _render_table(data: List[Dict[str, object]]):
@@ -209,7 +232,7 @@ def register_callbacks(app: dash.Dash) -> None:
         return True, selected, body
 
     @app.callback(
-        Output(DATA_STORE, "data"),
+        Output(DATA_STORE, "data", allow_duplicate=True),
         Output(MODAL_ID, "is_open", allow_duplicate=True),
         Output(f"{MODAL_ID}-body", "children", allow_duplicate=True),
         Input("confirm-resolve", "n_clicks"),

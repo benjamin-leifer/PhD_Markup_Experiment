@@ -213,7 +213,12 @@ def test_missing_data_resolve_flow(monkeypatch):
     monkeypatch.setitem(sys.modules, "battery_analysis", fake_ba)
     monkeypatch.setitem(sys.modules, "battery_analysis.models", models)
 
-    resolve_key = next(k for k in cb if "missing-data-store.data" in k)
+    resolve_key = next(
+        k
+        for k, v in cb.items()
+        if "missing-data-store.data" in k
+        and any(i["id"] == "confirm-resolve" for i in v["inputs"])
+    )
     resolve = cb[resolve_key]["callback"].__wrapped__
     new_data, modal_open, _body2 = resolve(1, selected, data, ["A1", "C1"])
     assert new_data == [] and modal_open is False
@@ -308,10 +313,62 @@ def test_missing_data_suggestions(monkeypatch):
     monkeypatch.setitem(sys.modules, "battery_analysis", fake_ba)
     monkeypatch.setitem(sys.modules, "battery_analysis.models", models)
 
-    resolve_key = next(k for k in cb if "missing-data-store.data" in k)
+    resolve_key = next(
+        k
+        for k, v in cb.items()
+        if "missing-data-store.data" in k
+        and any(i["id"] == "confirm-resolve" for i in v["inputs"])
+    )
     resolve = cb[resolve_key]["callback"].__wrapped__
     new_data, modal_open, _body2 = resolve(1, selected, data, ["A1", "C1"])
     assert new_data == [] and modal_open is False
+
+
+def test_missing_data_lazy_load(monkeypatch):
+    """_get_missing_data executes only when the tab is opened and filters results."""
+    import importlib.util
+    from pathlib import Path
+    import dash
+
+    spec = importlib.util.spec_from_file_location(
+        "missing_data_tab", Path(ROOT, "dashboard", "missing_data_tab.py")
+    )
+    missing_data_tab = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(missing_data_tab)
+
+    records = [
+        {"test_id": "1", "missing": ["anode"]},
+        {"test_id": "2", "missing": []},
+    ]
+
+    calls = {"n": 0}
+
+    def wrapped():
+        calls["n"] += 1
+        return [r for r in records if r["missing"]]
+
+    monkeypatch.setattr(missing_data_tab, "_get_missing_data", wrapped)
+
+    app = dash.Dash(__name__)
+    app.layout = missing_data_tab.layout()
+    missing_data_tab.register_callbacks(app)
+
+    assert calls["n"] == 0
+
+    cb = app.callback_map
+    load_key = next(
+        k
+        for k, v in cb.items()
+        if "missing-data-store.data" in k and any(i["id"] == "tabs" for i in v["inputs"])
+    )
+    load = cb[load_key]["callback"].__wrapped__
+
+    result = load("missing-data", [])
+    assert calls["n"] == 1
+    assert result == [{"test_id": "1", "missing": ["anode"]}]
+
+    again = load("missing-data", result)
+    assert calls["n"] == 1 and again is dash.no_update
 
 
 def test_export_plot_prompts_kaleido(monkeypatch):
