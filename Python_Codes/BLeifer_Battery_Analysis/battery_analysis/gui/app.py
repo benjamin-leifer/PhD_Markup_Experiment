@@ -2187,7 +2187,7 @@ class AnalysisTab(ttk.Frame):
                             if fade_analysis["predicted_eol_cycle"]:
                                 advanced_text.insert(
                                     tk.END,
-                                    f"Predicted EOL Cycle (80% retention): {int(fade_analysis['predicted_eol_cycle'])}\n",
+                                    f"Predicted EOL Cycle ({fade_analysis['eol_percent']}% retention): {int(fade_analysis['predicted_eol_cycle'])}\n",
                                 )
                                 advanced_text.insert(
                                     tk.END,

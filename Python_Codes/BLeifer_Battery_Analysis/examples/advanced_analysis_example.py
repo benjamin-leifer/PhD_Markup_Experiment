@@ -92,7 +92,7 @@ def main():
     # 2. Analyze capacity fade patterns and predict cycle life
     logging.info("\n2. Capacity Fade Analysis...")
     try:
-        fade_analysis = aa.capacity_fade_analysis(test.id)
+        fade_analysis = aa.capacity_fade_analysis(test.id, eol_percent=75)
 
         logging.info(f"- Initial capacity: {fade_analysis['initial_capacity']:.2f} mAh")
         logging.info(f"- Final capacity: {fade_analysis['final_capacity']:.2f} mAh")
@@ -115,7 +115,7 @@ def main():
             eol_cycle = fade_analysis["predicted_eol_cycle"]
             if eol_cycle:
                 logging.info(
-                    f"- Predicted 80% capacity retention at cycle: {int(eol_cycle)}"
+                    f"- Predicted {fade_analysis['eol_percent']}% capacity retention at cycle: {int(eol_cycle)}"
                 )
                 logging.info(
                     f"- Prediction confidence: {fade_analysis['confidence'] * 100:.1f}%"

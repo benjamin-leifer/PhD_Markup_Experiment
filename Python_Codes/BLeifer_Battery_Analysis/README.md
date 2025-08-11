@@ -164,9 +164,9 @@ analysis.update_sample_properties(sample)
 voltage, capacity = advanced_analysis.get_voltage_capacity_data(test_id, cycle_number=1)
 v_centers, dq_dv = advanced_analysis.differential_capacity_analysis(voltage, capacity)
 
-# Analyze capacity fade patterns and predict cycle life
-fade_analysis = advanced_analysis.capacity_fade_analysis(test_id)
-predicted_eol = fade_analysis['predicted_eol_cycle']  # Cycle where capacity reaches 80% of initial
+# Analyze capacity fade patterns and predict cycle life with custom EOL
+fade_analysis = advanced_analysis.capacity_fade_analysis(test_id, eol_percent=75)
+predicted_eol = fade_analysis['predicted_eol_cycle']  # Cycle where capacity reaches 75% of initial
 
 # Detect anomalies in cycling data
 anomalies = advanced_analysis.detect_anomalies(test_id, metric='discharge_capacity')
