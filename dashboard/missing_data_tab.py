@@ -24,7 +24,12 @@ def _get_missing_data() -> List[Dict[str, object]]:
         from battery_analysis import models
 
         coll = models.TestResult._get_collection()  # type: ignore[attr-defined]
-        for field in ("sample.anode", "sample.cathode", "sample.separator", "sample.electrolyte"):
+        for field in (
+            "sample.anode",
+            "sample.cathode",
+            "sample.separator",
+            "sample.electrolyte",
+        ):
             coll.create_index(field)
 
         query = {
@@ -36,7 +41,9 @@ def _get_missing_data() -> List[Dict[str, object]]:
             ]
         }
         records: List[Dict[str, object]] = []
-        for test in models.TestResult.objects(__raw__=query).only("id", "cell_code", "sample"):  # type: ignore[attr-defined]
+        for test in models.TestResult.objects(__raw__=query).only(
+            "id", "cell_code", "sample"
+        ):  # type: ignore[attr-defined]
             sample = (
                 test.sample.fetch() if hasattr(test.sample, "fetch") else test.sample
             )
@@ -46,12 +53,26 @@ def _get_missing_data() -> List[Dict[str, object]]:
                 if getattr(sample, f, None) is None
             ]
             if missing:
-                records.append({"test_id": str(test.id), "missing": missing})
+                records.append(
+                    {
+                        "test_id": str(test.id),
+                        "cell_code": getattr(test, "cell_code", ""),
+                        "missing": missing,
+                    }
+                )
         return records
     except Exception:
         return [
-            {"test_id": "Test_A", "missing": ["cathode", "separator"]},
-            {"test_id": "Test_B", "missing": ["electrolyte"]},
+            {
+                "test_id": "Test_A",
+                "cell_code": "Cell_A",
+                "missing": ["cathode", "separator"],
+            },
+            {
+                "test_id": "Test_B",
+                "cell_code": "Cell_B",
+                "missing": ["electrolyte"],
+            },
         ]
 
 
@@ -142,7 +163,7 @@ def layout() -> html.Div:
             dash_table.DataTable(
                 id=TABLE_ID,
                 columns=[
-                    {"name": "Test ID", "id": "test_id"},
+                    {"name": "Cell Code", "id": "cell_code"},
                     {"name": "Missing Components", "id": "missing"},
                     {"name": "Resolve", "id": "resolve", "presentation": "markdown"},
                 ],
@@ -189,6 +210,7 @@ def register_callbacks(app: dash.Dash) -> None:
             rows.append(
                 {
                     "test_id": rec["test_id"],
+                    "cell_code": rec.get("cell_code", ""),
                     "missing": ", ".join(rec["missing"]),
                     "resolve": "[Resolve](#)",
                 }
@@ -223,9 +245,12 @@ def register_callbacks(app: dash.Dash) -> None:
             else row["missing"]
         )
         suggestions = _suggest_values(row["test_id"], missing_list)
-        body = _build_modal_body(missing_list, suggestions)
+        body = [
+            html.P(f"Cell Code: {row.get('cell_code', '')}", id="cell-code-display")
+        ] + _build_modal_body(missing_list, suggestions)
         selected = {
             "test_id": row["test_id"],
+            "cell_code": row.get("cell_code", ""),
             "missing": missing_list,
             "suggestions": suggestions,
         }
@@ -262,7 +287,12 @@ def register_callbacks(app: dash.Dash) -> None:
         }
 
         if not all(v and str(v).strip() for v in provided.values()):
-            body = _build_modal_body(missing, provided, "All fields are required")
+            body = [
+                html.P(
+                    f"Cell Code: {selected.get('cell_code', '')}",
+                    id="cell-code-display",
+                )
+            ] + _build_modal_body(missing, provided, "All fields are required")
             return data, True, body
 
         # Attempt to update the database; failures surface to the user.
@@ -289,7 +319,12 @@ def register_callbacks(app: dash.Dash) -> None:
             if hasattr(sample, "save"):
                 sample.save()
         except Exception as exc:
-            body = _build_modal_body(missing, provided, str(exc))
+            body = [
+                html.P(
+                    f"Cell Code: {selected.get('cell_code', '')}",
+                    id="cell-code-display",
+                )
+            ] + _build_modal_body(missing, provided, str(exc))
             return data, True, body
 
         new_data = [rec for rec in data if rec.get("test_id") != selected["test_id"]]

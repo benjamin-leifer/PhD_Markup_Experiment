@@ -81,8 +81,8 @@ def test_basic_callbacks(monkeypatch):
     assert file_style["display"] == "block" and db_style["display"] == "none"
 
     render_table = cb["missing-data-table.data"]["callback"].__wrapped__
-    rows = render_table([{"test_id": "A", "missing": ["cathode"]}])
-    assert rows[0]["missing"] == "cathode"
+    rows = render_table([{"test_id": "A", "cell_code": "C_A", "missing": ["cathode"]}])
+    assert rows[0]["missing"] == "cathode" and rows[0]["cell_code"] == "C_A"
 
     update_results = cb["trait-results.children"]["callback"].__wrapped__
     result = update_results(1, None, None, None, None, None, None, None, None, None, [])
@@ -151,10 +151,15 @@ def test_missing_data_resolve_flow(monkeypatch):
     cb = app.callback_map
 
     render_table = cb["missing-data-table.data"]["callback"].__wrapped__
-    data = [{"test_id": "T1", "missing": ["anode", "cathode"]}]
+    data = [{"test_id": "T1", "cell_code": "C1", "missing": ["anode", "cathode"]}]
     rows = render_table(data)
     assert rows == [
-        {"test_id": "T1", "missing": "anode, cathode", "resolve": "[Resolve](#)"}
+        {
+            "test_id": "T1",
+            "cell_code": "C1",
+            "missing": "anode, cathode",
+            "resolve": "[Resolve](#)",
+        }
     ]
 
     open_key = next(
@@ -163,8 +168,9 @@ def test_missing_data_resolve_flow(monkeypatch):
         if "missing-data-modal.is_open" in k and "missing-data-store" not in k
     )
     open_modal = cb[open_key]["callback"].__wrapped__
-    is_open, selected, _body = open_modal({"row": 0, "column_id": "resolve"}, rows)
-    assert is_open and selected["test_id"] == "T1"
+    is_open, selected, body = open_modal({"row": 0, "column_id": "resolve"}, rows)
+    assert is_open and selected["test_id"] == "T1" and selected["cell_code"] == "C1"
+    assert body[0].children == "Cell Code: C1"
 
     class _Component:
         def __init__(self, name=None):
@@ -249,7 +255,7 @@ def test_missing_data_suggestions(monkeypatch):
     cb = app.callback_map
 
     render_table = cb["missing-data-table.data"]["callback"].__wrapped__
-    data = [{"test_id": "T1", "missing": ["anode", "cathode"]}]
+    data = [{"test_id": "T1", "cell_code": "C1", "missing": ["anode", "cathode"]}]
     rows = render_table(data)
 
     open_key = next(
@@ -259,7 +265,16 @@ def test_missing_data_suggestions(monkeypatch):
     )
     open_modal = cb[open_key]["callback"].__wrapped__
     is_open, selected, body = open_modal({"row": 0, "column_id": "resolve"}, rows)
-    assert is_open and selected["suggestions"] == {"anode": "A1", "cathode": "C1"}
+    assert (
+        is_open
+        and selected["cell_code"] == "C1"
+        and selected["suggestions"]
+        == {
+            "anode": "A1",
+            "cathode": "C1",
+        }
+    )
+    assert body[0].children == "Cell Code: C1"
     from dash import html
 
     inputs = [c.children[1] for c in body if isinstance(c, html.Div)]
@@ -337,8 +352,8 @@ def test_missing_data_lazy_load(monkeypatch):
     spec.loader.exec_module(missing_data_tab)
 
     records = [
-        {"test_id": "1", "missing": ["anode"]},
-        {"test_id": "2", "missing": []},
+        {"test_id": "1", "cell_code": "C1", "missing": ["anode"]},
+        {"test_id": "2", "cell_code": "C2", "missing": []},
     ]
 
     calls = {"n": 0}
@@ -359,13 +374,14 @@ def test_missing_data_lazy_load(monkeypatch):
     load_key = next(
         k
         for k, v in cb.items()
-        if "missing-data-store.data" in k and any(i["id"] == "tabs" for i in v["inputs"])
+        if "missing-data-store.data" in k
+        and any(i["id"] == "tabs" for i in v["inputs"])
     )
     load = cb[load_key]["callback"].__wrapped__
 
     result = load("missing-data", [])
     assert calls["n"] == 1
-    assert result == [{"test_id": "1", "missing": ["anode"]}]
+    assert result == [{"test_id": "1", "cell_code": "C1", "missing": ["anode"]}]
 
     again = load("missing-data", result)
     assert calls["n"] == 1 and again is dash.no_update
