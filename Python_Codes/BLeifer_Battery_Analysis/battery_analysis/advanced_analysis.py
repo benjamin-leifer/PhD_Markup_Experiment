@@ -24,6 +24,8 @@ except ImportError:  # pragma: no cover - allow running as script
     utils = importlib.import_module("utils")
     pybamm_models = importlib.import_module("pybamm_models")
 
+MODELS = models
+
 # ---------------------------------------------------------------------------
 # Column-name aliases so the code works with Arbin, BioLogic, Neware, etc.
 # ---------------------------------------------------------------------------
@@ -394,17 +396,36 @@ def voltage_efficiency_analysis(voltage_data, capacity_data, current_data=None):
     }
 
 
-def capacity_fade_analysis(test_id):
-    """
-    Analyze capacity fade patterns and predict cycle life.
+def capacity_fade_analysis(
+    test_id,
+    *,
+    eol_percent: float = 80,
+    models: tuple | list | set | None = None,
+):
+    """Analyze capacity fade patterns and predict cycle life.
 
-    Args:
-        test_id: ID of the TestResult to analyze
+    Parameters
+    ----------
+    test_id : ObjectId | str
+        ID of the :class:`~battery_analysis.models.TestResult` to analyse.
+    eol_percent : float, optional
+        End-of-life capacity as a percentage of the initial capacity. 80
+        corresponds to the traditional "80 % of initial" definition.
+    models : iterable[str] | None, optional
+        Subset of ``{"linear", "power", "exponential"}`` indicating which
+        fade models to fit. ``None`` (default) fits all models.
 
-    Returns:
-        dict: Dictionary with capacity fade metrics and predictions
+    Returns
+    -------
+    dict
+        Dictionary with capacity fade metrics and predictions.
     """
-    test = models.TestResult.objects(id=test_id).first()
+    if models is None:
+        model_names = {"linear", "power", "exponential"}
+    else:
+        allowed = {"linear", "power", "exponential"}
+        model_names = {m for m in models if m in allowed}
+    test = MODELS.TestResult.objects(id=test_id).first()
     if not test:
         raise ValueError(f"Test with ID {test_id} not found")
 
@@ -424,132 +445,131 @@ def capacity_fade_analysis(test_id):
     # Calculate fade rate (percent per cycle)
     fade_rate_pct = ((1 - norm_caps[-1]) / (cycle_nums[-1] - cycle_nums[0])) * 100
 
+    # Threshold for end-of-life
+    eol_threshold = (eol_percent / 100) * discharge_caps[0]
+
     # Try different fade models
     models_data = {}
 
     # 1. Linear fade model: cap = a*cycle + b
-    try:
-        linear_coef = np.polyfit(cycle_nums, discharge_caps, 1)
-        linear_a, linear_b = linear_coef
-        linear_fit = linear_a * cycle_nums + linear_b
-        linear_r2 = np.corrcoef(discharge_caps, linear_fit)[0, 1] ** 2
+    if "linear" in model_names:
+        try:
+            linear_coef = np.polyfit(cycle_nums, discharge_caps, 1)
+            linear_a, linear_b = linear_coef
+            linear_fit = linear_a * cycle_nums + linear_b
+            linear_r2 = np.corrcoef(discharge_caps, linear_fit)[0, 1] ** 2
 
-        # Predict cycle where capacity reaches 80% of initial
-        if linear_a < 0:  # Negative slope (capacity decreasing)
-            eol_threshold = 0.8 * discharge_caps[0]
-            eol_cycle_linear = (eol_threshold - linear_b) / linear_a
-            eol_cycle_linear = max(
-                cycle_nums[-1], eol_cycle_linear
-            )  # Don't predict earlier than last measured cycle
-        else:
-            eol_cycle_linear = None
+            # Predict cycle where capacity reaches the EOL threshold
+            if linear_a < 0:  # Negative slope (capacity decreasing)
+                eol_cycle_linear = (eol_threshold - linear_b) / linear_a
+                eol_cycle_linear = max(
+                    cycle_nums[-1], eol_cycle_linear
+                )  # Don't predict earlier than last measured cycle
+            else:
+                eol_cycle_linear = None
 
-        models_data["linear"] = {
-            "name": "Linear",
-            "params": {"slope": linear_a, "intercept": linear_b},
-            "r_squared": linear_r2,
-            "eol_cycle": eol_cycle_linear,
-        }
-    except Exception:
-        pass
+            models_data["linear"] = {
+                "name": "Linear",
+                "params": {"slope": linear_a, "intercept": linear_b},
+                "r_squared": linear_r2,
+                "eol_cycle": eol_cycle_linear,
+            }
+        except Exception:
+            pass
 
     # 2. Power law fade model: cap = a * cycle^b + c
-    try:
-        # Initial guess for optimization
-        p0 = [-0.1, 0.5, discharge_caps[0]]
-
-        def power_law(x, a, b, c):
-            return a * np.power(x, b) + c
-
-        params, _ = optimize.curve_fit(
-            power_law, cycle_nums, discharge_caps, p0=p0, maxfev=10000
-        )
-        power_a, power_b, power_c = params
-
-        power_fit = power_law(cycle_nums, power_a, power_b, power_c)
-        power_r2 = 1 - (
-            np.sum((discharge_caps - power_fit) ** 2)
-            / np.sum((discharge_caps - np.mean(discharge_caps)) ** 2)
-        )
-
-        # Predict cycle where capacity reaches 80% of initial
-        eol_threshold = 0.8 * discharge_caps[0]
-
+    if "power" in model_names:
         try:
-            # Define a function to find the root (where capacity = eol_threshold)
-            def find_eol(x):
-                return power_law(x, power_a, power_b, power_c) - eol_threshold
+            # Initial guess for optimization
+            p0 = [-0.1, 0.5, discharge_caps[0]]
 
-            if power_a < 0:  # Ensure capacity is decreasing
-                last_cycle = cycle_nums[-1]
-                if find_eol(last_cycle) > 0:  # EOL hasn't been reached yet
-                    eol_cycle_power = optimize.brentq(
-                        find_eol, last_cycle, last_cycle * 10
-                    )
+            def power_law(x, a, b, c):
+                return a * np.power(x, b) + c
+
+            params, _ = optimize.curve_fit(
+                power_law, cycle_nums, discharge_caps, p0=p0, maxfev=10000
+            )
+            power_a, power_b, power_c = params
+
+            power_fit = power_law(cycle_nums, power_a, power_b, power_c)
+            power_r2 = 1 - (
+                np.sum((discharge_caps - power_fit) ** 2)
+                / np.sum((discharge_caps - np.mean(discharge_caps)) ** 2)
+            )
+
+            try:
+                # Define a function to find the root (where capacity = eol_threshold)
+                def find_eol(x):
+                    return power_law(x, power_a, power_b, power_c) - eol_threshold
+
+                if power_a < 0:  # Ensure capacity is decreasing
+                    last_cycle = cycle_nums[-1]
+                    if find_eol(last_cycle) > 0:  # EOL hasn't been reached yet
+                        eol_cycle_power = optimize.brentq(
+                            find_eol, last_cycle, last_cycle * 10
+                        )
+                    else:
+                        eol_cycle_power = None
                 else:
                     eol_cycle_power = None
-            else:
+            except Exception:
                 eol_cycle_power = None
-        except Exception:
-            eol_cycle_power = None
 
-        models_data["power"] = {
-            "name": "Power Law",
-            "params": {"a": power_a, "b": power_b, "c": power_c},
-            "r_squared": power_r2,
-            "eol_cycle": eol_cycle_power,
-        }
-    except Exception:
-        pass
+            models_data["power"] = {
+                "name": "Power Law",
+                "params": {"a": power_a, "b": power_b, "c": power_c},
+                "r_squared": power_r2,
+                "eol_cycle": eol_cycle_power,
+            }
+        except Exception:
+            pass
 
     # 3. Exponential fade model: cap = a * exp(b * cycle) + c
-    try:
-        # Initial guess for optimization
-        p0 = [-0.2, -0.001, discharge_caps[0]]
-
-        def exp_decay(x, a, b, c):
-            return a * np.exp(b * x) + c
-
-        params, _ = optimize.curve_fit(
-            exp_decay, cycle_nums, discharge_caps, p0=p0, maxfev=10000
-        )
-        exp_a, exp_b, exp_c = params
-
-        exp_fit = exp_decay(cycle_nums, exp_a, exp_b, exp_c)
-        exp_r2 = 1 - (
-            np.sum((discharge_caps - exp_fit) ** 2)
-            / np.sum((discharge_caps - np.mean(discharge_caps)) ** 2)
-        )
-
-        # Predict cycle where capacity reaches 80% of initial
-        eol_threshold = 0.8 * discharge_caps[0]
-
+    if "exponential" in model_names:
         try:
-            # Define a function to find the root (where capacity = eol_threshold)
-            def find_eol(x):
-                return exp_decay(x, exp_a, exp_b, exp_c) - eol_threshold
+            # Initial guess for optimization
+            p0 = [-0.2, -0.001, discharge_caps[0]]
 
-            if exp_b < 0:  # Ensure capacity is decreasing (negative exponent)
-                last_cycle = cycle_nums[-1]
-                if find_eol(last_cycle) > 0:  # EOL hasn't been reached yet
-                    eol_cycle_exp = optimize.brentq(
-                        find_eol, last_cycle, last_cycle * 10
-                    )
+            def exp_decay(x, a, b, c):
+                return a * np.exp(b * x) + c
+
+            params, _ = optimize.curve_fit(
+                exp_decay, cycle_nums, discharge_caps, p0=p0, maxfev=10000
+            )
+            exp_a, exp_b, exp_c = params
+
+            exp_fit = exp_decay(cycle_nums, exp_a, exp_b, exp_c)
+            exp_r2 = 1 - (
+                np.sum((discharge_caps - exp_fit) ** 2)
+                / np.sum((discharge_caps - np.mean(discharge_caps)) ** 2)
+            )
+
+            try:
+                # Define a function to find the root (where capacity = eol_threshold)
+                def find_eol(x):
+                    return exp_decay(x, exp_a, exp_b, exp_c) - eol_threshold
+
+                if exp_b < 0:  # Ensure capacity is decreasing (negative exponent)
+                    last_cycle = cycle_nums[-1]
+                    if find_eol(last_cycle) > 0:  # EOL hasn't been reached yet
+                        eol_cycle_exp = optimize.brentq(
+                            find_eol, last_cycle, last_cycle * 10
+                        )
+                    else:
+                        eol_cycle_exp = None
                 else:
                     eol_cycle_exp = None
-            else:
+            except Exception:
                 eol_cycle_exp = None
-        except Exception:
-            eol_cycle_exp = None
 
-        models_data["exponential"] = {
-            "name": "Exponential",
-            "params": {"a": exp_a, "b": exp_b, "c": exp_c},
-            "r_squared": exp_r2,
-            "eol_cycle": eol_cycle_exp,
-        }
-    except Exception:
-        pass
+            models_data["exponential"] = {
+                "name": "Exponential",
+                "params": {"a": exp_a, "b": exp_b, "c": exp_c},
+                "r_squared": exp_r2,
+                "eol_cycle": eol_cycle_exp,
+            }
+        except Exception:
+            pass
 
     # Determine best model based on R²
     best_model = None

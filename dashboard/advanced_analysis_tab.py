@@ -512,7 +512,11 @@ def register_callbacks(app: dash.Dash) -> None:
                     return go.Figure(), err
                 cycle_nums = [c.cycle_index for c in test.cycles]
                 discharge_caps = [c.discharge_capacity for c in test.cycles]
-                result = advanced_analysis.capacity_fade_analysis(test_id)
+                result = advanced_analysis.capacity_fade_analysis(
+                    test_id,
+                    eol_percent=eol if eol is not None else 80,
+                    models=fade_models or [],
+                )
                 fig = go.Figure()
                 fig.add_trace(
                     go.Scatter(
