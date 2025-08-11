@@ -85,8 +85,8 @@ def _suggest_values(test_id: str, missing: List[str]) -> Dict[str, str]:
     values.  Failures to access the database simply result in an empty mapping
     so the interface remains functional in offline contexts.
     """
-
     guesses: Dict[str, str] = {}
+    # Gather potential component names from similar samples for each missing field.
     try:  # pragma: no cover - requires database
         from battery_analysis import models
         from similarity_suggestions import suggest_similar_samples
