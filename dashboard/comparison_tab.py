@@ -301,17 +301,26 @@ def register_callbacks(app: dash.Dash) -> None:
         prevent_initial_call=True,
     )
     def _popout_matplotlib(n_clicks, fig_dict):
+        import json
         import matplotlib.pyplot as plt
 
         if not n_clicks or not fig_dict:
             raise dash.exceptions.PreventUpdate
 
+        def _prepare(vals):
+            if not vals:
+                return []
+            return [
+                json.dumps(v, sort_keys=True) if isinstance(v, dict) else v
+                for v in vals
+            ]
+
         plt.figure()
         for trace in fig_dict.get("data", []):
             if trace.get("type") == "scatter":
                 plt.plot(
-                    trace.get("x", []),
-                    trace.get("y", []),
+                    _prepare(trace.get("x", [])),
+                    _prepare(trace.get("y", [])),
                     label=trace.get("name"),
                 )
         plt.legend()
