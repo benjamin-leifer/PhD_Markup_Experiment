@@ -954,15 +954,16 @@ class AdvancedAnalysisTab(ttk.Frame):
         ax2.set_title("Normalized Capacity Fade")
         ax2.grid(True, linestyle="--", alpha=0.7)
 
-        # Add prediction to 80% if available
+        # Add prediction to EOL percentage if available
         if self.current_fade_analysis["predicted_eol_cycle"]:
             eol_cycle = self.current_fade_analysis["predicted_eol_cycle"]
+            eol_pct = self.current_fade_analysis["eol_percent"]
             ax2.axvline(x=eol_cycle, color="r", linestyle="--")
-            ax2.axhline(y=80, color="r", linestyle="--")
-            ax2.plot(eol_cycle, 80, "ro", markersize=8)
+            ax2.axhline(y=eol_pct, color="r", linestyle="--")
+            ax2.plot(eol_cycle, eol_pct, "ro", markersize=8)
             ax2.annotate(
                 f"EOL at cycle {int(eol_cycle)}",
-                (eol_cycle, 80),
+                (eol_cycle, eol_pct),
                 xytext=(30, -20),
                 textcoords="offset points",
                 arrowprops=dict(arrowstyle="->", lw=1.5),
@@ -973,13 +974,18 @@ class AdvancedAnalysisTab(ttk.Frame):
                 conf = self.current_fade_analysis["confidence"] * 100
                 ax2.annotate(
                     f"Confidence: {conf:.1f}%",
-                    (eol_cycle, 80),
+                    (eol_cycle, eol_pct),
                     xytext=(30, -40),
                     textcoords="offset points",
                 )
 
-        # Add a horizontal line at 80% for reference
-        ax2.axhline(y=80, color="gray", linestyle="--", alpha=0.5)
+        # Add a horizontal line at the EOL percent for reference
+        ax2.axhline(
+            y=self.current_fade_analysis["eol_percent"],
+            color="gray",
+            linestyle="--",
+            alpha=0.5,
+        )
 
         # Adjust layout
         self.fig.tight_layout()
@@ -1062,7 +1068,7 @@ class AdvancedAnalysisTab(ttk.Frame):
                 if model_data["eol_cycle"] is not None:
                     self.results_text.insert(
                         tk.END,
-                        f"Predicted EOL Cycle (80%): {int(model_data['eol_cycle'])}\n",
+                        f"Predicted EOL Cycle ({self.current_fade_analysis['eol_percent']}%): {int(model_data['eol_cycle'])}\n",
                     )
 
                 self.results_text.insert(tk.END, "\n")
@@ -1081,7 +1087,7 @@ class AdvancedAnalysisTab(ttk.Frame):
                 if self.current_fade_analysis["predicted_eol_cycle"]:
                     self.results_text.insert(
                         tk.END,
-                        f"Predicted EOL Cycle (80%): {int(self.current_fade_analysis['predicted_eol_cycle'])}\n",
+                        f"Predicted EOL Cycle ({self.current_fade_analysis['eol_percent']}%): {int(self.current_fade_analysis['predicted_eol_cycle'])}\n",
                     )
 
                     if self.current_fade_analysis["confidence"]:
@@ -1144,12 +1150,12 @@ class AdvancedAnalysisTab(ttk.Frame):
             if eol <= completed:
                 self.results_text.insert(
                     tk.END,
-                    "Cell has already reached end-of-life criterion (80% capacity).\n",
+                    f"Cell has already reached end-of-life criterion ({self.current_fade_analysis['eol_percent']}% capacity).\n",
                 )
             else:
                 self.results_text.insert(
                     tk.END,
-                    f"Projected to reach 80% capacity at cycle {eol} "
+                    f"Projected to reach {self.current_fade_analysis['eol_percent']}% capacity at cycle {eol} "
                     + f"({eol - completed} more cycles from current state).\n",
                 )
 

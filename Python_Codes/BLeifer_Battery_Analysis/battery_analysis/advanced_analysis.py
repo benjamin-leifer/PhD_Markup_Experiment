@@ -625,6 +625,7 @@ def capacity_fade_analysis(
         "predicted_eol_cycle": (
             models_data.get(best_model, {}).get("eol_cycle") if best_model else None
         ),
+        "eol_percent": eol_percent,
     }
 
 
