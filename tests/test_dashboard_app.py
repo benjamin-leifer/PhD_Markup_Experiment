@@ -145,11 +145,6 @@ def test_missing_data_resolve_flow(monkeypatch):
     missing_data_tab = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(missing_data_tab)
 
-    import dash_bootstrap_components as dbc
-
-    if not hasattr(dbc, "FormGroup"):
-        monkeypatch.setattr(dbc, "FormGroup", dbc.Form, raising=False)
-
     app = dash.Dash(__name__)
     app.layout = missing_data_tab.layout()
     missing_data_tab.register_callbacks(app)

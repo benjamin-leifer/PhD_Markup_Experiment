@@ -67,13 +67,14 @@ def _build_modal_body(
     for field in missing:
         value = values.get(field, "") if values else ""
         body.append(
-            dbc.FormGroup(
+            html.Div(
                 [
                     dbc.Label(field.capitalize()),
                     dbc.Input(
                         id={"type": "missing-component", "field": field}, value=value
                     ),
-                ]
+                ],
+                className="mb-3",
             )
         )
     return body
