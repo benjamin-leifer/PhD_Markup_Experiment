@@ -15,6 +15,7 @@ import numpy as np
 import threading
 import logging
 
+from battery_analysis import analysis
 from battery_analysis import models
 from battery_analysis import advanced_analysis
 
@@ -864,7 +865,6 @@ class AdvancedAnalysisTab(ttk.Frame):
         gs = self.fig.add_gridspec(2, 1, height_ratios=[1, 1])
 
         # Extract data
-        cycle_count = self.current_test.cycle_count
         cycles = np.array([c.cycle_index for c in self.current_test.cycles])
         capacities = np.array([c.discharge_capacity for c in self.current_test.cycles])
 
@@ -1264,7 +1264,6 @@ class AdvancedAnalysisTab(ttk.Frame):
 
         # Add mean and threshold lines
         mean_value = anomaly_results["normal_range"]["mean"]
-        std_dev = anomaly_results["normal_range"]["std_dev"]
         threshold = anomaly_results["normal_range"]["threshold"]
 
         ax.axhline(y=mean_value, color="green", linestyle="--", label="Mean")
@@ -1461,12 +1460,11 @@ class AdvancedAnalysisTab(ttk.Frame):
                     energy_wh = energy_results["initial_discharge_energy"]
 
                     # Calculate energy density
-                    densities = utils.calculate_energy_density(
-                        energy_results["initial_discharge_capacity"],
-                        energy_wh / energy_results["initial_discharge_capacity"],
-                        weight,
-                        volume,
-                    )
+                    densities = {}
+                    if weight:
+                        densities["gravimetric"] = energy_wh / (weight / 1000)
+                    if volume:
+                        densities["volumetric"] = energy_wh / (volume / 1000)
 
                     # Add to results
                     energy_results["energy_density"].update(densities)
