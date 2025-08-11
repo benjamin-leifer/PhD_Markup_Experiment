@@ -25,6 +25,7 @@ EXPORT_DOWNLOAD = "compare-export-download"
 EXPORT_IMG_BUTTON = "compare-export-img-btn"
 EXPORT_IMG_DOWNLOAD = "compare-export-img-download"
 ERROR_ALERT = "compare-error-alert"
+MPL_POPOUT_BUTTON = "compare-mpl-popout-btn"
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +174,14 @@ def layout() -> html.Div:
                         ),
                         width="auto",
                     ),
+                    dbc.Col(
+                        dbc.Button(
+                            "Open in Matplotlib",
+                            id=MPL_POPOUT_BUTTON,
+                            color="secondary",
+                        ),
+                        width="auto",
+                    ),
                     dcc.Download(id=EXPORT_DOWNLOAD),
                     dcc.Download(id=EXPORT_IMG_DOWNLOAD),
                 ],
@@ -284,3 +293,27 @@ def register_callbacks(app: dash.Dash) -> None:
             dash.no_update,
             dash.no_update,
         )
+
+    @app.callback(
+        Output(MPL_POPOUT_BUTTON, "n_clicks"),
+        Input(MPL_POPOUT_BUTTON, "n_clicks"),
+        State(GRAPH, "figure"),
+        prevent_initial_call=True,
+    )
+    def _popout_matplotlib(n_clicks, fig_dict):
+        import matplotlib.pyplot as plt
+
+        if not n_clicks or not fig_dict:
+            raise dash.exceptions.PreventUpdate
+
+        plt.figure()
+        for trace in fig_dict.get("data", []):
+            if trace.get("type") == "scatter":
+                plt.plot(
+                    trace.get("x", []),
+                    trace.get("y", []),
+                    label=trace.get("name"),
+                )
+        plt.legend()
+        plt.show()
+        return 0
