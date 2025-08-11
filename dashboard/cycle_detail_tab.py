@@ -267,7 +267,11 @@ def register_callbacks(app: dash.Dash) -> None:
     )
     def _popout_matplotlib(n_clicks, fig_dict):
         import json
-        import matplotlib.pyplot as plt
+
+        try:
+            import matplotlib.pyplot as plt
+        except Exception:
+            return dash.no_update
 
         if not n_clicks or not fig_dict:
             raise dash.exceptions.PreventUpdate
@@ -280,16 +284,19 @@ def register_callbacks(app: dash.Dash) -> None:
                 for v in vals
             ]
 
-        plt.figure()
-        for trace in fig_dict.get("data", []):
-            if trace.get("type") == "scatter":
-                plt.plot(
-                    _prepare(trace.get("x", [])),
-                    _prepare(trace.get("y", [])),
-                    label=trace.get("name"),
-                )
-        plt.legend()
-        plt.show()
+        try:
+            plt.figure()
+            for trace in fig_dict.get("data", []):
+                if trace.get("type") == "scatter":
+                    plt.plot(
+                        _prepare(trace.get("x", [])),
+                        _prepare(trace.get("y", [])),
+                        label=trace.get("name"),
+                    )
+            plt.legend()
+            plt.show()
+        except Exception:
+            return dash.no_update
         return 0
 
 
