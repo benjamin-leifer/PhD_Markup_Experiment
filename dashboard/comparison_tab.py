@@ -55,7 +55,7 @@ def _get_sample_data(
 
     try:  # pragma: no cover - depends on battery_analysis and database
         from battery_analysis.models import Sample, TestResult  # type: ignore
-        from .data_access import get_cell_dataset
+        from dashboard.data_access import get_cell_dataset
 
         s = Sample.objects(id=sample_id).first()  # type: ignore[attr-defined]
         if not s:
