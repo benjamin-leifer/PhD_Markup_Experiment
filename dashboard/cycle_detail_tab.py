@@ -59,6 +59,32 @@ def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
         return []
 
 
+def _get_cycle_indices(test_id: str) -> List[int]:
+    """Return available cycle indices for ``test_id``.
+
+    The function first queries :class:`~battery_analysis.models.CycleDetailData`
+    directly so that even tests without populated ``cycles`` arrays still return
+    the indices of stored detailed data. When that query fails (for example when
+    the database is unavailable), it falls back to
+    :func:`get_detailed_cycle_data` which may consult inline cycle summaries.
+    """
+
+    try:  # pragma: no cover - depends on MongoDB
+        from battery_analysis import models
+
+        cycles = models.CycleDetailData.objects(test_result=test_id).only(
+            "cycle_index"
+        )  # type: ignore[attr-defined]
+        indices = [c.cycle_index for c in cycles]
+        if indices:
+            return sorted(indices)
+    except Exception:
+        pass
+
+    data = get_detailed_cycle_data(test_id)
+    return sorted(data.keys())
+
+
 SAMPLE_DROPDOWN = "cd-sample"
 TEST_DROPDOWN = "cd-test"
 CYCLE_DROPDOWN = "cd-cycle"
@@ -153,8 +179,8 @@ def register_callbacks(app: dash.Dash) -> None:
     def _update_cycles(test_id: Optional[str]) -> List[Dict[str, int]]:
         if not test_id:
             return []
-        data = get_detailed_cycle_data(test_id)
-        return [{"label": f"Cycle {idx}", "value": idx} for idx in sorted(data.keys())]
+        indices = _get_cycle_indices(test_id)
+        return [{"label": f"Cycle {idx}", "value": idx} for idx in indices]
 
     @app.callback(
         Output(GRAPH, "figure"),
