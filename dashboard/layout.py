@@ -89,9 +89,9 @@ def summary_layout(stats: Dict) -> dbc.Row:
     return dbc.Row(cards, className="mb-4")
 
 
-def running_tests_table(tests: List[Dict]) -> dash_table.DataTable:
-    """Table of running tests using a ``DataTable`` component."""
-    data = []
+def running_tests_rows(tests: List[Dict]) -> List[Dict]:
+    """Return formatted row dictionaries for running tests."""
+    data: List[Dict] = []
     for t in tests:
         data.append(
             {
@@ -108,6 +108,11 @@ def running_tests_table(tests: List[Dict]) -> dash_table.DataTable:
                 ),
             }
         )
+    return data
+
+
+def running_tests_table(tests: List[Dict]) -> dash_table.DataTable:
+    """Table of running tests using a ``DataTable`` component."""
     return dash_table.DataTable(
         id="running-tests-table",
         columns=[
@@ -120,17 +125,19 @@ def running_tests_table(tests: List[Dict]) -> dash_table.DataTable:
             {"name": "Status", "id": "status"},
             {"name": "Actions", "id": "actions", "presentation": "markdown"},
         ],
-        data=data,
+        data=running_tests_rows(tests),
         sort_action="native",
         filter_action="native",
-        style_table={"overflowX": "auto"},
+        page_action="none",
+        virtualization=True,
+        style_table={"overflowX": "auto", "overflowY": "auto", "height": "400px"},
         style_cell={"textAlign": "left"},
     )
 
 
-def upcoming_tests_table(tests: List[Dict]) -> dash_table.DataTable:
-    """Table of upcoming tests using a ``DataTable`` component."""
-    data = []
+def upcoming_tests_rows(tests: List[Dict]) -> List[Dict]:
+    """Return formatted row dictionaries for upcoming tests."""
+    data: List[Dict] = []
     for t in tests:
         data.append(
             {
@@ -144,6 +151,11 @@ def upcoming_tests_table(tests: List[Dict]) -> dash_table.DataTable:
                 ),
             }
         )
+    return data
+
+
+def upcoming_tests_table(tests: List[Dict]) -> dash_table.DataTable:
+    """Table of upcoming tests using a ``DataTable`` component."""
     return dash_table.DataTable(
         id="upcoming-tests-table",
         columns=[
@@ -153,10 +165,12 @@ def upcoming_tests_table(tests: List[Dict]) -> dash_table.DataTable:
             {"name": "Notes", "id": "notes"},
             {"name": "Actions", "id": "actions", "presentation": "markdown"},
         ],
-        data=data,
+        data=upcoming_tests_rows(tests),
         sort_action="native",
         filter_action="native",
-        style_table={"overflowX": "auto"},
+        page_action="none",
+        virtualization=True,
+        style_table={"overflowX": "auto", "overflowY": "auto", "height": "400px"},
         style_cell={"textAlign": "left"},
     )
 
