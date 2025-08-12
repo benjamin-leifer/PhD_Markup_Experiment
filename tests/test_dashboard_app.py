@@ -388,7 +388,7 @@ def test_missing_data_lazy_load(monkeypatch):
 
 
 def test_missing_data_falls_back_to_test_name(monkeypatch):
-    """Records lacking a cell code use the test's name instead."""
+    """Records lacking a cell code use the test's filename instead."""
     import importlib.util
     import types
     import sys
@@ -406,7 +406,7 @@ def test_missing_data_falls_back_to_test_name(monkeypatch):
     class _Test:
         id = "T1"
         cell_code = ""
-        name = "file1"
+        name = "file1.txt"
         sample = _Sample()
 
     class _Query:
@@ -433,7 +433,7 @@ def test_missing_data_falls_back_to_test_name(monkeypatch):
     monkeypatch.setitem(sys.modules, "battery_analysis.models", models)
 
     records = missing_data_tab._get_missing_data()
-    assert records[0]["cell_code"] == "file1"
+    assert records[0]["cell_code"] == "file1.txt"
 
 def test_export_plot_prompts_kaleido(monkeypatch):
     """Missing kaleido triggers a toast notification when exporting plots."""
