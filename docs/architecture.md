@@ -16,28 +16,40 @@ graph TD
     CM --> S --> E --> C --> T
 ```
 
+### Model overview
+
+| Stage           | Parent          | Example fields                      |
+|-----------------|-----------------|-------------------------------------|
+| CathodeMaterial | –               | `composition`, `manufacturer`       |
+| Slurry          | CathodeMaterial | `solids_content`, `mixing_time`     |
+| Electrode       | Slurry          | `loading`, `thickness`              |
+| Cell            | Electrode       | `format`, `nominal_capacity`        |
+| TestResult      | Cell            | `tester`, `test_type`               |
+
 ## Metadata inheritance
 
 Every model exposes a `metadata` dictionary. The
 [`inherit_metadata`](../Python_Codes/BLeifer_Battery_Analysis/battery_analysis/models/stages.py)
 helper walks up the `parent` chain and merges these dictionaries so that child
-values override those of their ancestors. Calling `clean()` or using the
-`from_parent` helpers ensures the merged metadata is stored before saving.
+values override those of their ancestors. Each model's `clean()` method invokes
+this helper, so calling `save()` automatically fills in any missing metadata
+from its ancestors. The `from_parent` constructors additionally pre-populate the
+merged metadata when instantiating a child from its parent.
 
 ### Example propagation
 
-| Stage            | Metadata provided                    | Result after inheritance                                       |
-|------------------|--------------------------------------|----------------------------------------------------------------|
-| CathodeMaterial  | `{"material":"NMC"}`              | `{"material":"NMC"}`                                       |
-| Slurry           | `{"solids":45}`                   | `{"material":"NMC","solids":45}`                        |
-| Electrode        | `{"loading":5}`                   | `{"material":"NMC","solids":45,"loading":5}`         |
-| Cell             | `{"format":"2032"}`              | `{"material":"NMC","solids":45,"loading":5,"format":"2032"}` |
-| TestResult       | `{"tester":"Arbin"}`             | `{"material":"NMC","solids":45,"loading":5,"format":"2032","tester":"Arbin"}` |
+| Stage            | Parent          | Metadata provided                    | Result after inheritance                                       |
+|------------------|-----------------|--------------------------------------|----------------------------------------------------------------|
+| CathodeMaterial  | –               | `{"material":"NMC"}`              | `{"material":"NMC"}`                                       |
+| Slurry           | CathodeMaterial | `{"solids":45}`                   | `{"material":"NMC","solids":45}`                        |
+| Electrode        | Slurry          | `{"loading":5}`                   | `{"material":"NMC","solids":45,"loading":5}`         |
+| Cell             | Electrode       | `{"format":"2032"}`              | `{"material":"NMC","solids":45,"loading":5,"format":"2032"}` |
+| TestResult       | Cell            | `{"tester":"Arbin"}`             | `{"material":"NMC","solids":45,"loading":5,"format":"2032","tester":"Arbin"}` |
 
 ## Creating entities
 
 Create objects using the provided class methods so references and metadata are
-wired correctly:
+wired correctly. Metadata values from ancestors are filled down automatically:
 
 1. **CathodeMaterial** – starting point for metadata.
    ```python
@@ -63,12 +75,12 @@ wired correctly:
    cell = Cell.from_parent(elec, format="2032")
    cell.save()
    ```
-5. **TestResult** – references the cell and inherits all metadata.
+5. **TestResult** – references the cell. Saving triggers `clean()` which
+   pulls metadata from the cell and all earlier stages.
    ```python
-   from battery_analysis.models import TestResult, inherit_metadata
+   from battery_analysis.models import TestResult
    test = TestResult(sample=..., parent=cell, tester="Arbin")
-   test.metadata = inherit_metadata(test)
-   test.save()
+   test.save()  # metadata inherited automatically
    ```
 
 Following this sequence ensures that each entity is created in the correct
