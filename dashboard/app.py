@@ -69,6 +69,8 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
     cache = diskcache.Cache("./cache")
     background_callback_manager = DiskcacheManager(cache)
 
+    page_size = 25
+
     app = dash.Dash(
         __name__,
         external_stylesheets=[dbc.themes.BOOTSTRAP],
@@ -83,9 +85,8 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
 
     def dashboard_layout(user_role: str) -> html.Div:
         prefs = preferences.load_preferences()
-        initial = 25
-        running = data_access.get_running_tests(limit=initial)["rows"]
-        upcoming = data_access.get_upcoming_tests(limit=initial)["rows"]
+        running = data_access.get_running_tests(limit=page_size)["rows"]
+        upcoming = data_access.get_upcoming_tests(limit=page_size)["rows"]
         stats = data_access.get_summary_stats()
         flags = cell_flagger.get_flags()
         navbar = dbc.NavbarSimple(
@@ -233,9 +234,6 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                 dbc.Row([dbc.Col(tabs, width=12)]),
                 layout_components.metadata_modal(),
                 layout_components.export_modal(),
-                dcc.Interval(
-                    id="initial-load", interval=1, n_intervals=0, max_intervals=1
-                ),
                 dcc.Interval(id="refresh-interval", interval=60 * 1000, n_intervals=0),
                 layout_components.toast_container(),
                 status_bar,
@@ -341,31 +339,58 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
     @app.callback(
         Output("running-tests-table", "data"),
         Output("upcoming-tests-table", "data"),
-        Input("initial-load", "n_intervals"),
+        Input("refresh-interval", "n_intervals"),
+        State("running-tests-table", "data"),
+        State("upcoming-tests-table", "data"),
         prevent_initial_call=True,
-        background=True,
     )
-    def load_full_tables(_):
-        running = data_access.get_running_tests()["rows"]
-        upcoming = data_access.get_upcoming_tests()["rows"]
+    def refresh_test_tables(_, running_rows, upcoming_rows):
+        running_limit = len(running_rows or [])
+        upcoming_limit = len(upcoming_rows or [])
+        running = data_access.get_running_tests(limit=running_limit)["rows"]
+        upcoming = data_access.get_upcoming_tests(limit=upcoming_limit)["rows"]
         return (
-            layout_components.running_tests_table(running).data,
-            layout_components.upcoming_tests_table(upcoming).data,
+            layout_components.running_tests_rows(running),
+            layout_components.upcoming_tests_rows(upcoming),
         )
 
     @app.callback(
         Output("running-tests-table", "data"),
-        Output("upcoming-tests-table", "data"),
-        Input("refresh-interval", "n_intervals"),
+        Input("running-tests-table", "derived_viewport_indices"),
+        State("running-tests-table", "data"),
         prevent_initial_call=True,
     )
-    def refresh_test_tables(_):
-        running = data_access.get_running_tests()["rows"]
-        upcoming = data_access.get_upcoming_tests()["rows"]
-        return (
-            layout_components.running_tests_table(running).data,
-            layout_components.upcoming_tests_table(upcoming).data,
-        )
+    def paginate_running(viewport, current):
+        if not viewport:
+            raise dash.exceptions.PreventUpdate
+        last = viewport[-1]
+        if last < len(current or []) - 1:
+            raise dash.exceptions.PreventUpdate
+        new_rows = data_access.get_running_tests(
+            limit=page_size, offset=len(current or [])
+        )["rows"]
+        if not new_rows:
+            raise dash.exceptions.PreventUpdate
+        return (current or []) + layout_components.running_tests_rows(new_rows)
+
+    @app.callback(
+        Output("upcoming-tests-table", "data"),
+        Input("upcoming-tests-table", "derived_viewport_indices"),
+        State("upcoming-tests-table", "data"),
+        prevent_initial_call=True,
+    )
+    def paginate_upcoming(viewport, current):
+        if not viewport:
+            raise dash.exceptions.PreventUpdate
+        last = viewport[-1]
+        if last < len(current or []) - 1:
+            raise dash.exceptions.PreventUpdate
+        new_rows = data_access.get_upcoming_tests(
+            limit=page_size, offset=len(current or [])
+        )["rows"]
+        if not new_rows:
+            raise dash.exceptions.PreventUpdate
+        return (current or []) + layout_components.upcoming_tests_rows(new_rows)
 
     @app.callback(
         Output("db-status", "children"), Input("refresh-interval", "n_intervals")

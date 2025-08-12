@@ -116,7 +116,9 @@ def get_cell_dataset(cell_code: str):
 
 
 def get_running_tests(
-    limit: int | None = None, fields: List[str] | None = None
+    limit: int | None = None,
+    offset: int = 0,
+    fields: List[str] | None = None,
 ) -> Dict[str, Any]:
     """Return currently running tests with minimal fields.
 
@@ -124,6 +126,9 @@ def get_running_tests(
     ----------
     limit:
         Maximum number of rows to return. When ``None`` all rows are returned.
+    offset:
+        Number of initial rows to skip before returning results. Useful for
+        implementing server-side pagination.
     fields:
         Optional list of :class:`TestResult` field names to fetch. When provided,
         MongoEngine's ``only`` is used to limit the fields retrieved from the
@@ -145,6 +150,8 @@ def get_running_tests(
         tests = tests.order_by("-date")
         if fields:
             tests = tests.only(*fields)
+        if offset:
+            tests = tests.skip(offset)
         if limit:
             tests = tests.limit(limit)
     except Exception as exc:  # pragma: no cover - requires database
@@ -169,7 +176,9 @@ def get_running_tests(
 
 
 def get_upcoming_tests(
-    limit: int | None = None, fields: List[str] | None = None
+    limit: int | None = None,
+    offset: int = 0,
+    fields: List[str] | None = None,
 ) -> Dict[str, Any]:
     """Return upcoming scheduled tests with minimal fields.
 
@@ -177,6 +186,9 @@ def get_upcoming_tests(
     ----------
     limit:
         Maximum number of rows to return. When ``None`` all rows are returned.
+    offset:
+        Number of initial rows to skip before returning results. Useful for
+        implementing server-side pagination.
     fields:
         Optional list of :class:`TestResult` field names to fetch. When provided,
         MongoEngine's ``only`` is used to limit the fields retrieved from the
@@ -198,6 +210,8 @@ def get_upcoming_tests(
         tests = tests.order_by("date")
         if fields:
             tests = tests.only(*fields)
+        if offset:
+            tests = tests.skip(offset)
         if limit:
             tests = tests.limit(limit)
     except Exception as exc:  # pragma: no cover - requires database
