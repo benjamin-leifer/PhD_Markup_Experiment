@@ -1,5 +1,6 @@
 import datetime
 import io
+import logging
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -23,6 +24,10 @@ except Exception:  # pragma: no cover - provide dummy fallback
 import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 try:  # pragma: no cover - database optional
     from battery_analysis import models
@@ -275,14 +280,14 @@ def get_test_metadata(cell_id: str) -> Dict:
 
 
 def add_new_material(name: str, chemistry: str, notes: str) -> None:
-    """Store a new material entry in the database or print a message."""
+    """Store a new material entry in the database or log a message."""
     if db_connected():  # pragma: no cover - requires database
         try:
             models.Sample(name=name, chemistry=chemistry, notes=notes).save()  # type: ignore[attr-defined]
             return
         except Exception:
             pass
-    print(f"New material added: {name}, {chemistry}, {notes}")
+    logger.info("New material added: %s, %s, %s", name, chemistry, notes)
 
 
 def get_running_tests_csv(

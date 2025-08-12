@@ -1,6 +1,7 @@
 """Update :class:`CellDataset` documents when new data are added."""
 
 import argparse
+import logging
 import os
 import sys
 
@@ -15,6 +16,10 @@ from battery_analysis.utils.db import ensure_connection  # noqa: E402
 from battery_analysis.utils.cell_dataset_builder import (  # noqa: E402
     update_cell_dataset,
 )
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -39,24 +44,24 @@ def main() -> None:
     args = parser.parse_args()
 
     if not ensure_connection():
-        print("Could not connect to database.")
+        logger.error("Could not connect to database.")
         return
 
     codes = [code for code in TestResult.objects.distinct("cell_code") if code]
 
     if args.count:
-        print(len(codes))
+        logger.info(str(len(codes)))
         return
 
     if args.cell:
         update_cell_dataset(args.cell)
-        print(f"Updated dataset for {args.cell}")
+        logger.info("Updated dataset for %s", args.cell)
         return
 
     if args.all:
         for code in codes:
             update_cell_dataset(code)
-        print("Updated datasets for all cell codes")
+        logger.info("Updated datasets for all cell codes")
         return
 
     parser.print_help()
