@@ -21,6 +21,13 @@ try:  # pragma: no cover - behaviour depends on environment
         from .raw_file import RawDataFile  # type: ignore
         from .test_protocol import TestProtocol  # type: ignore
         from .cell_dataset import CellDataset  # type: ignore
+        from .stages import (
+            CathodeMaterial,
+            Slurry,
+            Electrode,
+            Cell,
+            inherit_metadata,
+        )
     except ImportError:  # pragma: no cover - allow running as script
         import importlib
 
@@ -31,6 +38,12 @@ try:  # pragma: no cover - behaviour depends on environment
         RawDataFile = importlib.import_module("raw_file").RawDataFile  # type: ignore
         TestProtocol = importlib.import_module("test_protocol").TestProtocol  # type: ignore
         CellDataset = importlib.import_module("cell_dataset").CellDataset  # type: ignore
+        stages_mod = importlib.import_module("stages")
+        CathodeMaterial = stages_mod.CathodeMaterial  # type: ignore
+        Slurry = stages_mod.Slurry  # type: ignore
+        Electrode = stages_mod.Electrode  # type: ignore
+        Cell = stages_mod.Cell  # type: ignore
+        inherit_metadata = stages_mod.inherit_metadata  # type: ignore
 
     __all__ = [
         "Sample",
@@ -40,6 +53,11 @@ try:  # pragma: no cover - behaviour depends on environment
         "CycleDetailData",
         "TestProtocol",
         "CellDataset",
+        "CathodeMaterial",
+        "Slurry",
+        "Electrode",
+        "Cell",
+        "inherit_metadata",
     ]
 except Exception:  # pragma: no cover - executed when mongoengine is missing
     # Provide very small dataclass implementations used in tests
@@ -52,18 +70,89 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         discharge_capacity: float
         coulombic_efficiency: float
 
+    def inherit_metadata(obj):  # type: ignore
+        merged: dict = {}
+        current = obj
+        while current is not None:
+            data = getattr(current, "metadata", {}) or {}
+            merged = {**data, **merged}
+            current = getattr(current, "parent", None)
+        return merged
+
+    @dataclass
+    class CathodeMaterial:  # type: ignore
+        name: str
+        composition: str | None = None
+        manufacturer: str | None = None
+        metadata: dict = dc_field(default_factory=dict)
+        parent: "CathodeMaterial | None" = None
+
+        @classmethod
+        def from_parent(cls, parent: "CathodeMaterial | None" = None, **kwargs):
+            obj = cls(parent=parent, **kwargs)
+            obj.metadata = inherit_metadata(obj)
+            return obj
+
+    @dataclass
+    class Slurry:  # type: ignore
+        parent: CathodeMaterial
+        solids_content: float | None = None
+        mixing_time: float | None = None
+        metadata: dict = dc_field(default_factory=dict)
+
+        @classmethod
+        def from_parent(cls, parent: CathodeMaterial, **kwargs):
+            obj = cls(parent=parent, **kwargs)
+            obj.metadata = inherit_metadata(obj)
+            return obj
+
+    @dataclass
+    class Electrode:  # type: ignore
+        parent: Slurry
+        loading: float | None = None
+        thickness: float | None = None
+        metadata: dict = dc_field(default_factory=dict)
+
+        @classmethod
+        def from_parent(cls, parent: Slurry, **kwargs):
+            obj = cls(parent=parent, **kwargs)
+            obj.metadata = inherit_metadata(obj)
+            return obj
+
+    @dataclass
+    class Cell:  # type: ignore
+        parent: Electrode
+        format: str | None = None
+        nominal_capacity: float | None = None
+        metadata: dict = dc_field(default_factory=dict)
+
+        @classmethod
+        def from_parent(cls, parent: Electrode, **kwargs):
+            obj = cls(parent=parent, **kwargs)
+            obj.metadata = inherit_metadata(obj)
+            return obj
+
     @dataclass
     class TestResult:  # type: ignore
+        parent: Cell | None = None
+        sample: Sample | None = None
         initial_capacity: float = 0.0
         final_capacity: float = 0.0
         capacity_retention: float = 0.0
         avg_coulombic_eff: float = 0.0
+        metadata: dict = dc_field(default_factory=dict)
         last_cycle_complete: bool | None = None
         c_rates: list = dc_field(default_factory=list)
         protocol: "TestProtocol | None" = None
         created_by: str | None = None
         last_modified_by: str | None = None
         notes_log: list = dc_field(default_factory=list)
+
+        @classmethod
+        def from_parent(cls, parent: Cell, **kwargs):  # type: ignore
+            obj = cls(parent=parent, **kwargs)
+            obj.metadata = inherit_metadata(obj)
+            return obj
 
     @dataclass
     class Sample:  # type: ignore
@@ -134,4 +223,9 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         "CycleDetailData",
         "TestProtocol",
         "CellDataset",
+        "CathodeMaterial",
+        "Slurry",
+        "Electrode",
+        "Cell",
+        "inherit_metadata",
     ]

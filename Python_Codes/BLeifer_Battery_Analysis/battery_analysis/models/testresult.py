@@ -6,6 +6,7 @@ from mongoengine import Document, fields, ValidationError
 
 from battery_analysis.utils.gridfs_conversion import data_to_gridfs, gridfs_to_data
 from battery_analysis.utils.db import ensure_connection
+from .stages import inherit_metadata
 
 try:
     from .cycle_summary import CycleSummary
@@ -18,6 +19,7 @@ except ImportError:  # pragma: no cover - allow running as script
 class TestResult(Document):
     # Remove CASCADE to break circular dependency
     sample = fields.LazyReferenceField("Sample", required=True)
+    parent = fields.ReferenceField("Cell", required=False)
     tester = fields.StringField(
         required=True,
         choices=["Arbin", "BioLogic", "Maccor", "Neware", "Other"],
@@ -58,6 +60,7 @@ class TestResult(Document):
     validated = fields.BooleanField(default=False)
     notes = fields.StringField(required=False)
     custom_data = fields.DictField(required=False)
+    metadata = fields.DictField(default=dict)
     created_by = fields.StringField(required=False)
     last_modified_by = fields.StringField(required=False)
     notes_log = fields.ListField(
@@ -82,6 +85,9 @@ class TestResult(Document):
 
     def clean(self):
         """Custom validation and automatic protocol assignment."""
+        # Merge metadata from parent hierarchy
+        self.metadata = inherit_metadata(self)
+
         if not self.cell_code and self.name:
             match = re.search(r"(CN\d+)", self.name)
             if match:
@@ -228,6 +234,12 @@ class TestResult(Document):
             if cycle_data:
                 data[idx] = cycle_data
         return data
+
+    @classmethod
+    def from_parent(cls, parent, sample, **kwargs):
+        obj = cls(parent=parent, sample=sample, **kwargs)
+        obj.metadata = inherit_metadata(obj)
+        return obj
 
 
 # In battery_analysis/models/test_result.py
