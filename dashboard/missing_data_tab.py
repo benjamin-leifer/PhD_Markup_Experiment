@@ -42,7 +42,10 @@ def _get_missing_data() -> List[Dict[str, object]]:
         }
         records: List[Dict[str, object]] = []
         for test in models.TestResult.objects(__raw__=query).only(
-            "id", "cell_code", "sample", "name"
+            "id",
+            "cell_code",
+            "sample",
+            "name",  # allow fallback to name when cell code is absent
         ):  # type: ignore[attr-defined]
             sample = (
                 test.sample.fetch() if hasattr(test.sample, "fetch") else test.sample
