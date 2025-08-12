@@ -83,8 +83,9 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
 
     def dashboard_layout(user_role: str) -> html.Div:
         prefs = preferences.load_preferences()
-        running = data_access.get_running_tests()["rows"]
-        upcoming = data_access.get_upcoming_tests()["rows"]
+        initial = 25
+        running = data_access.get_running_tests(limit=initial)["rows"]
+        upcoming = data_access.get_upcoming_tests(limit=initial)["rows"]
         stats = data_access.get_summary_stats()
         flags = cell_flagger.get_flags()
         navbar = dbc.NavbarSimple(
@@ -123,9 +124,15 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                     [
                         layout_components.summary_layout(stats),
                         html.H4("Running Tests"),
-                        layout_components.running_tests_table(running),
+                        dcc.Loading(
+                            id="running-tests-loading",
+                            children=layout_components.running_tests_table(running),
+                        ),
                         html.H4("Upcoming Tests"),
-                        layout_components.upcoming_tests_table(upcoming),
+                        dcc.Loading(
+                            id="upcoming-tests-loading",
+                            children=layout_components.upcoming_tests_table(upcoming),
+                        ),
                     ],
                     label="Overview",
                     value="overview",
@@ -226,6 +233,9 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                 dbc.Row([dbc.Col(tabs, width=12)]),
                 layout_components.metadata_modal(),
                 layout_components.export_modal(),
+                dcc.Interval(
+                    id="initial-load", interval=1, n_intervals=0, max_intervals=1
+                ),
                 dcc.Interval(id="refresh-interval", interval=60 * 1000, n_intervals=0),
                 layout_components.toast_container(),
                 status_bar,
@@ -327,6 +337,21 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         if open_clicks or close_clicks:
             return not is_open
         return is_open
+
+    @app.callback(
+        Output("running-tests-table", "data"),
+        Output("upcoming-tests-table", "data"),
+        Input("initial-load", "n_intervals"),
+        prevent_initial_call=True,
+        background=True,
+    )
+    def load_full_tables(_):
+        running = data_access.get_running_tests()["rows"]
+        upcoming = data_access.get_upcoming_tests()["rows"]
+        return (
+            layout_components.running_tests_table(running).data,
+            layout_components.upcoming_tests_table(upcoming).data,
+        )
 
     @app.callback(
         Output("running-tests-table", "data"),
