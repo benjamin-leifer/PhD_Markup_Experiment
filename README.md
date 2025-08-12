@@ -58,6 +58,15 @@ pytest -q
 
 The package requires a running MongoDB instance for data storage.
 
+Connection details are configured through environment variables:
+
+* `MONGO_URI` – full MongoDB connection string. When provided it takes precedence.
+* `MONGO_HOST` and `MONGO_PORT` – host and port values used when `MONGO_URI` is unset.
+* `BATTERY_DB_NAME` – optional database name (defaults to `battery_test_db`).
+
+Both the dashboard and the `update_cell_dataset_cli.py` script rely on these
+variables when establishing database connections.
+
 ## Updating cell datasets
 
 Use the ``update_cell_dataset_cli.py`` script to keep processed datasets in

@@ -7,6 +7,9 @@ This script shows how to:
 2. Analyze capacity fade patterns and predict cycle life
 3. Detect anomalies in cycling data
 4. Compare and cluster multiple tests
+
+The MongoDB connection is configured via the standard environment variables
+(`MONGO_URI` or `MONGO_HOST`/`MONGO_PORT`).
 """
 
 import os
