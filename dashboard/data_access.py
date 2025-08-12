@@ -4,7 +4,20 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List
 
-from battery_analysis import user_tracking
+try:  # pragma: no cover - optional dependency
+    from battery_analysis import user_tracking
+except Exception:  # pragma: no cover - provide dummy fallback
+
+    class _UserTracking:
+        @staticmethod
+        def log_export(_name: str) -> None:
+            """Fallback no-op logger."""
+
+        @staticmethod
+        def get_available_users() -> list[str]:  # type: ignore[override]
+            return []
+
+    user_tracking = _UserTracking()
 
 import pandas as pd
 from reportlab.lib.pagesizes import letter
@@ -48,6 +61,7 @@ def get_available_users() -> List[str]:
             except Exception:
                 pass
     return ["user1", "user2"]
+
 
 # ---------------------------------------------------------------------------
 # Database helpers
@@ -104,7 +118,7 @@ def get_cell_dataset(cell_code: str):
 def get_running_tests(
     limit: int | None = None, fields: List[str] | None = None
 ) -> Dict[str, Any]:
-    """Return currently running tests.
+    """Return currently running tests with minimal fields.
 
     Parameters
     ----------
@@ -138,27 +152,17 @@ def get_running_tests(
     rows: List[Dict] = []
     for test in tests:
         try:
-            sample = test.sample.fetch() if hasattr(test.sample, "fetch") else test.sample
+            sample = (
+                test.sample.fetch() if hasattr(test.sample, "fetch") else test.sample
+            )
             sample_name = getattr(sample, "name", str(sample.id))
-            chemistry = getattr(sample, "chemistry", "")
         except Exception:
-            sample_name, chemistry = "Unknown", ""
-        cycle = (
-            test.cycle_count
-            if getattr(test, "cycle_count", None) is not None
-            else len(getattr(test, "cycles", []) or [])
-        )
+            sample_name = "Unknown"
         rows.append(
             {
                 "cell_id": sample_name,
-                "chemistry": chemistry or "Unknown",
                 "test_type": getattr(test, "test_type", ""),
-                "current_cycle": cycle,
-                "last_timestamp": getattr(test, "date", now),
-                "test_schedule": getattr(
-                    getattr(test, "protocol", None), "name", test.name or ""
-                ),
-                "status": "running",
+                "timestamp": getattr(test, "date", now),
             }
         )
     return {"rows": rows, "total": total}
@@ -167,7 +171,7 @@ def get_running_tests(
 def get_upcoming_tests(
     limit: int | None = None, fields: List[str] | None = None
 ) -> Dict[str, Any]:
-    """Return upcoming scheduled tests.
+    """Return upcoming scheduled tests with minimal fields.
 
     Parameters
     ----------
@@ -201,16 +205,17 @@ def get_upcoming_tests(
     rows: List[Dict] = []
     for test in tests:
         try:
-            sample = test.sample.fetch() if hasattr(test.sample, "fetch") else test.sample
+            sample = (
+                test.sample.fetch() if hasattr(test.sample, "fetch") else test.sample
+            )
             sample_name = getattr(sample, "name", str(sample.id))
         except Exception:
             sample_name = "Unknown"
         rows.append(
             {
                 "cell_id": sample_name,
-                "start_time": getattr(test, "date", now),
-                "hardware": getattr(test, "tester", ""),
-                "notes": getattr(test, "notes", ""),
+                "test_type": getattr(test, "test_type", getattr(test, "name", "")),
+                "timestamp": getattr(test, "date", now),
             }
         )
     return {"rows": rows, "total": total}
