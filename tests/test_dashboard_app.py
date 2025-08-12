@@ -387,6 +387,54 @@ def test_missing_data_lazy_load(monkeypatch):
     assert calls["n"] == 1 and again is dash.no_update
 
 
+def test_missing_data_falls_back_to_test_name(monkeypatch):
+    """Records lacking a cell code use the test's name instead."""
+    import importlib.util
+    import types
+    import sys
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location(
+        "missing_data_tab", Path(ROOT, "dashboard", "missing_data_tab.py")
+    )
+    missing_data_tab = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(missing_data_tab)
+
+    class _Sample:
+        anode = cathode = separator = electrolyte = None
+
+    class _Test:
+        id = "T1"
+        cell_code = ""
+        name = "file1"
+        sample = _Sample()
+
+    class _Query:
+        def only(self, *fields):
+            return [_Test()]
+
+    class _TestResult:
+        @staticmethod
+        def _get_collection():
+            class _Coll:
+                def create_index(self, _field):
+                    pass
+
+            return _Coll()
+
+        @staticmethod
+        def objects(__raw__):
+            return _Query()
+
+    models = types.SimpleNamespace(TestResult=_TestResult)
+    fake_ba = types.ModuleType("battery_analysis")
+    fake_ba.models = models
+    monkeypatch.setitem(sys.modules, "battery_analysis", fake_ba)
+    monkeypatch.setitem(sys.modules, "battery_analysis.models", models)
+
+    records = missing_data_tab._get_missing_data()
+    assert records[0]["cell_code"] == "file1"
+
 def test_export_plot_prompts_kaleido(monkeypatch):
     """Missing kaleido triggers a toast notification when exporting plots."""
     import types
