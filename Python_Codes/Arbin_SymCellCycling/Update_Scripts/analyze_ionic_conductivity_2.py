@@ -406,27 +406,40 @@ def main_2_best_cell_logS(root_dir):
     df_results["Group"] = df_results["Cell Code"].str[:2]
 
     colors = plt.cm.tab10.colors
-    plt.figure(figsize=(10, 7))
+    fig, ax = plt.subplots(figsize=(4, 5))  # Smaller plot size
+
     for idx, (group, group_df) in enumerate(df_results.groupby("Group")):
-        # Find best cell by highest mean conductivity
         pivot = group_df.pivot_table(index="1000/T", columns="Cell Code", values="Conductivity_mS_cm")
         best_cell = pivot.mean().idxmax()
         if best_cell == "GE03":
             best_cell = "GE01"
         best_curve = pivot[best_cell].dropna()
-        best_curve_S_cm = best_curve / 1000  # Convert mS/cm to S/cm
+        best_curve_S_cm = best_curve / 1000  # mS/cm → S/cm
 
-        plt.plot(best_curve.index, np.log10(best_curve_S_cm),
-                 color=colors[idx % len(colors)], label=f"{group} best: {best_cell}")
+        ax.plot(best_curve.index, np.log10(best_curve_S_cm),
+                marker='o', markersize=8, linewidth=2.5,
+                color=colors[idx % len(colors)],
+                label=f"{group} best: {best_cell}")
 
-    plt.xlabel("1000 / T (K⁻¹)")
-    plt.ylabel("log$_{10}$(Conductivity [S/cm])")
-    plt.title("Arrhenius Plot: Best Cell per Group (log scale)")
-    #plt.grid(True)
-    plt.tick_params(axis='both', which='major', direction='in')
-    plt.legend()
+    # Axes labels
+    ax.set_xlabel("1000 / T (K$^{-1}$)", fontsize=20)
+    ax.set_ylabel("log$_{10}$(Conductivity [S/cm])", fontsize=20)
+
+    # Thicker plot box
+    for spine in ax.spines.values():
+        spine.set_linewidth(2)
+
+    # Tick styling
+    ax.tick_params(axis='both', which='major', labelsize=12, width=1.5, length=6, direction='in')
+
+    # Legend styling
+    ax.legend(fontsize=12, frameon=False)
+
+    # Invert x-axis (Arrhenius style)
+    ax.invert_xaxis()
+
     plt.tight_layout()
-    plt.gca().invert_xaxis()
+
     plt.show()
     fig_path = os.path.join(figures_dir, "arrhenius_plot_best_cell_per_group_logS.png")
     plt.savefig(fig_path, dpi=300)

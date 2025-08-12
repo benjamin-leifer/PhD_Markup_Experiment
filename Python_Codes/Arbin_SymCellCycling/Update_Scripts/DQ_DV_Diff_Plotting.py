@@ -1,3 +1,5 @@
+# === GCPL dQ/dV Charge1 vs Charge2 (+ Difference) — Add-on ===
+# Safe to append; only used when explicitly called or when using the --gcpl-dqdv-diff flag.
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -347,5 +349,168 @@ def main():
 
     plt.show()
 
+
+
+from pathlib import Path as _Path
+import re as _re
+import numpy as _np
+import pandas as _pd
+import matplotlib.pyplot as _plt
+import sys as _sys
+
+# --- Config ---
+_GCPL_ENC = "cp1252"
+_GCPL_BIN_W = 0.003  # 3 mV bin width
+_GCPL_CHUNK = 50_000
+
+# Optional: mass (g) keyed by your short cell ID (e.g., "GN01")
+GCPL_MASS_G = {
+    # "GN01": 0.0249,  # example
+}
+
+def _gcpl_cell_short_id(_fname: str) -> str:
+    _first = _fname.split("_")[0]        # e.g., BL-LL-GN01
+    return _first.split("-")[-1] if "-" in _first else _first
+
+def _gcpl_eclab_header_row(_fp: _Path):
+    with _fp.open("r", encoding=_GCPL_ENC, errors="ignore") as f:
+        for line in f:
+            if line.lower().startswith("nb header lines"):
+                _hdr = int(line.split(":")[-1].strip()) - 1
+                break
+        else:
+            raise RuntimeError("EC-Lab header count not found")
+    with _fp.open("r", encoding=_GCPL_ENC, errors="ignore") as f:
+        for i, l in enumerate(f):
+            if i == _hdr:
+                return _hdr, l.rstrip().split("\t")
+    raise RuntimeError("Failed to read header row")
+
+def _gcpl_pick(_cols, charge=True):
+    _m = lambda p: next((c for c in _cols if _re.search(p, c, _re.I)), None)
+    _v  = _m(r"(ewe|ecell).*v")
+    _q  = _m(r"q.*charge.*m?a\.?h" if charge else r"q.*discharge.*m?a\.?h")
+    _cyc = _m(r"cycle.*(index|number)|\bNs\b")
+    _half = _m(r"half\s*cycle")
+    if not (_v and _q):
+        raise KeyError("V or Q column missing in the file")
+    return _v, _q, _cyc, _half
+
+def _gcpl_load_charge_halfcycle(_fp: _Path, _cycle_number: int) -> _pd.DataFrame:
+    _hdr, _cols = _gcpl_eclab_header_row(_fp)
+    _v, _q, _cyc, _half = _gcpl_pick(_cols, charge=True)
+    _use = [_v, _q] + [c for c in (_cyc, _half) if c]
+
+    _chunks = []
+    for ch in _pd.read_csv(
+        _fp, sep="\t", header=None, names=_cols,
+        skiprows=range(_hdr + 1), usecols=_use,
+        chunksize=_GCPL_CHUNK, engine="python", encoding=_GCPL_ENC
+    ):
+        if _cyc is not None:
+            ch = ch[ch[_cyc] == (_cycle_number - 1)]  # Bio-Logic cycles are 0-based
+        if _half is not None:
+            ch = ch[ch[_half] == 0]  # 0 = charge, 1 = discharge
+        _chunks.append(ch[[_v, _q]])
+
+    if not _chunks:
+        raise RuntimeError(f"No data found for cycle {_cycle_number} charge in {_fp.name}")
+
+    _df = _pd.concat(_chunks, ignore_index=True).astype(float)
+    _df.columns = ["V", "QmAh"]
+    return _df.dropna().reset_index(drop=True)
+
+def _gcpl_fixed_bin(_df: _pd.DataFrame, _bin_w: float = _GCPL_BIN_W) -> _pd.DataFrame:
+    _df = _df.assign(_vbin=_np.round(_df["V"] / _bin_w) * _bin_w)
+    _out = (
+        _df.groupby("_vbin", as_index=False)["QmAh"]
+        .mean()
+        .rename(columns={"_vbin": "V"})
+        .sort_values("V", ignore_index=True)
+    )
+    return _out
+
+def _gcpl_dqdv_from_binned(_df: _pd.DataFrame) -> _pd.DataFrame:
+    _v = _df["V"].to_numpy()
+    _q = (_df["QmAh"] / 1000.0).to_numpy()  # mAh -> Ah for numeric stability
+    _ord = _np.argsort(_v)
+    _v, _q = _v[_ord], _q[_ord]
+    _dv = _np.diff(_v)
+    _dq = _np.diff(_q)
+    with _np.errstate(divide="ignore", invalid="ignore"):
+        _dqdv = _np.divide(_dq, _dv, out=_np.full_like(_dq, _np.nan), where=_dv != 0)
+    _vmid = 0.5 * (_v[:-1] + _v[1:])
+    _res = _pd.DataFrame({"V": _vmid, "dQdV": _dqdv * 1000.0})  # back to mAh/V
+    return _res.dropna()
+
+def compute_gcpl_dqdv_charge1_charge2_diff(fp: _Path, mass_g: float | None = None):
+    """
+    Returns (c1, c2, diff) DataFrames with columns ['V', 'dQdV'].
+    Units: mAh V^-1 (or mAh g^-1 V^-1 if mass_g provided).
+    """
+    _df1 = _gcpl_load_charge_halfcycle(fp, 1)
+    _df2 = _gcpl_load_charge_halfcycle(fp, 2)
+    _b1 = _gcpl_fixed_bin(_df1, _GCPL_BIN_W)
+    _b2 = _gcpl_fixed_bin(_df2, _GCPL_BIN_W)
+    _d1 = _gcpl_dqdv_from_binned(_b1)
+    _d2 = _gcpl_dqdv_from_binned(_b2)
+    if mass_g is not None and mass_g > 0:
+        _d1["dQdV"] /= mass_g
+        _d2["dQdV"] /= mass_g
+    _merged = _pd.merge(_d1, _d2, on="V", how="inner", suffixes=("_c1", "_c2"))
+    _diff = _pd.DataFrame({"V": _merged["V"], "dQdV": _merged["dQdV_c2"] - _merged["dQdV_c1"]})
+    return _d1, _d2, _diff
+
+def plot_gcpl_dqdv_charge_diff(fp: _Path, save: bool = False):
+    """
+    Plots Charge 1, Charge 2, and (C2 - C1) on the same axes.
+    """
+    _cid = _gcpl_cell_short_id(fp.name)
+    _mass = GCPL_MASS_G.get(_cid)
+    _c1, _c2, _diff = compute_gcpl_dqdv_charge1_charge2_diff(fp, mass_g=_mass)
+
+    _plt.figure(figsize=(8.0, 5.0))
+    _plt.plot(_c1["V"], _c1["dQdV"], lw=2.0, label="Charge 1")
+    _plt.plot(_c2["V"], _c2["dQdV"], lw=2.0, label="Charge 2")
+    _plt.plot(_diff["V"], _diff["dQdV"], lw=2.0, linestyle="--", label="Difference (C2 - C1)")
+    _ylab = "dQ/dV (mAh V$^{-1}$)" if _mass is None else "dQ/dV (mAh g$^{-1}$ V$^{-1}$)"
+    _plt.xlabel("Voltage (V)")
+    _plt.ylabel(_ylab)
+    _plt.title(f"{_cid} — dQ/dV: Charge 1 vs Charge 2 and Difference")
+    _plt.legend()
+    _plt.grid(True, alpha=0.3)
+    if save:
+        _out = fp.with_suffix("").as_posix() + "_dqdv_charge_diff.png"
+        _plt.savefig(_out, dpi=300, bbox_inches="tight")
+    _plt.show()
+
+def _gcpl_find_files(_path: _Path):
+    if _path.is_file() and "_03_GCPL_" in _path.name and _path.suffix.lower() == ".mpt":
+        return [_path]
+    return sorted(p for p in _path.rglob("*_03_GCPL_*.mpt"))
+
+def _gcpl_cli(_argv=None):
+    _argv = list(_sys.argv[1:] if _argv is None else _argv)
+    if "--gcpl-dqdv-diff" not in _argv:
+        return False  # do nothing; preserve original script behavior
+    _argv.remove("--gcpl-dqdv-diff")
+    if not _argv:
+        print("Usage: python Dq_DV_PITT_Integration_patched.py --gcpl-dqdv-diff <file_or_dir> [--save]")
+        return True
+    _target = _Path(_argv[0])
+    _save = ("--save" in _argv[1:])
+    _files = _gcpl_find_files(_target)
+    if not _files:
+        print("No *_03_GCPL_*.mpt files found.")
+        return True
+    for _fp in _files:
+        print(f"Processing {_fp.name} ...")
+        try:
+            plot_gcpl_dqdv_charge_diff(_fp, save=_save)
+        except Exception as _e:
+            print(f"  ✗ {_fp.name}: {_e}")
+    return True
+
+
 if __name__ == "__main__":
-    main()
+    plot_gcpl_dqdv_charge_diff(Path(r"C:\Users\benja\Downloads\DQ_DV Work\Lab Arbin_DQ_DV_2025_07_15\07\Dq_DV\BL-LL-GN01_RT_No_Formation_03_GCPL_C01.mpt"), save=True)
