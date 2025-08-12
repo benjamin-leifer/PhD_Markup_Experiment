@@ -170,7 +170,7 @@ def test_missing_data_resolve_flow(monkeypatch):
     open_modal = cb[open_key]["callback"].__wrapped__
     is_open, selected, body = open_modal({"row": 0, "column_id": "resolve"}, rows)
     assert is_open and selected["test_id"] == "T1" and selected["cell_code"] == "C1"
-    assert body[0].children == "Cell Code: C1"
+    assert body[0].children == "Cell Code / Filename: C1"
 
     class _Component:
         def __init__(self, name=None):
@@ -274,7 +274,7 @@ def test_missing_data_suggestions(monkeypatch):
             "cathode": "C1",
         }
     )
-    assert body[0].children == "Cell Code: C1"
+    assert body[0].children == "Cell Code / Filename: C1"
     from dash import html
 
     inputs = [c.children[1] for c in body if isinstance(c, html.Div)]
@@ -434,6 +434,7 @@ def test_missing_data_falls_back_to_test_name(monkeypatch):
 
     records = missing_data_tab._get_missing_data()
     assert records[0]["cell_code"] == "file1.txt"
+
 
 def test_export_plot_prompts_kaleido(monkeypatch):
     """Missing kaleido triggers a toast notification when exporting plots."""
