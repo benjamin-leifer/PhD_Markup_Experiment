@@ -473,3 +473,66 @@ def test_export_plot_prompts_kaleido(monkeypatch):
     result = export_cb(1, go.Figure().to_dict())
     assert result[0] is dash.no_update
     assert result[1] is True and "kaleido" in result[2].lower()
+
+
+def test_missing_data_tab_shows_filename_for_empty_cell_code(monkeypatch):
+    """A test without a cell code displays its filename in the table."""
+    import importlib.util
+    import types
+    import sys
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location(
+        "missing_data_tab", Path(ROOT, "dashboard", "missing_data_tab.py")
+    )
+    missing_data_tab = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(missing_data_tab)
+
+    class _Sample:
+        anode = cathode = separator = electrolyte = None
+
+    class _Test:
+        id = "T1"
+        cell_code = ""
+        name = "file1.txt"
+        sample = _Sample()
+
+    class _Query:
+        def only(self, *fields):
+            return [_Test()]
+
+    class _TestResult:
+        @staticmethod
+        def _get_collection():
+            class _Coll:
+                def create_index(self, _field):
+                    pass
+
+            return _Coll()
+
+        @staticmethod
+        def objects(__raw__):
+            return _Query()
+
+    models = types.SimpleNamespace(TestResult=_TestResult)
+    fake_ba = types.ModuleType("battery_analysis")
+    fake_ba.models = models
+    monkeypatch.setitem(sys.modules, "battery_analysis", fake_ba)
+    monkeypatch.setitem(sys.modules, "battery_analysis.models", models)
+
+    app = dash.Dash(__name__)
+    app.layout = missing_data_tab.layout()
+    missing_data_tab.register_callbacks(app)
+
+    records = missing_data_tab._get_missing_data()
+    render_table = app.callback_map["missing-data-table.data"]["callback"].__wrapped__
+    rows = render_table(records)
+
+    assert rows == [
+        {
+            "test_id": "T1",
+            "cell_code": "file1.txt",
+            "missing": "anode, cathode, separator, electrolyte",
+            "resolve": "[Resolve](#)",
+        }
+    ]
