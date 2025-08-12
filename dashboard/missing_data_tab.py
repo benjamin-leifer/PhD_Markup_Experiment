@@ -167,7 +167,7 @@ def layout() -> html.Div:
             dash_table.DataTable(
                 id=TABLE_ID,
                 columns=[
-                    {"name": "Cell Code", "id": "cell_code"},
+                    {"name": "Cell Code / Filename", "id": "cell_code"},
                     {"name": "Missing Components", "id": "missing"},
                     {"name": "Resolve", "id": "resolve", "presentation": "markdown"},
                 ],
@@ -250,7 +250,10 @@ def register_callbacks(app: dash.Dash) -> None:
         )
         suggestions = _suggest_values(row["test_id"], missing_list)
         body = [
-            html.P(f"Cell Code: {row.get('cell_code', '')}", id="cell-code-display")
+            html.P(
+                f"Cell Code / Filename: {row.get('cell_code', '')}",
+                id="cell-code-display",
+            )
         ] + _build_modal_body(missing_list, suggestions)
         selected = {
             "test_id": row["test_id"],
@@ -293,7 +296,7 @@ def register_callbacks(app: dash.Dash) -> None:
         if not all(v and str(v).strip() for v in provided.values()):
             body = [
                 html.P(
-                    f"Cell Code: {selected.get('cell_code', '')}",
+                    f"Cell Code / Filename: {selected.get('cell_code', '')}",
                     id="cell-code-display",
                 )
             ] + _build_modal_body(missing, provided, "All fields are required")
@@ -325,7 +328,7 @@ def register_callbacks(app: dash.Dash) -> None:
         except Exception as exc:
             body = [
                 html.P(
-                    f"Cell Code: {selected.get('cell_code', '')}",
+                    f"Cell Code / Filename: {selected.get('cell_code', '')}",
                     id="cell-code-display",
                 )
             ] + _build_modal_body(missing, provided, str(exc))
