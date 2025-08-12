@@ -96,12 +96,8 @@ def running_tests_table(tests: List[Dict]) -> dash_table.DataTable:
         data.append(
             {
                 "cell_id": t["cell_id"],
-                "chemistry": t["chemistry"],
                 "test_type": t["test_type"],
-                "current_cycle": t["current_cycle"],
-                "last_timestamp": t["last_timestamp"].strftime("%Y-%m-%d %H:%M"),
-                "test_schedule": t["test_schedule"],
-                "status": t["status"],
+                "timestamp": t["timestamp"].strftime("%Y-%m-%d %H:%M"),
                 "actions": (
                     f"[Flag for Review](#/flag-review/{t['cell_id']}) | "
                     f"[Flag for Retest](#/flag-retest/{t['cell_id']})"
@@ -112,12 +108,8 @@ def running_tests_table(tests: List[Dict]) -> dash_table.DataTable:
         id="running-tests-table",
         columns=[
             {"name": "Cell ID", "id": "cell_id"},
-            {"name": "Chemistry", "id": "chemistry"},
             {"name": "Test Type", "id": "test_type"},
-            {"name": "Current Cycle", "id": "current_cycle"},
-            {"name": "Last Timestamp", "id": "last_timestamp"},
-            {"name": "Schedule", "id": "test_schedule"},
-            {"name": "Status", "id": "status"},
+            {"name": "Timestamp", "id": "timestamp"},
             {"name": "Actions", "id": "actions", "presentation": "markdown"},
         ],
         data=data,
@@ -135,9 +127,8 @@ def upcoming_tests_table(tests: List[Dict]) -> dash_table.DataTable:
         data.append(
             {
                 "cell_id": t["cell_id"],
-                "start_time": t["start_time"].strftime("%Y-%m-%d %H:%M"),
-                "hardware": t["hardware"],
-                "notes": t["notes"],
+                "test_type": t["test_type"],
+                "timestamp": t["timestamp"].strftime("%Y-%m-%d %H:%M"),
                 "actions": (
                     f"[Flag for Review](#/flag-review/{t['cell_id']}) | "
                     f"[Flag for Retest](#/flag-retest/{t['cell_id']})"
@@ -148,9 +139,8 @@ def upcoming_tests_table(tests: List[Dict]) -> dash_table.DataTable:
         id="upcoming-tests-table",
         columns=[
             {"name": "Cell ID", "id": "cell_id"},
-            {"name": "Start Time", "id": "start_time"},
-            {"name": "Hardware", "id": "hardware"},
-            {"name": "Notes", "id": "notes"},
+            {"name": "Test Type", "id": "test_type"},
+            {"name": "Timestamp", "id": "timestamp"},
             {"name": "Actions", "id": "actions", "presentation": "markdown"},
         ],
         data=data,
