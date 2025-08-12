@@ -24,6 +24,27 @@ def test_metadata_inheritance_chain():
     }
 
 
+def test_metadata_propagates_to_each_stage():
+    mat = models.CathodeMaterial(name="M1", metadata={"material": "NMC"})
+    mat.clean()
+    slurry = models.Slurry.from_parent(mat, metadata={"slurry": "S"})
+    electrode = models.Electrode.from_parent(slurry, metadata={"electrode": "E"})
+    cell = models.Cell.from_parent(electrode, metadata={"cell": "C"})
+
+    assert slurry.metadata == {"material": "NMC", "slurry": "S"}
+    assert electrode.metadata == {
+        "material": "NMC",
+        "slurry": "S",
+        "electrode": "E",
+    }
+    assert cell.metadata == {
+        "material": "NMC",
+        "slurry": "S",
+        "electrode": "E",
+        "cell": "C",
+    }
+
+
 def test_cell_code_fallback_from_name():
     sample = models.Sample(name="S1")
     tr = models.TestResult(sample=sample, tester="Arbin", name="run_CN9_data")
@@ -58,6 +79,7 @@ def test_from_parent_sets_parent_chain():
     assert test.parent == cell
 
 
-def test_missing_parent_raises_error():
+@pytest.mark.parametrize("stage_cls", [models.Slurry, models.Electrode, models.Cell])
+def test_missing_parent_raises_error(stage_cls):
     with pytest.raises(ValidationError, match="parent"):
-        models.Slurry.from_parent(None).validate()
+        stage_cls.from_parent(None).validate()
