@@ -42,7 +42,7 @@ def _get_missing_data() -> List[Dict[str, object]]:
         }
         records: List[Dict[str, object]] = []
         for test in models.TestResult.objects(__raw__=query).only(
-            "id", "cell_code", "sample"
+            "id", "cell_code", "sample", "name"
         ):  # type: ignore[attr-defined]
             sample = (
                 test.sample.fetch() if hasattr(test.sample, "fetch") else test.sample
@@ -53,10 +53,11 @@ def _get_missing_data() -> List[Dict[str, object]]:
                 if getattr(sample, f, None) is None
             ]
             if missing:
+                code = getattr(test, "cell_code", None) or getattr(test, "name", "")
                 records.append(
                     {
                         "test_id": str(test.id),
-                        "cell_code": getattr(test, "cell_code", ""),
+                        "cell_code": code,
                         "missing": missing,
                     }
                 )
