@@ -32,7 +32,8 @@ FILES: List[str] = [
     # ---------- your dQ/dV & charge-curve input files ----------
     "BL-LL-FZ01_RT_C_20_Charge_02_CP_C04.mpt",
     "BL-LL-GA01_RT_C_20_Charge_02_CP_C02.mpt",
-    "BL-LL-GN01_RT_No_Formation_03_GCPL_C01.mpt"
+    "BL-LL-GN01_RT_No_Formation_03_GCPL_C01.mpt",
+    "BL-LL-GO01_RT_No_Formation_03_GCPL_C04.mpt"
     #"BL-LL-GA02_RT_C_20_Form_HighFid_Channel_64_Wb_1.xlsx",
     #"BL-LL-FZ02_RT_C_20_Form_HighFid_Channel_63_Wb_1.xlsx",
     #"BL-LL-FW02_RT_C_20_Form_HighFid_Channel_60_Wb_1.xlsx",
@@ -42,7 +43,7 @@ FILES: List[str] = [
 # active-material masses (mg) if you want normalised units
 MASS_MG = {id_: 0.02496886674 / 1000  # mg → g
            for id_ in ["FZ01","FY01","FX01","FW01","GA01",
-                        "FZ02","FY02","FX02","FW02","GA02", "GN01"]}
+                        "FZ02","FY02","FX02","FW02","GA02", "GN01", "GO01"]}
 MASS_G = {
     #"GD01": 0.02496886674,   # example masses
     #"GC01": 0.02496886674,
@@ -408,17 +409,19 @@ def _gcpl_load_charge_halfcycle(_fp: _Path, _cycle_number: int) -> _pd.DataFrame
         chunksize=_GCPL_CHUNK, engine="python", encoding=_GCPL_ENC
     ):
         if _cyc is not None:
-            ch = ch[ch[_cyc] == (_cycle_number - 1)]  # Bio-Logic cycles are 0-based
+            ch = ch[ch[_cyc] == (_cycle_number - 1)]  # pass 1 for C1, 2 for C2
         if _half is not None:
             ch = ch[ch[_half] == 0]  # 0 = charge, 1 = discharge
-        _chunks.append(ch[[_v, _q]])
+        if len(ch):
+            _chunks.append(ch[[_v, _q]])
 
     if not _chunks:
-        raise RuntimeError(f"No data found for cycle {_cycle_number} charge in {_fp.name}")
+        raise RuntimeError(f"No data found for cycle {_cycle_number} (charge) in {_fp.name}")
 
     _df = _pd.concat(_chunks, ignore_index=True).astype(float)
     _df.columns = ["V", "QmAh"]
     return _df.dropna().reset_index(drop=True)
+
 
 def _gcpl_fixed_bin(_df: _pd.DataFrame, _bin_w: float = _GCPL_BIN_W) -> _pd.DataFrame:
     _df = _df.assign(_vbin=_np.round(_df["V"] / _bin_w) * _bin_w)
@@ -448,18 +451,22 @@ def compute_gcpl_dqdv_charge1_charge2_diff(fp: _Path, mass_g: float | None = Non
     Returns (c1, c2, diff) DataFrames with columns ['V', 'dQdV'].
     Units: mAh V^-1 (or mAh g^-1 V^-1 if mass_g provided).
     """
-    _df1 = _gcpl_load_charge_halfcycle(fp, 1)
-    _df2 = _gcpl_load_charge_halfcycle(fp, 2)
+    _df1 = _gcpl_load_charge_halfcycle(fp, 1)  # Charge of Cycle 1
+    _df2 = _gcpl_load_charge_halfcycle(fp, 2)  # Charge of Cycle 2
+
     _b1 = _gcpl_fixed_bin(_df1, _GCPL_BIN_W)
     _b2 = _gcpl_fixed_bin(_df2, _GCPL_BIN_W)
     _d1 = _gcpl_dqdv_from_binned(_b1)
     _d2 = _gcpl_dqdv_from_binned(_b2)
+
     if mass_g is not None and mass_g > 0:
         _d1["dQdV"] /= mass_g
         _d2["dQdV"] /= mass_g
+
     _merged = _pd.merge(_d1, _d2, on="V", how="inner", suffixes=("_c1", "_c2"))
     _diff = _pd.DataFrame({"V": _merged["V"], "dQdV": _merged["dQdV_c2"] - _merged["dQdV_c1"]})
     return _d1, _d2, _diff
+
 
 def plot_gcpl_dqdv_charge_diff(fp: _Path, save: bool = False):
     """
