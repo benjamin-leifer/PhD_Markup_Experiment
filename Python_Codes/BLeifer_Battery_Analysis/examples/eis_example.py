@@ -8,24 +8,27 @@ This script shows how to:
 3. Fit equivalent circuit models to the data
 4. Extract physical parameters from circuit fits
 5. Generate comprehensive EIS reports
+
+The MongoDB connection relies on the `MONGO_URI` environment variable or the
+`MONGO_HOST`/`MONGO_PORT` fallback variables.
 """
 
 import os
 import sys
 import logging
-import matplotlib.pyplot as plt
 import numpy as np
 
 # Add parent directory to path to run the example directly
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Set up logging
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 # Import package components
-from battery_analysis import utils, models
-from battery_analysis import eis
+from battery_analysis import utils, models  # noqa: E402
+from battery_analysis import eis  # noqa: E402
 
 
 def main():
@@ -33,12 +36,14 @@ def main():
 
     # Check if impedance.py is available
     if not eis.HAS_IMPEDANCE:
-        logging.warning("impedance.py is not installed. Some functionality will be limited.")
+        logging.warning(
+            "impedance.py is not installed. Some functionality will be limited."
+        )
         logging.warning("Install with: pip install impedance")
 
     # Connect to MongoDB
     logging.info("Connecting to MongoDB...")
-    connected = utils.connect_to_database('battery_test_db')
+    connected = utils.connect_to_database("battery_test_db")
 
     if not connected:
         logging.error("Failed to connect to database. Make sure MongoDB is running.")
@@ -51,7 +56,7 @@ def main():
         form_factor="Coin cell",
         nominal_capacity=25.0,  # 25 mAh
         tags=["demo", "EIS"],
-        area=1.54  # cm²
+        area=1.54,  # cm²
     )
     sample.save()
 
@@ -60,8 +65,12 @@ def main():
 
     eis_data = simulate_eis_data()
 
-    logging.info(f"- Generated EIS data with {len(eis_data['frequency'])} frequency points")
-    logging.info(f"- Frequency range: {eis_data['frequency'].min():.2e} - {eis_data['frequency'].max():.2e} Hz")
+    logging.info(
+        f"- Generated EIS data with {len(eis_data['frequency'])} frequency points"
+    )
+    logging.info(
+        f"- Frequency range: {eis_data['frequency'].min():.2e} - {eis_data['frequency'].max():.2e} Hz"
+    )
 
     # Save EIS data to the database
     logging.info("- Storing EIS data in database...")
@@ -69,10 +78,10 @@ def main():
     test_data = eis.import_eis_data(
         "simulated_eis.csv",  # This is just a reference name since we're using simulated data
         sample_id=str(sample.id),
-        metadata={"test_type": "EIS", "temperature": 25, "soc": 50}
+        metadata={"test_type": "EIS", "temperature": 25, "soc": 50},
     )
 
-    test_id = test_data['test_id']
+    test_id = test_data["test_id"]
     logging.info(f"- Stored as test ID: {test_id}")
 
     # 2. Retrieve and validate EIS data from database
@@ -83,16 +92,14 @@ def main():
 
     # Validate the data
     validation_results = eis.validate_eis_data(
-        retrieved_data['frequency'],
-        retrieved_data['Z_real'],
-        retrieved_data['Z_imag']
+        retrieved_data["frequency"], retrieved_data["Z_real"], retrieved_data["Z_imag"]
     )
 
     logging.info(f"- Data quality score: {validation_results['quality_score']}/100")
 
-    if validation_results['warnings']:
+    if validation_results["warnings"]:
         logging.info("- Validation warnings:")
-        for warning in validation_results['warnings']:
+        for warning in validation_results["warnings"]:
             logging.info(f"  * {warning}")
     else:
         logging.info("- No validation warnings")
@@ -102,19 +109,14 @@ def main():
 
     # Nyquist plot
     fig_nyquist = eis.plot_nyquist(
-        retrieved_data,
-        label="LiNMC Coin Cell",
-        highlight_frequencies=True
+        retrieved_data, label="LiNMC Coin Cell", highlight_frequencies=True
     )
-    fig_nyquist.savefig("eis_nyquist.png", dpi=300, bbox_inches='tight')
+    fig_nyquist.savefig("eis_nyquist.png", dpi=300, bbox_inches="tight")
     logging.info("- Nyquist plot saved as eis_nyquist.png")
 
     # Bode plot
-    fig_bode = eis.plot_bode(
-        retrieved_data,
-        label="LiNMC Coin Cell"
-    )
-    fig_bode.savefig("eis_bode.png", dpi=300, bbox_inches='tight')
+    fig_bode = eis.plot_bode(retrieved_data, label="LiNMC Coin Cell")
+    fig_bode.savefig("eis_bode.png", dpi=300, bbox_inches="tight")
     logging.info("- Bode plot saved as eis_bode.png")
 
     # 4. Fit EIS data to equivalent circuit models
@@ -123,20 +125,20 @@ def main():
 
         # Try multiple circuit models
         circuit_fit_results = eis.fit_standard_circuits(
-            retrieved_data['frequency'],
-            retrieved_data['Z_real'],
-            retrieved_data['Z_imag']
+            retrieved_data["frequency"],
+            retrieved_data["Z_real"],
+            retrieved_data["Z_imag"],
         )
 
         # Get the best model
-        best_model = circuit_fit_results['best_model']
-        best_fit = circuit_fit_results['all_models'][best_model]
+        best_model = circuit_fit_results["best_model"]
+        best_fit = circuit_fit_results["all_models"][best_model]
 
         logging.info(f"- Best circuit model: {best_model}")
         logging.info(f"- R² goodness of fit: {best_fit['r_squared']:.4f}")
         logging.info("- Circuit parameters:")
 
-        for param, value in best_fit['parameters'].items():
+        for param, value in best_fit["parameters"].items():
             logging.info(f"  * {param}: {value:.4e}")
 
         # 5. Extract physical parameters
@@ -146,18 +148,20 @@ def main():
 
         logging.info("Physical interpretation of circuit elements:")
         for name, param in physical_params.items():
-            logging.info(f"  * {name}: {param['value']:.4e} {param['unit']} - {param['description']}")
+            logging.info(
+                f"  * {name}: {param['value']:.4e} {param['unit']} - {param['description']}"
+            )
 
         # 6. Generate comprehensive report
         logging.info("\n6. Generating comprehensive EIS report...")
 
         # Add fitted impedance to the data for plotting
-        retrieved_data['fitted_impedance'] = best_fit['fitted_impedance']
+        retrieved_data["fitted_impedance"] = best_fit["fitted_impedance"]
 
         report_file = eis.generate_comprehensive_eis_report(
             retrieved_data,
             fit_results=best_fit,
-            filename="eis_comprehensive_report.pdf"
+            filename="eis_comprehensive_report.pdf",
         )
 
         logging.info(f"- Comprehensive report saved as {report_file}")
@@ -167,37 +171,43 @@ def main():
             logging.info("\n7. Performing DRT analysis...")
 
             fig_drt = eis.plot_drt(retrieved_data)
-            fig_drt.savefig("eis_drt.png", dpi=300, bbox_inches='tight')
+            fig_drt.savefig("eis_drt.png", dpi=300, bbox_inches="tight")
             logging.info("- DRT plot saved as eis_drt.png")
 
         except Exception as e:
             logging.warning(f"- DRT analysis failed: {e}")
 
     else:
-        logging.info("\nSkipping circuit fitting and DRT analysis (impedance.py not installed)")
+        logging.info(
+            "\nSkipping circuit fitting and DRT analysis (impedance.py not installed)"
+        )
 
     # 8. Extract characteristic frequencies
     logging.info("\n8. Calculating characteristic frequencies...")
 
     char_freqs = eis.compute_characteristic_frequencies(
-        retrieved_data['frequency'],
-        retrieved_data['Z_real'],
-        retrieved_data['Z_imag']
+        retrieved_data["frequency"], retrieved_data["Z_real"], retrieved_data["Z_imag"]
     )
 
-    logging.info(f"- Detected {char_freqs['peak_count']} characteristic time constants:")
+    logging.info(
+        f"- Detected {char_freqs['peak_count']} characteristic time constants:"
+    )
 
-    for i, peak in enumerate(char_freqs['characteristic_frequencies']):
-        logging.info(f"  * Peak {i + 1}: {peak['frequency']:.2e} Hz (τ = {peak['time_constant']:.2e} s)")
+    for i, peak in enumerate(char_freqs["characteristic_frequencies"]):
+        logging.info(
+            f"  * Peak {i + 1}: {peak['frequency']:.2e} Hz (τ = {peak['time_constant']:.2e} s)"
+        )
 
-    logging.info(f"- Phase minimum frequency: {char_freqs['phase_minimum_frequency']:.2e} Hz")
+    logging.info(
+        f"- Phase minimum frequency: {char_freqs['phase_minimum_frequency']:.2e} Hz"
+    )
 
     # 9. Compare multiple EIS spectra (simulating different tests)
     logging.info("\n9. Comparing multiple EIS spectra...")
 
     # Create a second EIS test with slightly different parameters
     # (simulating aging or different state of charge)
-    second_eis_data = simulate_eis_data(
+    _second_eis_data = simulate_eis_data(
         rs_factor=1.2,  # 20% increase in series resistance
         rct_factor=1.5,  # 50% increase in charge transfer resistance
     )
@@ -206,15 +216,17 @@ def main():
     second_test_data = eis.import_eis_data(
         "simulated_eis_aged.csv",
         sample_id=str(sample.id),
-        metadata={"test_type": "EIS", "temperature": 25, "soc": 50, "state": "Aged"}
+        metadata={"test_type": "EIS", "temperature": 25, "soc": 50, "state": "Aged"},
     )
 
     # Compare the two tests
-    comparison = eis.compare_eis_spectra([test_id, second_test_data['test_id']])
+    comparison = eis.compare_eis_spectra([test_id, second_test_data["test_id"]])
 
     logging.info("- EIS comparison results:")
-    if 'changes' in comparison and 'R_hf_change_pct' in comparison['changes']:
-        logging.info(f"  * Series resistance change: {comparison['changes']['R_hf_change_pct']:.1f}%")
+    if "changes" in comparison and "R_hf_change_pct" in comparison["changes"]:
+        logging.info(
+            f"  * Series resistance change: {comparison['changes']['R_hf_change_pct']:.1f}%"
+        )
 
     logging.info("\nEIS example completed!")
 
@@ -277,22 +289,22 @@ def simulate_eis_data(rs_factor=1.0, rct_factor=1.0):
 
     # Create data dictionary
     return {
-        'frequency': frequency,
-        'Z_real': z_real,
-        'Z_imag': z_imag,
-        'Z_mag': np.sqrt(z_real ** 2 + z_imag ** 2),
-        'Z_phase': np.arctan2(z_imag, z_real) * (180 / np.pi),
-        'metadata': {
-            'source_file': 'simulated_eis.csv',
-            'source_format': 'Simulated',
-            'parameters': {
-                'Rs': rs,
-                'Rct': rct,
-                'CPE_Q': cpe_q,
-                'CPE_n': cpe_n,
-                'W': w
-            }
-        }
+        "frequency": frequency,
+        "Z_real": z_real,
+        "Z_imag": z_imag,
+        "Z_mag": np.sqrt(z_real**2 + z_imag**2),
+        "Z_phase": np.arctan2(z_imag, z_real) * (180 / np.pi),
+        "metadata": {
+            "source_file": "simulated_eis.csv",
+            "source_format": "Simulated",
+            "parameters": {
+                "Rs": rs,
+                "Rct": rct,
+                "CPE_Q": cpe_q,
+                "CPE_n": cpe_n,
+                "W": w,
+            },
+        },
     }
 
 

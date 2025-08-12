@@ -11,10 +11,11 @@ if PACKAGE_ROOT not in sys.path:
     sys.path.insert(0, PACKAGE_ROOT)
 
 from battery_analysis.models import TestResult  # noqa: E402
-from battery_analysis.utils.db import ensure_connection  # noqa: E402
 from battery_analysis.utils.cell_dataset_builder import (  # noqa: E402
     update_cell_dataset,
 )
+from Mongodb_implementation import get_client  # noqa: E402
+from mongoengine import connect  # noqa: E402
 
 
 def main() -> None:
@@ -38,7 +39,26 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if not ensure_connection():
+    client = get_client()
+    db_name = os.getenv("BATTERY_DB_NAME", "battery_test_db")
+    try:
+        uri = getattr(client, "_configured_uri", None)
+        if uri:
+            connect(
+                db_name,
+                host=uri,
+                alias="default",
+                serverSelectionTimeoutMS=2000,
+            )
+        else:
+            connect(
+                db_name,
+                host=getattr(client, "_configured_host", "localhost"),
+                port=getattr(client, "_configured_port", 27017),
+                alias="default",
+                serverSelectionTimeoutMS=2000,
+            )
+    except Exception:
         print("Could not connect to database.")
         return
 

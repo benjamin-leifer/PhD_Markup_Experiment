@@ -26,10 +26,12 @@ from reportlab.pdfgen import canvas
 
 try:  # pragma: no cover - database optional
     from battery_analysis import models
-    from battery_analysis.utils.db import connect_with_fallback
+    from mongoengine import connect
 except Exception:  # pragma: no cover - allow running without DB
     models = None
-    connect_with_fallback = None
+    connect = None
+
+from Mongodb_implementation import get_client
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -75,24 +77,34 @@ def db_connected() -> bool:
     global _DB_CONNECTED
     if _DB_CONNECTED is not None:
         return _DB_CONNECTED
-    if models is None or connect_with_fallback is None:
+    if models is None or connect is None:
         _DB_CONNECTED = False
         return False
-    host = os.getenv("BATTERY_DB_HOST", "localhost")
-    port = int(os.getenv("BATTERY_DB_PORT", "27017"))
     db_name = os.getenv("BATTERY_DB_NAME", "battery_test_db")
-    connected = connect_with_fallback(
-        db_name=db_name, host=host, port=port, ask_if_fails=False
-    )
-    if connected:
-        try:  # pragma: no cover - requires database
-            models.Sample.objects.first()  # type: ignore[attr-defined]
-            _DB_CONNECTED = True
-            return True
-        except Exception:
-            pass
-    _DB_CONNECTED = False
-    return False
+    client = get_client()
+    uri = getattr(client, "_configured_uri", None)
+    try:
+        if uri:
+            connect(
+                db_name,
+                host=uri,
+                alias="default",
+                serverSelectionTimeoutMS=2000,
+            )
+        else:
+            connect(
+                db_name,
+                host=getattr(client, "_configured_host", "localhost"),
+                port=getattr(client, "_configured_port", 27017),
+                alias="default",
+                serverSelectionTimeoutMS=2000,
+            )
+        models.Sample.objects.first()  # type: ignore[attr-defined]
+        _DB_CONNECTED = True
+        return True
+    except Exception:
+        _DB_CONNECTED = False
+        return False
 
 
 # ---------------------------------------------------------------------------
