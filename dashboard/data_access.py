@@ -2,7 +2,7 @@ import datetime
 import io
 import os
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from battery_analysis import user_tracking
 
@@ -101,13 +101,38 @@ def get_cell_dataset(cell_code: str):
         return None
 
 
-def get_running_tests() -> List[Dict]:
-    """Return currently running tests."""
+def get_running_tests(
+    limit: int | None = None, fields: List[str] | None = None
+) -> Dict[str, Any]:
+    """Return currently running tests.
+
+    Parameters
+    ----------
+    limit:
+        Maximum number of rows to return. When ``None`` all rows are returned.
+    fields:
+        Optional list of :class:`TestResult` field names to fetch. When provided,
+        MongoEngine's ``only`` is used to limit the fields retrieved from the
+        database.
+
+    Returns
+    -------
+    dict
+        Dictionary with ``rows`` containing serialized test information and
+        ``total`` with the total number of matching records.
+    """
+
     now = datetime.datetime.now()
     if not db_connected():
-        return []
+        return {"rows": [], "total": 0}
     try:  # pragma: no cover - requires database
-        tests = models.TestResult.objects(validated=False).order_by("-date")  # type: ignore[attr-defined]
+        tests = models.TestResult.objects(validated=False)  # type: ignore[attr-defined]
+        total = tests.count()
+        tests = tests.order_by("-date")
+        if fields:
+            tests = tests.only(*fields)
+        if limit:
+            tests = tests.limit(limit)
     except Exception as exc:  # pragma: no cover - requires database
         raise RuntimeError("Failed to query running tests") from exc
     rows: List[Dict] = []
@@ -136,16 +161,41 @@ def get_running_tests() -> List[Dict]:
                 "status": "running",
             }
         )
-    return rows
+    return {"rows": rows, "total": total}
 
 
-def get_upcoming_tests() -> List[Dict]:
-    """Return upcoming scheduled tests."""
+def get_upcoming_tests(
+    limit: int | None = None, fields: List[str] | None = None
+) -> Dict[str, Any]:
+    """Return upcoming scheduled tests.
+
+    Parameters
+    ----------
+    limit:
+        Maximum number of rows to return. When ``None`` all rows are returned.
+    fields:
+        Optional list of :class:`TestResult` field names to fetch. When provided,
+        MongoEngine's ``only`` is used to limit the fields retrieved from the
+        database.
+
+    Returns
+    -------
+    dict
+        Dictionary with ``rows`` containing serialized test information and
+        ``total`` with the total number of matching records.
+    """
+
     now = datetime.datetime.now()
     if not db_connected():
-        return []
+        return {"rows": [], "total": 0}
     try:  # pragma: no cover - requires database
-        tests = models.TestResult.objects(date__gt=now).order_by("date")  # type: ignore[attr-defined]
+        tests = models.TestResult.objects(date__gt=now)  # type: ignore[attr-defined]
+        total = tests.count()
+        tests = tests.order_by("date")
+        if fields:
+            tests = tests.only(*fields)
+        if limit:
+            tests = tests.limit(limit)
     except Exception as exc:  # pragma: no cover - requires database
         raise RuntimeError("Failed to query upcoming tests") from exc
     rows: List[Dict] = []
@@ -163,7 +213,7 @@ def get_upcoming_tests() -> List[Dict]:
                 "notes": getattr(test, "notes", ""),
             }
         )
-    return rows
+    return {"rows": rows, "total": total}
 
 
 def get_summary_stats() -> Dict:
@@ -214,16 +264,22 @@ def add_new_material(name: str, chemistry: str, notes: str) -> None:
     print(f"New material added: {name}, {chemistry}, {notes}")
 
 
-def get_running_tests_csv() -> str:
+def get_running_tests_csv(
+    limit: int | None = None, fields: List[str] | None = None
+) -> str:
     """Return running tests data formatted as CSV."""
-    df = pd.DataFrame(get_running_tests())
+    data = get_running_tests(limit=limit, fields=fields)["rows"]
+    df = pd.DataFrame(data)
     user_tracking.log_export("running_csv")
     return df.to_csv(index=False)
 
 
-def get_upcoming_tests_csv() -> str:
+def get_upcoming_tests_csv(
+    limit: int | None = None, fields: List[str] | None = None
+) -> str:
     """Return upcoming tests data formatted as CSV."""
-    df = pd.DataFrame(get_upcoming_tests())
+    data = get_upcoming_tests(limit=limit, fields=fields)["rows"]
+    df = pd.DataFrame(data)
     user_tracking.log_export("upcoming_csv")
     return df.to_csv(index=False)
 
@@ -251,16 +307,22 @@ def _tests_to_pdf(rows: List[Dict]) -> bytes:
     return buffer.getvalue()
 
 
-def get_running_tests_pdf() -> bytes:
+def get_running_tests_pdf(
+    limit: int | None = None, fields: List[str] | None = None
+) -> bytes:
     """Return running tests data formatted as PDF bytes."""
     user_tracking.log_export("running_pdf")
-    return _tests_to_pdf(get_running_tests())
+    rows = get_running_tests(limit=limit, fields=fields)["rows"]
+    return _tests_to_pdf(rows)
 
 
-def get_upcoming_tests_pdf() -> bytes:
+def get_upcoming_tests_pdf(
+    limit: int | None = None, fields: List[str] | None = None
+) -> bytes:
     """Return upcoming tests data formatted as PDF bytes."""
     user_tracking.log_export("upcoming_pdf")
-    return _tests_to_pdf(get_upcoming_tests())
+    rows = get_upcoming_tests(limit=limit, fields=fields)["rows"]
+    return _tests_to_pdf(rows)
 
 
 def store_temp_upload(filename: str, content: bytes) -> str:

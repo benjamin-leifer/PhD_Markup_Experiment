@@ -83,8 +83,8 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
 
     def dashboard_layout(user_role: str) -> html.Div:
         prefs = preferences.load_preferences()
-        running = data_access.get_running_tests()
-        upcoming = data_access.get_upcoming_tests()
+        running = data_access.get_running_tests()["rows"]
+        upcoming = data_access.get_upcoming_tests()["rows"]
         stats = data_access.get_summary_stats()
         flags = cell_flagger.get_flags()
         navbar = dbc.NavbarSimple(
@@ -335,8 +335,8 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         prevent_initial_call=True,
     )
     def refresh_test_tables(_):
-        running = data_access.get_running_tests()
-        upcoming = data_access.get_upcoming_tests()
+        running = data_access.get_running_tests()["rows"]
+        upcoming = data_access.get_upcoming_tests()["rows"]
         return (
             layout_components.running_tests_table(running).data,
             layout_components.upcoming_tests_table(upcoming).data,
