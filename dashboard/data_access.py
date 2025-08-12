@@ -1,6 +1,7 @@
 import datetime
 import io
 import os
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -42,13 +43,14 @@ _DB_CONNECTED: bool | None = None
 # ---------------------------------------------------------------------------
 
 
+@lru_cache(maxsize=1)
 def get_available_users() -> List[str]:
     """Return available usernames for the dashboard.
 
-    The function attempts to retrieve the list from
-    :mod:`battery_analysis.user_tracking`. When that package does not expose
-    a helper or an error occurs, a small placeholder list is returned so the
-    UI remains usable in offline or test environments.
+    The result is cached to avoid repeated lookups against the optional
+    :mod:`battery_analysis.user_tracking` helper. When that package does not
+    expose a helper or an error occurs, a small placeholder list is returned so
+    the UI remains usable in offline or test environments.
     """
 
     for attr in ("get_available_users", "get_users", "available_users"):
