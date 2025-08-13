@@ -17,6 +17,8 @@ try:  # pragma: no cover - behaviour depends on environment
     try:
         from .cycle_summary import CycleSummary  # type: ignore
         from .sample import Sample  # type: ignore
+
+        get_or_create_sample = Sample.get_or_create  # type: ignore
         from .testresult import TestResult, CycleDetailData  # type: ignore
         from .raw_file import RawDataFile  # type: ignore
         from .test_protocol import TestProtocol  # type: ignore
@@ -33,6 +35,7 @@ try:  # pragma: no cover - behaviour depends on environment
 
         CycleSummary = importlib.import_module("cycle_summary").CycleSummary  # type: ignore
         Sample = importlib.import_module("sample").Sample  # type: ignore
+        get_or_create_sample = Sample.get_or_create  # type: ignore
         TestResult = importlib.import_module("testresult").TestResult  # type: ignore
         CycleDetailData = importlib.import_module("testresult").CycleDetailData  # type: ignore
         RawDataFile = importlib.import_module("raw_file").RawDataFile  # type: ignore
@@ -47,6 +50,7 @@ try:  # pragma: no cover - behaviour depends on environment
 
     __all__ = [
         "Sample",
+        "get_or_create_sample",
         "TestResult",
         "CycleSummary",
         "RawDataFile",
@@ -62,6 +66,7 @@ try:  # pragma: no cover - behaviour depends on environment
 except Exception:  # pragma: no cover - executed when mongoengine is missing
     # Provide very small dataclass implementations used in tests
     from dataclasses import dataclass, field as dc_field
+    from typing import ClassVar
 
     @dataclass
     class CycleSummary:  # type: ignore
@@ -175,6 +180,24 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         notes_log: list = dc_field(default_factory=list)
         default_dataset: "CellDataset | None" = None
 
+        _registry: ClassVar[dict[str, "Sample"]] = {}
+
+        @classmethod
+        def get_by_name(cls, name: str) -> "Sample | None":
+            return cls._registry.get(name)
+
+        def save(self) -> "Sample":
+            self.__class__._registry[self.name] = self
+            return self
+
+        @classmethod
+        def get_or_create(cls, name: str, **attrs) -> "Sample":
+            sample = cls.get_by_name(name)
+            if sample is None:
+                sample = cls(name=name, **attrs)
+                sample.save()
+            return sample
+
     @dataclass
     class CellDataset:  # type: ignore
         cell_code: str
@@ -215,8 +238,11 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         summary: str
         c_rates: list = dc_field(default_factory=list)
 
+    get_or_create_sample = Sample.get_or_create
+
     __all__ = [
         "Sample",
+        "get_or_create_sample",
         "TestResult",
         "CycleSummary",
         "RawDataFile",
