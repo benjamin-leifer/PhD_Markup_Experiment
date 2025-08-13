@@ -28,35 +28,6 @@ from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
 logger = logging.getLogger(__name__)
 
 
-def _get_or_create_sample(
-    file_path: str, metadata: Dict[str, object] | None = None
-) -> models.Sample:
-    """Return the :class:`~battery_analysis.models.Sample` for ``file_path``.
-
-    Parameters
-    ----------
-    file_path:
-        Path to the data file.  The parent directory name is used when a
-        ``sample_code`` is not present in ``metadata``.
-    metadata:
-        Optional metadata returned by the parser.  If it contains a
-        ``sample_code`` key that value is used as the sample name.
-    """
-
-    name = None
-    if metadata:
-        name = metadata.get("sample_code")
-    if not name:
-        name = os.path.basename(os.path.dirname(file_path)) or "unknown"
-
-    sample = models.Sample.objects(name=name).first()
-    if not sample:
-        sample = models.Sample(name=name)
-        sample.save()
-        logger.info("Created sample %s", name)
-    return sample
-
-
 def import_directory(root: str, *, sample_lookup: bool = False) -> int:
     """Import all supported files within ``root``.
 
@@ -98,7 +69,15 @@ def import_directory(root: str, *, sample_lookup: bool = False) -> int:
                     logger.error("Failed to parse %s: %s", file_path, exc)
                     metadata = None
 
-            sample = _get_or_create_sample(file_path, metadata)
+            name = metadata.get("sample_code") if metadata else None
+            if not name:
+                name = os.path.basename(os.path.dirname(file_path)) or "unknown"
+
+            attrs: Dict[str, object] = {}
+            if metadata:
+                attrs = {k: v for k, v in metadata.items() if k != "sample_code"}
+
+            sample = models.Sample.get_or_create(name, **attrs)
 
             try:
                 test, was_update = data_update.process_file_with_update(
