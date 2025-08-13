@@ -16,5 +16,7 @@ jobs:
           pip install -r requirements-dev.txt
       - name: Run pre-commit
         run: pre-commit run --all-files --show-diff-on-failure
+      - name: Run mypy
+        run: mypy
       - name: Run tests
         run: pytest

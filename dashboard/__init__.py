@@ -14,7 +14,9 @@ except Exception:  # pragma: no cover - optional dependency may be missing
         create_app = importlib.import_module("app").create_app
     except Exception:  # pragma: no cover - dependencies missing
 
-        def create_app() -> "dash.Dash":  # type: ignore[return-type]
+        def create_app(
+            test_role: str | None = None, enable_login: bool = False
+        ) -> "dash.Dash":
             """Raise informative error if Dash is not installed."""
             raise RuntimeError(
                 "Dash is required to use the dashboard. Install with 'pip install dash dash-bootstrap-components'."

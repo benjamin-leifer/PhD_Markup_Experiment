@@ -44,6 +44,21 @@ Basic Usage:
     eis.plot_nyquist(eis_data, filename="nyquist.png")
 """
 
+# This module exposes the main API for the ``battery_analysis`` package and
+# performs optional imports. The heavy use of dynamic imports means we provide
+# explicit typing information for variables that may be set to ``None`` when
+# optional dependencies are unavailable.
+
+from types import ModuleType
+from typing import Any, Callable, cast
+import warnings
+
+# Public objects that may be populated dynamically.
+advanced_analysis: ModuleType | None
+plots: ModuleType | None
+eis: ModuleType | None
+outlier_analysis: ModuleType | None
+
 # Package version
 __version__ = "0.1.0"
 
@@ -61,16 +76,14 @@ except ImportError:  # pragma: no cover - allow running as script
     report = importlib.import_module("report")
     utils = importlib.import_module("utils")
 
-import warnings
-
-MISSING_ADVANCED_PACKAGES = []
+MISSING_ADVANCED_PACKAGES: list[str] = []
 
 
-def _check_missing_advanced_packages():
+def _check_missing_advanced_packages() -> list[str]:
     """Return a list of optional packages required for advanced analysis that
     are not installed."""
 
-    missing = []
+    missing: list[str] = []
     try:  # pragma: no cover - runtime check
         import scipy  # noqa: F401
     except Exception:  # pragma: no cover - dependency may be absent
@@ -130,8 +143,10 @@ except Exception:  # pragma: no cover - optional import
 
 # Make parsers accessible
 try:
-    from .parsers import parse_file
+    from .parsers import parse_file as _parse_file
 except ImportError:  # pragma: no cover - allow running as script
     import importlib
 
-    parse_file = importlib.import_module("parsers").parse_file
+    _parse_file = importlib.import_module("parsers").parse_file
+
+parse_file = cast(Callable[..., Any], _parse_file)
