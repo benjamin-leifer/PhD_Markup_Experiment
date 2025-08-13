@@ -31,13 +31,14 @@ import matplotlib.pyplot as plt
 # =========================
 FILE_PATH = r"C:\Users\benja\Downloads\DQ_DV Work\Lab Arbin_DQ_DV_2025_07_15\07\Dq_DV\BL-LL-GN01_RT_No_Formation_03_GCPL_C01.mpt"   # .mpt file or directory
 CHARGE_CYCLES = (1, 2)     # which charge cycles to compare (1-based)
-BIN_W = 0.001              # 3 mV bins for dQ/dV
+BIN_W = 0.005              # 3 mV bins for dQ/dV
 SAVE_PNG = True
 ENC = "cp1252"
 CHUNK = 200_000            # larger chunks okay; we only read selected cols
 # Optional: mass normalization (grams) by short ID
 MASS_G = {
-    # "GN01": 0.0249,
+     "GN01": 0.0249,
+    "GO01": 0.0249,
 }
 
 # =========================
