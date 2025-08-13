@@ -112,19 +112,26 @@ def store_detailed_cycle_data(test_id, detailed_cycles):
         return False
 
 
-def get_detailed_cycle_data(test_id, cycle_index=None):
-    """
-    Retrieve detailed cycle data from GridFS.
+def get_detailed_cycle_data(test_id, cycle_index=None, include_incomplete=False):
+    """Retrieve detailed cycle data from GridFS.
 
     If ``test_id`` is not a valid :class:`bson.ObjectId`, the function logs a
     message and returns an empty dict without querying the database.
 
-    Args:
-        test_id: ID of the TestResult document
-        cycle_index: Specific cycle to retrieve (if None, retrieves all available)
+    Parameters
+    ----------
+    test_id: str
+        ID of the ``TestResult`` document.
+    cycle_index: int | None
+        Specific cycle to retrieve. If ``None``, all cycles are returned.
+    include_incomplete: bool, optional
+        When ``False`` (default) cycles lacking charge or discharge capacity are
+        omitted. Set to ``True`` to include all cycles.
 
-    Returns:
-        dict: Dictionary with detailed cycle data
+    Returns
+    -------
+    dict
+        Mapping of cycle index to detailed cycle data dictionaries.
     """
     logging.info(
         f"Attempting to retrieve GridFS data for test {test_id}, cycle {cycle_index}"
@@ -137,7 +144,24 @@ def get_detailed_cycle_data(test_id, cycle_index=None):
         return {}
     try:
         if cycle_index is not None:
-            # Get specific cycle
+            # Optionally verify completeness using cycle summaries
+            if not include_incomplete:
+                test = TestResult.objects(id=test_id).only("cycles").first()
+                if test:
+                    for cyc in test.cycles:
+                        if cyc.cycle_index == cycle_index:
+                            if (
+                                getattr(cyc, "charge_capacity", 0) <= 0
+                                or getattr(cyc, "discharge_capacity", 0) <= 0
+                            ):
+                                logging.info(
+                                    "Skipping incomplete cycle %s for test %s",
+                                    cycle_index,
+                                    test_id,
+                                )
+                                return {}
+                            break
+
             detail_data = CycleDetailData.objects(
                 test_result=test_id, cycle_index=cycle_index
             ).first()
@@ -175,12 +199,30 @@ def get_detailed_cycle_data(test_id, cycle_index=None):
                 logging.error(f"TestResult with ID {test_id} not found")
                 return {}
 
-            cycle_indices = [c.cycle_index for c in test.cycles]
-            result = {}
+            cycle_indices = [
+                c.cycle_index
+                for c in test.cycles
+                if include_incomplete
+                or (
+                    getattr(c, "charge_capacity", 0) > 0
+                    and getattr(c, "discharge_capacity", 0) > 0
+                )
+            ]
 
+            if not cycle_indices:
+                cycle_indices = [
+                    c.cycle_index
+                    for c in CycleDetailData.objects(test_result=test_id).only(
+                        "cycle_index"
+                    )
+                ]
+
+            result = {}
             for idx in cycle_indices:
                 try:
-                    cycle_data = get_detailed_cycle_data(test_id, idx)
+                    cycle_data = get_detailed_cycle_data(
+                        test_id, idx, include_incomplete=include_incomplete
+                    )
                     if cycle_data and idx in cycle_data:
                         result[idx] = cycle_data[idx]
                 except Exception as e:
