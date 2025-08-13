@@ -86,3 +86,23 @@ wired correctly. Metadata values from ancestors are filled down automatically:
 Following this sequence ensures that each entity is created in the correct
 order and that all downstream documents receive the accumulated metadata from
 previous stages.
+
+## Self-referential `Sample` documents
+
+Many parts of the system—cells, electrodes, or even sub-components—share the
+same underlying `Sample` document. Relationships between these pieces are
+represented through self-referential fields on `Sample`, letting one sample link
+to another without introducing additional models.
+
+```python
+from battery_analysis.models import Sample
+
+anode = Sample.get_or_create("MyAnode")
+cell = Sample.get_or_create("Cell123")
+cell.anode = anode
+cell.save()
+```
+
+Here the `cell` sample references its `anode` sample. Cathodes, separators, or
+any other components can be associated in the same way, so the full assembly is
+described by interconnected `Sample` documents.
