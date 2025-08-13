@@ -18,14 +18,18 @@ The database name can still be overridden with ``BATTERY_DB_NAME``.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
 import gridfs
 
 from Mongodb_implementation import get_client
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def export_dataset(limit: int = 10) -> Path:
@@ -77,7 +81,7 @@ def export_dataset(limit: int = 10) -> Path:
 
 def main() -> None:
     path = export_dataset()
-    print(f"Export complete: {path}")
+    logger.info("Export complete: %s", path)
 
 
 if __name__ == "__main__":  # pragma: no cover - manual utility
