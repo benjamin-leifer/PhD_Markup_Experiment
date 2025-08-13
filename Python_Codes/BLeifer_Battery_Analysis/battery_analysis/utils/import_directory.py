@@ -2,7 +2,8 @@
 
 This module scans a directory tree for files supported by
 :func:`battery_analysis.parsers.parse_file`, imports each test using
-``process_file_with_update`` and refreshes any affected cell datasets.
+``process_file_with_update`` and refreshes any affected cell datasets. Samples
+are retrieved or created via :func:`Sample.get_or_create`.
 
 The script can be executed directly::
 
@@ -20,7 +21,8 @@ import logging
 import os
 from typing import Dict, Set
 
-from battery_analysis import models, parsers
+from battery_analysis import parsers
+from battery_analysis.models import Sample
 from battery_analysis.utils.db import ensure_connection
 from battery_analysis.utils import data_update
 from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
@@ -77,7 +79,7 @@ def import_directory(root: str, *, sample_lookup: bool = False) -> int:
             if metadata:
                 attrs = {k: v for k, v in metadata.items() if k != "sample_code"}
 
-            sample = models.Sample.get_or_create(name, **attrs)
+            sample = Sample.get_or_create(name, **attrs)
 
             try:
                 test, was_update = data_update.process_file_with_update(

@@ -1,4 +1,9 @@
-"""Update :class:`CellDataset` documents when new data are added."""
+"""Update :class:`CellDataset` documents when new data are added.
+
+For each cell code a corresponding :class:`~battery_analysis.models.Sample`
+is ensured to exist using :func:`Sample.get_or_create` before refreshing the
+dataset. Run ``python update_cell_dataset_cli.py --help`` for usage details.
+"""
 
 import argparse
 import logging
@@ -11,7 +16,7 @@ PACKAGE_ROOT = os.path.join(
 if PACKAGE_ROOT not in sys.path:
     sys.path.insert(0, PACKAGE_ROOT)
 
-from battery_analysis.models import TestResult  # noqa: E402
+from battery_analysis.models import Sample, TestResult  # noqa: E402
 from battery_analysis.utils.cell_dataset_builder import (  # noqa: E402
     update_cell_dataset,
 )
@@ -72,12 +77,14 @@ def main() -> None:
         return
 
     if args.cell:
+        Sample.get_or_create(args.cell)  # Ensure the sample exists
         update_cell_dataset(args.cell)
         logging.info("Updated dataset for %s", args.cell)
         return
 
     if args.all:
         for code in codes:
+            Sample.get_or_create(code)  # Ensure the sample exists
             update_cell_dataset(code)
         logging.info("Updated datasets for all cell codes")
         return
