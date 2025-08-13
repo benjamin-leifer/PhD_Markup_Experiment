@@ -1,5 +1,6 @@
 import datetime
 import io
+import logging
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -32,6 +33,9 @@ except Exception:  # pragma: no cover - allow running without DB
     connect = None
 
 from Mongodb_implementation import get_client
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -294,7 +298,7 @@ def add_new_material(name: str, chemistry: str, notes: str) -> None:
             return
         except Exception:
             pass
-    print(f"New material added: {name}, {chemistry}, {notes}")
+    logger.info("New material added: %s, %s, %s", name, chemistry, notes)
 
 
 def get_running_tests_csv(

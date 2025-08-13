@@ -1,6 +1,7 @@
 """Update :class:`CellDataset` documents when new data are added."""
 
 import argparse
+import logging
 import os
 import sys
 
@@ -39,6 +40,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    logging.basicConfig(level=logging.INFO)
+
     client = get_client()
     db_name = os.getenv("BATTERY_DB_NAME", "battery_test_db")
     try:
@@ -59,24 +62,24 @@ def main() -> None:
                 serverSelectionTimeoutMS=2000,
             )
     except Exception:
-        print("Could not connect to database.")
+        logging.error("Could not connect to database.")
         return
 
     codes = [code for code in TestResult.objects.distinct("cell_code") if code]
 
     if args.count:
-        print(len(codes))
+        logging.info("%d", len(codes))
         return
 
     if args.cell:
         update_cell_dataset(args.cell)
-        print(f"Updated dataset for {args.cell}")
+        logging.info("Updated dataset for %s", args.cell)
         return
 
     if args.all:
         for code in codes:
             update_cell_dataset(code)
-        print("Updated datasets for all cell codes")
+        logging.info("Updated datasets for all cell codes")
         return
 
     parser.print_help()
