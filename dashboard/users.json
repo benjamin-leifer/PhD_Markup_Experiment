@@ -1,0 +1,10 @@
+{
+  "admin": {
+    "password_hash": "$2b$12$9xXVMSDKZJr8XYb.M/d.LObUVVFzYJcaHOME5EHfQRQxxfDJN/FmW",
+    "role": "admin"
+  },
+  "viewer": {
+    "password_hash": "$2b$12$69WnecgRVfNru4X3f74BDeVl6xh.sLzSH3mI6/ZsH448iY9p.VXee",
+    "role": "viewer"
+  }
+}
