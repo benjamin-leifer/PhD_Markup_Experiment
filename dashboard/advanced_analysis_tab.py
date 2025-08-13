@@ -763,5 +763,6 @@ def register_callbacks(app: dash.Dash) -> None:
                     label=trace.get("name"),
                 )
         plt.legend()
-        plt.show()
+        # show the figure without blocking to avoid threading issues
+        plt.show(block=False)
         return 0
