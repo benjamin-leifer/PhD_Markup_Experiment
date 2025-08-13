@@ -47,6 +47,15 @@ class Sample(Document):
         """Return the sample with the given name or ``None`` if not found."""
         return cls.objects(name=name).first()
 
+    @classmethod
+    def get_or_create(cls, name: str, **attrs) -> "Sample":
+        """Retrieve a sample by name or create and save a new one."""
+        sample = cls.get_by_name(name)
+        if sample is None:
+            sample = cls(name=name, **attrs)
+            sample.save()
+        return sample
+
     def clean(self):
         self.updated_at = datetime.datetime.utcnow()
         super().clean()
