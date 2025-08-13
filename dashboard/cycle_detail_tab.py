@@ -62,15 +62,28 @@ def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
 def _get_cycle_indices(test_id: str) -> List[int]:
     """Return available cycle indices for ``test_id``.
 
-    The function first queries :class:`~battery_analysis.models.CycleDetailData`
+    The function prefers indices from the ``TestResult`` record, filtering out
+    cycles that lack both charge and discharge capacity. If no cycle summaries
+    are available it queries :class:`~battery_analysis.models.CycleDetailData`
     directly so that even tests without populated ``cycles`` arrays still return
-    the indices of stored detailed data. When that query fails (for example when
-    the database is unavailable), it falls back to
-    :func:`get_detailed_cycle_data` which may consult inline cycle summaries.
+    available detailed data. When that query fails (for example when the
+    database is unavailable), it falls back to :func:`get_detailed_cycle_data`
+    which may consult inline cycle summaries.
     """
 
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis import models
+
+        test = models.TestResult.objects(id=test_id).only("cycles").first()
+        if test and getattr(test, "cycles", None):
+            indices = [
+                c.cycle_index
+                for c in test.cycles
+                if getattr(c, "charge_capacity", 0) > 0
+                and getattr(c, "discharge_capacity", 0) > 0
+            ]
+            if indices:
+                return sorted(indices)
 
         cycles = models.CycleDetailData.objects(test_result=test_id).only(
             "cycle_index"

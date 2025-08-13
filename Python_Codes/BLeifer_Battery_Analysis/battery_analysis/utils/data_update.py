@@ -315,7 +315,7 @@ def backfill_cycle_summaries(test_ids=None):
 
     updated = 0
     for test in tests:
-        detailed = get_detailed_cycle_data(str(test.id))
+        detailed = get_detailed_cycle_data(str(test.id), include_incomplete=True)
         if not detailed:
             # If no cycle indices recorded on the test, gather directly
             detailed = {}
