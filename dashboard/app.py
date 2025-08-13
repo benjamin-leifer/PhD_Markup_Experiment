@@ -337,8 +337,8 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         return is_open
 
     @app.callback(
-        Output("running-tests-table", "data"),
-        Output("upcoming-tests-table", "data"),
+        Output("running-tests-table", "data", allow_duplicate=True),
+        Output("upcoming-tests-table", "data", allow_duplicate=True),
         Input("refresh-interval", "n_intervals"),
         State("running-tests-table", "data"),
         State("upcoming-tests-table", "data"),
@@ -355,7 +355,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         )
 
     @app.callback(
-        Output("running-tests-table", "data"),
+        Output("running-tests-table", "data", allow_duplicate=True),
         Input("running-tests-table", "derived_viewport_indices"),
         State("running-tests-table", "data"),
         prevent_initial_call=True,
@@ -374,7 +374,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         return (current or []) + layout_components.running_tests_rows(new_rows)
 
     @app.callback(
-        Output("upcoming-tests-table", "data"),
+        Output("upcoming-tests-table", "data", allow_duplicate=True),
         Input("upcoming-tests-table", "derived_viewport_indices"),
         State("upcoming-tests-table", "data"),
         prevent_initial_call=True,
