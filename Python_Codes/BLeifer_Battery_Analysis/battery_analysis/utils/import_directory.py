@@ -17,9 +17,12 @@ is used as the sample identifier.
 from __future__ import annotations
 
 import argparse
+import fnmatch
+import json
 import logging
 import os
-from typing import Dict, Set
+from pathlib import Path
+from typing import Dict, Iterable, Set
 
 from battery_analysis import parsers
 from battery_analysis.models import Sample
@@ -30,7 +33,15 @@ from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
 logger = logging.getLogger(__name__)
 
 
-def import_directory(root: str, *, sample_lookup: bool = False) -> int:
+def import_directory(
+    root: str,
+    *,
+    sample_lookup: bool = False,
+    dry_run: bool = False,
+    include: Iterable[str] | None = None,
+    exclude: Iterable[str] | None = None,
+    resume_manifest: str | None = None,
+) -> int:
     """Import all supported files within ``root``.
 
     Parameters
@@ -41,6 +52,17 @@ def import_directory(root: str, *, sample_lookup: bool = False) -> int:
         When ``True`` the parser is invoked to extract metadata (such as a
         ``sample_code``) to determine the sample.  Otherwise the parent
         directory name is used.
+    dry_run:
+        When ``True`` files are logged but no database changes are made.
+    include:
+        Optional iterable of glob patterns. Only files matching at least one
+        pattern are processed.
+    exclude:
+        Optional iterable of glob patterns. Files matching any pattern are
+        skipped.
+    resume_manifest:
+        Path to a JSON file listing previously processed file paths. When
+        provided, files listed are skipped and newly processed files are added.
 
     Returns
     -------
@@ -56,12 +78,33 @@ def import_directory(root: str, *, sample_lookup: bool = False) -> int:
     supported = {ext.lower() for ext in parsers.get_supported_formats()}
     processed: Set[str] = set()
 
+    include = list(include or [])
+    exclude = list(exclude or [])
+
+    manifest_path: Path | None = None
+    manifest_processed: Set[str] = set()
+    if resume_manifest:
+        manifest_path = Path(resume_manifest)
+        if manifest_path.exists():
+            try:
+                manifest_processed = set(json.load(manifest_path.open()))
+            except Exception:  # pragma: no cover - defensive
+                manifest_processed = set()
+
     for dirpath, _, filenames in os.walk(root):
         for filename in filenames:
             ext = os.path.splitext(filename)[1].lower()
             if ext not in supported:
                 continue
             file_path = os.path.join(dirpath, filename)
+            rel_path = os.path.relpath(file_path, root)
+
+            if include and not any(fnmatch.fnmatch(rel_path, pat) for pat in include):
+                continue
+            if exclude and any(fnmatch.fnmatch(rel_path, pat) for pat in exclude):
+                continue
+            if resume_manifest and rel_path in manifest_processed:
+                continue
 
             metadata = None
             if sample_lookup:
@@ -69,7 +112,7 @@ def import_directory(root: str, *, sample_lookup: bool = False) -> int:
                     _, metadata = parsers.parse_file(file_path)
                 except Exception as exc:  # pragma: no cover - defensive
                     logger.error("Failed to parse %s: %s", file_path, exc)
-                    metadata = None
+                    continue
 
             name = metadata.get("sample_code") if metadata else None
             if not name:
@@ -79,30 +122,38 @@ def import_directory(root: str, *, sample_lookup: bool = False) -> int:
             if metadata:
                 attrs = {k: v for k, v in metadata.items() if k != "sample_code"}
 
-            sample = Sample.get_or_create(name, **attrs)
-
             try:
-                test, was_update = data_update.process_file_with_update(
-                    file_path, sample
-                )
+                if dry_run:
+                    logger.info("Dry run: would process %s for sample %s", file_path, name)
+                else:
+                    sample = Sample.get_or_create(name, **attrs)
+                    test, was_update = data_update.process_file_with_update(
+                        file_path, sample
+                    )
+                    action = "updated" if was_update else "created"
+                    logger.info(
+                        "%s test %s for sample %s",
+                        action.title(),
+                        getattr(test, "id", None),
+                        sample.name,
+                    )
+                    processed.add(sample.name)
+                if resume_manifest:
+                    manifest_processed.add(rel_path)
             except Exception as exc:  # pragma: no cover - defensive
                 logger.error("Failed to process %s: %s", file_path, exc)
                 continue
 
-            action = "updated" if was_update else "created"
-            logger.info(
-                "%s test %s for sample %s",
-                action.title(),
-                getattr(test, "id", None),
-                sample.name,
-            )
-            processed.add(sample.name)
+    if not dry_run:
+        for name in processed:
+            try:
+                update_cell_dataset(name)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.error("Failed to refresh dataset for %s: %s", name, exc)
 
-    for name in processed:
-        try:
-            update_cell_dataset(name)
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.error("Failed to refresh dataset for %s: %s", name, exc)
+    if resume_manifest and manifest_path is not None:
+        with manifest_path.open("w", encoding="utf-8") as fh:
+            json.dump(sorted(manifest_processed), fh, indent=2)
 
     return 0
 
