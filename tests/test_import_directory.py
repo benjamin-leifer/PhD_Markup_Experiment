@@ -90,3 +90,32 @@ def test_sequential_files_append_cycles(
     test = TestResult.objects.first()
     assert [c.cycle_index for c in test.cycles] == [1, 2, 3, 4]
     disconnect()
+
+
+def test_state_skips_and_reset_reimports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _setup_db()
+    _make_file(tmp_path, "test.csv")
+
+    calls: list[str] = []
+
+    def fake_process(path: str, sample: Sample):
+        calls.append(path)
+        class Dummy:
+            pass
+        return Dummy(), False
+
+    monkeypatch.setattr(import_directory.data_update, "process_file_with_update", fake_process)
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
+    import_directory.import_directory(tmp_path)
+    assert len(calls) == 1
+    assert (tmp_path / ".import_state.json").exists()
+
+    import_directory.import_directory(tmp_path)
+    assert len(calls) == 1
+
+    import_directory.import_directory(tmp_path, reset=True)
+    assert len(calls) == 2
+    disconnect()
