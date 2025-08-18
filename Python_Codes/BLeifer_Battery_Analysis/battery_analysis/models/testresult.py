@@ -58,6 +58,7 @@ class TestResult(Document):
     capacity_retention = fields.FloatField(required=False)
     avg_coulombic_eff = fields.FloatField(required=False)
     avg_energy_efficiency = fields.FloatField(required=False)
+    median_internal_resistance = fields.FloatField(required=False)
 
     # New fields for automated protocol detection
     last_cycle_complete = fields.BooleanField(required=False)
@@ -90,6 +91,25 @@ class TestResult(Document):
         ],
     }
 
+    # ------------------------------------------------------------------
+    # Persistence helpers
+    # ------------------------------------------------------------------
+    def save(self, *args, **kwargs):  # type: ignore[override]
+        """Persist the test result and refresh sample aggregates."""
+        result = super().save(*args, **kwargs)
+        try:
+            sample = (
+                self.sample.fetch() if hasattr(self.sample, "fetch") else self.sample
+            )
+            if sample is not None:
+                existing_ids = [getattr(ref, "id", None) for ref in sample.tests]
+                if self.id not in existing_ids:
+                    sample.tests.append(self)
+                sample.recompute_metrics()
+        except Exception:  # pragma: no cover - best-effort update
+            pass
+        return result
+      
     def add_note(self, text: str, author: str | None = None) -> None:
         """Append a note entry to :attr:`notes_log` and persist the change."""
 
@@ -101,6 +121,7 @@ class TestResult(Document):
             }
         )
         self.save()
+
 
     def clean(self):
         """Custom validation and automatic protocol assignment."""
