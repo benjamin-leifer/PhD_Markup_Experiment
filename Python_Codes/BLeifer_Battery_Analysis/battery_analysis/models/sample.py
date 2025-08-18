@@ -1,7 +1,7 @@
 # battery_analysis/models/sample.py
 
 import datetime
-from mongoengine import Document, fields, ReferenceField
+from mongoengine import Document, fields, ReferenceField, ValidationError
 
 
 class Sample(Document):
@@ -77,7 +77,30 @@ class Sample(Document):
 
     def clean(self):
         self.updated_at = datetime.datetime.utcnow()
+        self.validate_components()
         super().clean()
+
+    def validate_components(self) -> None:
+        """Ensure component references are saved and not self."""
+        components = {
+            "parent": self.parent,
+            "anode": self.anode,
+            "cathode": self.cathode,
+            "separator": self.separator,
+            "electrolyte": self.electrolyte,
+        }
+
+        for name, ref in components.items():
+            if ref is None:
+                continue
+            ref_id = getattr(ref, "id", None)
+            # Self-reference check (requires referenced doc to be saved)
+            if self.id is not None and ref_id == self.id:
+                raise ValidationError(f"{name} cannot reference self")
+            if ref_id is None:
+                raise ValidationError(
+                    f"{name} reference must point to a saved Sample"
+                )
 
     def __str__(self):
         try:
