@@ -18,6 +18,7 @@ try:  # pragma: no cover - behaviour depends on environment
         from .cycle_summary import CycleSummary  # type: ignore
         from .sample import Sample  # type: ignore
 
+        # Convenience export to create or fetch samples by name
         get_or_create_sample = Sample.get_or_create  # type: ignore
         from .testresult import TestResult, CycleDetailData  # type: ignore
         from .raw_file import RawDataFile  # type: ignore
@@ -35,6 +36,7 @@ try:  # pragma: no cover - behaviour depends on environment
 
         CycleSummary = importlib.import_module("cycle_summary").CycleSummary  # type: ignore
         Sample = importlib.import_module("sample").Sample  # type: ignore
+        # Convenience export to create or fetch samples by name
         get_or_create_sample = Sample.get_or_create  # type: ignore
         TestResult = importlib.import_module("testresult").TestResult  # type: ignore
         CycleDetailData = importlib.import_module("testresult").CycleDetailData  # type: ignore
@@ -238,6 +240,7 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         summary: str
         c_rates: list = dc_field(default_factory=list)
 
+    # Convenience export to create or fetch samples by name
     get_or_create_sample = Sample.get_or_create
 
     __all__ = [
