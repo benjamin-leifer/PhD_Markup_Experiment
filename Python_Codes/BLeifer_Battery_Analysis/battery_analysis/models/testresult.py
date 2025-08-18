@@ -17,6 +17,13 @@ except ImportError:  # pragma: no cover - allow running as script
 
 
 class TestResult(Document):
+    """Stores metadata and results for a single electrochemical test.
+
+    Notes can be logged during analysis with :meth:`add_note`::
+
+        test_result.add_note("processed cycle 1", author="analyst")
+    """
+
     # Remove CASCADE to break circular dependency
     sample = fields.LazyReferenceField("Sample", required=True)
     parent = fields.ReferenceField("Cell", required=False)
@@ -82,6 +89,18 @@ class TestResult(Document):
             "sample.electrolyte",
         ],
     }
+
+    def add_note(self, text: str, author: str | None = None) -> None:
+        """Append a note entry to :attr:`notes_log` and persist the change."""
+
+        self.notes_log.append(
+            {
+                "text": text,
+                "author": author,
+                "timestamp": datetime.datetime.utcnow(),
+            }
+        )
+        self.save()
 
     def clean(self):
         """Custom validation and automatic protocol assignment."""

@@ -5,6 +5,13 @@ from mongoengine import Document, fields, ReferenceField
 
 
 class Sample(Document):
+    """Represents a physical sample or cell.
+
+    Use :meth:`add_note` to append timestamped notes for tracking::
+
+        sample.add_note("checked performance", author="researcher")
+    """
+
     name = fields.StringField(required=True, unique=True)
     chemistry = fields.StringField(required=False)
     manufacturer = fields.StringField(required=False)
@@ -41,6 +48,18 @@ class Sample(Document):
     median_internal_resistance = fields.FloatField(required=False)
 
     meta = {"collection": "samples", "indexes": ["name"]}
+
+    def add_note(self, text: str, author: str | None = None) -> None:
+        """Append a note entry to :attr:`notes_log` and persist the change."""
+
+        self.notes_log.append(
+            {
+                "text": text,
+                "author": author,
+                "timestamp": datetime.datetime.utcnow(),
+            }
+        )
+        self.save()
 
     @classmethod
     def get_by_name(cls, name: str):
