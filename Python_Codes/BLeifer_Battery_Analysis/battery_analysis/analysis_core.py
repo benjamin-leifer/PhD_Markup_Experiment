@@ -114,6 +114,10 @@ def create_test_result(sample, cycles_summary, tester, metadata=None):
         "charge_rate",
         "discharge_rate",
         "file_path",
+        "base_file_name",
+        "base_test_name",
+        "test_id",
+        "file_hash",
     ]:
         if field in metadata:
             setattr(test_result, field, metadata[field])

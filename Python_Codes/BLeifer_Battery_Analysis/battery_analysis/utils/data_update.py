@@ -1,14 +1,17 @@
 """
 Utilities for handling data updates and file processing.
 """
+
 import os
 import logging
-import datetime
 import re
+import hashlib
+from mongoengine.queryset.visitor import Q
 
 # Update imports to avoid circular dependencies
 from battery_analysis import models, parsers
 from battery_analysis.utils.db import ensure_connection
+
 # Import directly from the analysis package
 from battery_analysis.analysis import (
     compute_metrics,
@@ -42,6 +45,7 @@ def _normalize_identifier(name: str | None) -> str | None:
     base = re.sub(r"_wb_\d+$", "", base, flags=re.IGNORECASE)
     return base
 
+
 def extract_test_identifiers(file_path, parsed_data, metadata):
     """
     Extract identifying information from a test file.
@@ -56,24 +60,28 @@ def extract_test_identifiers(file_path, parsed_data, metadata):
     """
     file_name = os.path.basename(file_path)
     identifiers = {
-        'file_name': file_name,
-        'tester': metadata.get('tester', None),
-        'test_name': metadata.get('name', None),
+        "file_name": file_name,
+        "tester": metadata.get("tester", None),
+        "test_name": metadata.get("name", None),
         # Normalized versions for matching sequential files
-        'base_file_name': _normalize_identifier(file_name),
+        "base_file_name": _normalize_identifier(file_name),
     }
 
-    if identifiers['test_name']:
-        identifiers['base_test_name'] = _normalize_identifier(identifiers['test_name'])
+    if identifiers["test_name"]:
+        identifiers["base_test_name"] = _normalize_identifier(identifiers["test_name"])
 
     # Add more identifying information as available
-    if 'date' in metadata:
-        identifiers['date'] = metadata['date']
+    if "date" in metadata:
+        identifiers["date"] = metadata["date"]
 
-    if 'test_id' in metadata:
-        identifiers['test_id'] = metadata['test_id']
+    if "test_id" in metadata:
+        identifiers["test_id"] = metadata["test_id"]
+
+    if "file_hash" in metadata:
+        identifiers["file_hash"] = metadata["file_hash"]
 
     return identifiers
+
 
 def find_matching_tests(identifiers, sample_id):
     """
@@ -90,37 +98,25 @@ def find_matching_tests(identifiers, sample_id):
     if not sample:
         return []
 
-    matches = []
+    query = models.TestResult.objects(sample=sample_id)
+    conditions = []
 
-    # Check each test for this sample
-    for test_ref in sample.tests:
-        test = models.TestResult.objects(id=test_ref.id).first()
-        if not test:
-            continue
+    for field in ["test_id", "file_hash", "base_test_name", "base_file_name"]:
+        value = identifiers.get(field)
+        if value:
+            conditions.append(Q(**{field: value}))
 
-        # Direct name match
-        if identifiers.get('test_name') and test.name == identifiers['test_name']:
-            matches.append(test)
-            continue
+    if not conditions:
+        return []
 
-        # Direct file name match (if test has file_path)
-        if identifiers.get('file_name') and getattr(test, 'file_path', None):
-            if os.path.basename(test.file_path) == identifiers['file_name']:
-                matches.append(test)
-                continue
+    combined = conditions[0]
+    for cond in conditions[1:]:
+        combined |= cond
 
-        # Normalized name match to handle sequential files
-        norm_incoming = identifiers.get('base_test_name') or identifiers.get('base_file_name')
-        if norm_incoming:
-            existing_name = _normalize_identifier(test.name)
-            existing_file = _normalize_identifier(os.path.basename(test.file_path)) if getattr(test, 'file_path', None) else None
-            if norm_incoming and (existing_name == norm_incoming or existing_file == norm_incoming):
-                matches.append(test)
-                continue
+    return list(query.filter(combined))
 
-    return matches
 
-def update_test_data(existing_test, new_cycles, metadata, strategy='append'):
+def update_test_data(existing_test, new_cycles, metadata, strategy="append"):
     """
     Update an existing test with new data.
 
@@ -133,7 +129,7 @@ def update_test_data(existing_test, new_cycles, metadata, strategy='append'):
     Returns:
         TestResult: Updated TestResult object
     """
-    if strategy == 'replace':
+    if strategy == "replace":
         # Replace all cycles
         existing_test.cycles = []
 
@@ -142,27 +138,30 @@ def update_test_data(existing_test, new_cycles, metadata, strategy='append'):
 
     # Add new cycles that don't exist yet
     for cycle in new_cycles:
-        if strategy == 'replace' or cycle['cycle_index'] not in existing_indices:
+        if strategy == "replace" or cycle["cycle_index"] not in existing_indices:
             # Create and add the cycle
             cycle_doc = models.CycleSummary(
-                cycle_index=cycle['cycle_index'],
-                charge_capacity=cycle['charge_capacity'],
-                discharge_capacity=cycle['discharge_capacity'],
-                coulombic_efficiency=cycle['coulombic_efficiency']
+                cycle_index=cycle["cycle_index"],
+                charge_capacity=cycle["charge_capacity"],
+                discharge_capacity=cycle["discharge_capacity"],
+                coulombic_efficiency=cycle["coulombic_efficiency"],
             )
 
             # Add optional fields if present
-            if 'charge_energy' in cycle and cycle['charge_energy'] is not None:
-                cycle_doc.charge_energy = cycle['charge_energy']
+            if "charge_energy" in cycle and cycle["charge_energy"] is not None:
+                cycle_doc.charge_energy = cycle["charge_energy"]
 
-            if 'discharge_energy' in cycle and cycle['discharge_energy'] is not None:
-                cycle_doc.discharge_energy = cycle['discharge_energy']
+            if "discharge_energy" in cycle and cycle["discharge_energy"] is not None:
+                cycle_doc.discharge_energy = cycle["discharge_energy"]
 
-            if 'energy_efficiency' in cycle and cycle['energy_efficiency'] is not None:
-                cycle_doc.energy_efficiency = cycle['energy_efficiency']
+            if "energy_efficiency" in cycle and cycle["energy_efficiency"] is not None:
+                cycle_doc.energy_efficiency = cycle["energy_efficiency"]
 
-            if 'internal_resistance' in cycle and cycle['internal_resistance'] is not None:
-                cycle_doc.internal_resistance = cycle['internal_resistance']
+            if (
+                "internal_resistance" in cycle
+                and cycle["internal_resistance"] is not None
+            ):
+                cycle_doc.internal_resistance = cycle["internal_resistance"]
 
             existing_test.cycles.append(cycle_doc)
 
@@ -170,8 +169,8 @@ def update_test_data(existing_test, new_cycles, metadata, strategy='append'):
     if metadata:
         # Extract detailed_cycles if present, then remove from metadata
         detailed_cycles = None
-        if 'detailed_cycles' in metadata:
-            detailed_cycles = metadata.pop('detailed_cycles')
+        if "detailed_cycles" in metadata:
+            detailed_cycles = metadata.pop("detailed_cycles")
 
         # Update any existing fields
         for key, value in metadata.items():
@@ -179,7 +178,10 @@ def update_test_data(existing_test, new_cycles, metadata, strategy='append'):
                 setattr(existing_test, key, value)
 
         # Update custom_data
-        if not hasattr(existing_test, 'custom_data') or existing_test.custom_data is None:
+        if (
+            not hasattr(existing_test, "custom_data")
+            or existing_test.custom_data is None
+        ):
             existing_test.custom_data = {}
 
         # Add any metadata not already captured
@@ -199,9 +201,14 @@ def update_test_data(existing_test, new_cycles, metadata, strategy='append'):
     # Store detailed cycle data if available
     if detailed_cycles:
         try:
-            from battery_analysis.utils.detailed_data_manager import store_detailed_cycle_data
+            from battery_analysis.utils.detailed_data_manager import (
+                store_detailed_cycle_data,
+            )
+
             store_detailed_cycle_data(str(existing_test.id), detailed_cycles)
-            logging.info(f"Stored {len(detailed_cycles)} detailed cycles for test {existing_test.id}")
+            logging.info(
+                f"Stored {len(detailed_cycles)} detailed cycles for test {existing_test.id}"
+            )
         except Exception as e:
             logging.error(f"Error storing detailed cycle data: {e}")
 
@@ -209,6 +216,7 @@ def update_test_data(existing_test, new_cycles, metadata, strategy='append'):
     update_sample_properties(existing_test.sample.fetch())
 
     return existing_test
+
 
 def process_file_with_update(file_path, sample):
     """
@@ -225,27 +233,39 @@ def process_file_with_update(file_path, sample):
     parsed_data, metadata = parsers.parse_file(file_path)
     logging.info(f"File processed as tester type: {metadata.get('tester', 'Unknown')}")
 
+    # Compute file hash for matching when possible
+    file_hash = None
+    try:
+        with open(file_path, "rb") as f:
+            file_hash = hashlib.md5(f.read()).hexdigest()
+    except Exception as exc:  # pragma: no cover - best effort
+        logging.warning(f"Could not compute hash for {file_path}: {exc}")
+    if metadata is None:
+        metadata = {}
+    metadata["file_hash"] = file_hash
+
     # Extract detailed_cycles if present in metadata
     detailed_cycles = None
-    if metadata and 'detailed_cycles' in metadata:
-        detailed_cycles = metadata.pop('detailed_cycles')
+    if metadata and "detailed_cycles" in metadata:
+        detailed_cycles = metadata.pop("detailed_cycles")
         logging.info(f"Extracted {len(detailed_cycles)} detailed cycle datasets")
 
     # If parser did not return cycle summaries, build them from detailed data
     if (
         (not parsed_data or not isinstance(parsed_data, list))
-        or (parsed_data and 'discharge_capacity' not in parsed_data[0])
+        or (parsed_data and "discharge_capacity" not in parsed_data[0])
     ) and detailed_cycles:
         logging.info("Building cycle summaries from detailed data")
         parsed_data = summarize_detailed_cycles(detailed_cycles)
 
     # Add file path to metadata
-    if metadata is None:
-        metadata = {}
-    metadata['file_path'] = file_path
+    metadata["file_path"] = file_path
 
-    # Extract identifiers
+    # Extract identifiers and ensure metadata carries normalized versions
     identifiers = extract_test_identifiers(file_path, parsed_data, metadata)
+    for key in ["base_file_name", "base_test_name", "test_id", "file_hash"]:
+        if identifiers.get(key):
+            metadata[key] = identifiers[key]
 
     # Look for matching tests
     matching_tests = find_matching_tests(identifiers, sample.id)
@@ -253,14 +273,21 @@ def process_file_with_update(file_path, sample):
     if matching_tests:
         # Update the existing test
         existing_test = matching_tests[0]
-        updated_test = update_test_data(existing_test, parsed_data, metadata, strategy='append')
+        updated_test = update_test_data(
+            existing_test, parsed_data, metadata, strategy="append"
+        )
 
         # Store detailed cycle data if available
         if detailed_cycles:
             try:
-                from battery_analysis.utils.detailed_data_manager import store_detailed_cycle_data
+                from battery_analysis.utils.detailed_data_manager import (
+                    store_detailed_cycle_data,
+                )
+
                 store_detailed_cycle_data(str(updated_test.id), detailed_cycles)
-                logging.info(f"Stored {len(detailed_cycles)} detailed cycles for test {updated_test.id}")
+                logging.info(
+                    f"Stored {len(detailed_cycles)} detailed cycles for test {updated_test.id}"
+                )
             except Exception as e:
                 logging.error(f"Error storing detailed cycle data: {e}")
 
@@ -270,16 +297,21 @@ def process_file_with_update(file_path, sample):
         test_result = create_test_result(
             sample=sample,
             cycles_summary=parsed_data,
-            tester=metadata.get('tester', 'Unknown'),
-            metadata=metadata
+            tester=metadata.get("tester", "Unknown"),
+            metadata=metadata,
         )
 
         # Store detailed cycle data if available
         if detailed_cycles:
             try:
-                from battery_analysis.utils.detailed_data_manager import store_detailed_cycle_data
+                from battery_analysis.utils.detailed_data_manager import (
+                    store_detailed_cycle_data,
+                )
+
                 store_detailed_cycle_data(str(test_result.id), detailed_cycles)
-                logging.info(f"Stored {len(detailed_cycles)} detailed cycles for test {test_result.id}")
+                logging.info(
+                    f"Stored {len(detailed_cycles)} detailed cycles for test {test_result.id}"
+                )
             except Exception as e:
                 logging.error(f"Error storing detailed cycle data: {e}")
 
@@ -321,7 +353,11 @@ def backfill_cycle_summaries(test_ids=None):
             detailed = {}
             for detail in models.CycleDetailData.objects(test_result=test.id):
                 try:
-                    charge = pickle.loads(detail.charge_data.read()) if detail.charge_data else {}
+                    charge = (
+                        pickle.loads(detail.charge_data.read())
+                        if detail.charge_data
+                        else {}
+                    )
                     discharge = (
                         pickle.loads(detail.discharge_data.read())
                         if detail.discharge_data
