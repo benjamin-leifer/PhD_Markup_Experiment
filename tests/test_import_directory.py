@@ -90,3 +90,50 @@ def test_sequential_files_append_cycles(
     test = TestResult.objects.first()
     assert [c.cycle_index for c in test.cycles] == [1, 2, 3, 4]
     disconnect()
+
+
+def test_parallel_samples_update_datasets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Files for different samples are processed in parallel and datasets are
+    refreshed after processing each sample."""
+
+    _setup_db()
+
+    # Create files for two different samples
+    for sample in ("A", "B"):
+        path = tmp_path / sample
+        path.mkdir(parents=True, exist_ok=True)
+        (path / "test.csv").write_text("dummy")
+
+    call_log: list[tuple[str, str]] = []
+
+    def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
+        call_log.append(("process", sample.name))
+        return object(), False
+
+    def fake_update_dataset(name: str) -> None:
+        call_log.append(("dataset", name))
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(import_directory, "update_cell_dataset", fake_update_dataset)
+
+    import_directory.import_directory(tmp_path, workers=2)
+
+    # Ensure dataset refresh happens after processing for each sample
+    for sample in ("A", "B"):
+        process_indices = [
+            i
+            for i, (kind, name) in enumerate(call_log)
+            if kind == "process" and name == sample
+        ]
+        dataset_index = next(
+            i
+            for i, (kind, name) in enumerate(call_log)
+            if kind == "dataset" and name == sample
+        )
+        assert dataset_index > max(process_indices)
+
+    disconnect()

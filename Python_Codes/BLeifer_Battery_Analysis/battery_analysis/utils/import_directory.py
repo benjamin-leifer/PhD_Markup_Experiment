@@ -19,7 +19,8 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-from typing import Dict, Set
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Dict, List, Set, Tuple
 
 from battery_analysis import parsers
 from battery_analysis.models import Sample
@@ -30,7 +31,12 @@ from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
 logger = logging.getLogger(__name__)
 
 
-def import_directory(root: str, *, sample_lookup: bool = False) -> int:
+def import_directory(
+    root: str,
+    *,
+    sample_lookup: bool = False,
+    workers: int | None = None,
+) -> int:
     """Import all supported files within ``root``.
 
     Parameters
@@ -41,6 +47,9 @@ def import_directory(root: str, *, sample_lookup: bool = False) -> int:
         When ``True`` the parser is invoked to extract metadata (such as a
         ``sample_code``) to determine the sample.  Otherwise the parent
         directory name is used.
+    workers:
+        Maximum number of worker threads for parallel processing. ``None``
+        uses the default determined by :class:`ThreadPoolExecutor`.
 
     Returns
     -------
@@ -54,8 +63,8 @@ def import_directory(root: str, *, sample_lookup: bool = False) -> int:
         return 1
 
     supported = {ext.lower() for ext in parsers.get_supported_formats()}
-    processed: Set[str] = set()
-
+    # Gather all eligible file paths grouped by sample
+    by_sample: Dict[str, Tuple[Sample, List[str]]] = {}
     for dirpath, _, filenames in os.walk(root):
         for filename in filenames:
             ext = os.path.splitext(filename)[1].lower()
@@ -80,29 +89,53 @@ def import_directory(root: str, *, sample_lookup: bool = False) -> int:
                 attrs = {k: v for k, v in metadata.items() if k != "sample_code"}
 
             sample = Sample.get_or_create(name, **attrs)
+            info = by_sample.setdefault(sample.name, (sample, []))
+            info[1].append(file_path)
+
+    processed: Set[str] = set()
+
+    def _process_sample(sample: Sample, paths: List[str]) -> List[Tuple[object, bool]]:
+        """Worker function to process all files for a sample sequentially."""
+        if not ensure_connection():  # defensive
+            raise RuntimeError("Database connection not available")
+        results: List[Tuple[object, bool]] = []
+        for path in paths:
+            try:
+                test, was_update = data_update.process_file_with_update(path, sample)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.error("Failed to process %s: %s", path, exc)
+                continue
+            results.append((test, was_update))
+        return results
+
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        future_to_sample = {
+            executor.submit(_process_sample, sample, paths): sample.name
+            for sample, paths in by_sample.values()
+        }
+
+        for future in as_completed(future_to_sample):
+            sample_name = future_to_sample[future]
+            try:
+                results = future.result()
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.error("Processing failed for sample %s: %s", sample_name, exc)
+                results = []
+
+            for test, was_update in results:
+                action = "updated" if was_update else "created"
+                logger.info(
+                    "%s test %s for sample %s",
+                    action.title(),
+                    getattr(test, "id", None),
+                    sample_name,
+                )
+            processed.add(sample_name)
 
             try:
-                test, was_update = data_update.process_file_with_update(
-                    file_path, sample
-                )
+                update_cell_dataset(sample_name)
             except Exception as exc:  # pragma: no cover - defensive
-                logger.error("Failed to process %s: %s", file_path, exc)
-                continue
-
-            action = "updated" if was_update else "created"
-            logger.info(
-                "%s test %s for sample %s",
-                action.title(),
-                getattr(test, "id", None),
-                sample.name,
-            )
-            processed.add(sample.name)
-
-    for name in processed:
-        try:
-            update_cell_dataset(name)
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.error("Failed to refresh dataset for %s: %s", name, exc)
+                logger.error("Failed to refresh dataset for %s: %s", sample_name, exc)
 
     return 0
 
@@ -117,10 +150,20 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Lookup sample using parser metadata instead of directory name",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Maximum number of worker threads (default: library default)",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO)
-    return import_directory(args.root, sample_lookup=args.sample_lookup)
+    return import_directory(
+        args.root,
+        sample_lookup=args.sample_lookup,
+        workers=args.workers,
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry
