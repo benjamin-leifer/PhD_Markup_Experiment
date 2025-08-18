@@ -315,12 +315,15 @@ def register_callbacks(app: dash.Dash) -> None:
 
             for field, name in provided.items():
                 model_cls = getattr(models, field.capitalize())
-                query = model_cls.objects(name=name)  # type: ignore[attr-defined]
-                obj = query.first() if hasattr(query, "first") else None
-                if not obj:
-                    obj = model_cls(name=name)
-                    if hasattr(obj, "save"):
-                        obj.save()
+                if hasattr(model_cls, "get_or_create"):
+                    obj = model_cls.get_or_create(name)  # type: ignore[attr-defined]
+                else:
+                    query = model_cls.objects(name=name)  # type: ignore[attr-defined]
+                    obj = query.first() if hasattr(query, "first") else None
+                    if not obj:
+                        obj = model_cls(name=name)
+                        if hasattr(obj, "save"):
+                            obj.save()
                 setattr(sample, field, obj)
 
             if hasattr(sample, "save"):
