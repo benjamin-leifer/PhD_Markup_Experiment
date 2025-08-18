@@ -4,10 +4,17 @@ import datetime
 from typing import List
 
 import numpy as np
-from mongoengine import Document, fields, ReferenceField
+from mongoengine import Document, fields, ReferenceField, ValidationError
 
 
 class Sample(Document):
+    """Represents a physical sample or cell.
+
+    Use :meth:`add_note` to append timestamped notes for tracking::
+
+        sample.add_note("checked performance", author="researcher")
+    """
+
     name = fields.StringField(required=True, unique=True)
     chemistry = fields.StringField(required=False)
     manufacturer = fields.StringField(required=False)
@@ -45,6 +52,18 @@ class Sample(Document):
 
     meta = {"collection": "samples", "indexes": ["name"]}
 
+    def add_note(self, text: str, author: str | None = None) -> None:
+        """Append a note entry to :attr:`notes_log` and persist the change."""
+
+        self.notes_log.append(
+            {
+                "text": text,
+                "author": author,
+                "timestamp": datetime.datetime.utcnow(),
+            }
+        )
+        self.save()
+
     @classmethod
     def get_by_name(cls, name: str):
         """Return the sample with the given name or ``None`` if not found."""
@@ -61,7 +80,30 @@ class Sample(Document):
 
     def clean(self):
         self.updated_at = datetime.datetime.utcnow()
+        self.validate_components()
         super().clean()
+
+    def validate_components(self) -> None:
+        """Ensure component references are saved and not self."""
+        components = {
+            "parent": self.parent,
+            "anode": self.anode,
+            "cathode": self.cathode,
+            "separator": self.separator,
+            "electrolyte": self.electrolyte,
+        }
+
+        for name, ref in components.items():
+            if ref is None:
+                continue
+            ref_id = getattr(ref, "id", None)
+            # Self-reference check (requires referenced doc to be saved)
+            if self.id is not None and ref_id == self.id:
+                raise ValidationError(f"{name} cannot reference self")
+            if ref_id is None:
+                raise ValidationError(
+                    f"{name} reference must point to a saved Sample"
+                )
 
     def __str__(self):
         try:

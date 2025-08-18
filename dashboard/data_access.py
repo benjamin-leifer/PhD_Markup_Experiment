@@ -128,7 +128,7 @@ def get_cell_dataset(cell_code: str):
         return None
 
     try:  # pragma: no cover - depends on MongoDB
-        return models.CellDataset.objects.get(cell_code=cell_code)  # type: ignore[attr-defined]
+        return models.CellDataset.get_by_cell_code(cell_code)  # type: ignore[attr-defined]
     except Exception:
         return None
 
