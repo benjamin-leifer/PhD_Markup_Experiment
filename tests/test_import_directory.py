@@ -90,3 +90,14 @@ def test_sequential_files_append_cycles(
     test = TestResult.objects.first()
     assert [c.cycle_index for c in test.cycles] == [1, 2, 3, 4]
     disconnect()
+
+
+def test_dry_run_no_changes(tmp_path: Path) -> None:
+    _setup_db()
+    _make_file(tmp_path, "test.csv")
+
+    import_directory.import_directory(tmp_path, dry_run=True)
+
+    assert Sample.objects.count() == 0
+    assert TestResult.objects.count() == 0
+    disconnect()
