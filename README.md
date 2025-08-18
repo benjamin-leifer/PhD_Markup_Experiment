@@ -67,6 +67,18 @@ Connection details are configured through environment variables:
 Both the dashboard and the `update_cell_dataset_cli.py` script rely on these
 variables when establishing database connections.
 
+## Importing test files
+
+Use the ``import_directory`` utility to recursively import supported test files
+from a directory::
+
+    python -m battery_analysis.utils.import_directory DATA_DIR
+
+Limit the files processed with ``--include`` and ``--exclude`` glob patterns::
+
+    python -m battery_analysis.utils.import_directory DATA_DIR \
+        --include "*_Wb_*.csv" --exclude "*/old/*"
+
 ## Updating cell datasets
 
 Use the ``update_cell_dataset_cli.py`` script to keep processed datasets in

@@ -9,9 +9,15 @@ The script can be executed directly::
 
     python -m battery_analysis.utils.import_directory ROOT_DIR
 
+Limit processing with glob patterns::
+
+    python -m battery_analysis.utils.import_directory data \
+        --include "*_Wb_*.csv" --exclude "*/old/*"
+
 Use ``--sample-lookup`` to attempt detecting the sample from parser metadata
 (e.g. a ``sample_code`` field).  Without this option the parent directory name
-is used as the sample identifier.
+is used as the sample identifier.  Supply ``--include`` and ``--exclude``
+patterns to limit which files are processed.
 """
 
 from __future__ import annotations
@@ -19,7 +25,8 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-from typing import Dict, Set
+from fnmatch import fnmatch
+from typing import Dict, Iterable, List, Set
 
 from battery_analysis import parsers
 from battery_analysis.models import Sample
@@ -30,7 +37,17 @@ from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
 logger = logging.getLogger(__name__)
 
 
-def import_directory(root: str, *, sample_lookup: bool = False) -> int:
+def _matches(path: str, patterns: Iterable[str]) -> bool:
+    return any(fnmatch(path, pat) for pat in patterns)
+
+
+def import_directory(
+    root: str,
+    *,
+    sample_lookup: bool = False,
+    include: List[str] | None = None,
+    exclude: List[str] | None = None,
+) -> int:
     """Import all supported files within ``root``.
 
     Parameters
@@ -56,8 +73,27 @@ def import_directory(root: str, *, sample_lookup: bool = False) -> int:
     supported = {ext.lower() for ext in parsers.get_supported_formats()}
     processed: Set[str] = set()
 
-    for dirpath, _, filenames in os.walk(root):
+    include = include or ["*"]
+    exclude = exclude or []
+
+    for dirpath, dirnames, filenames in os.walk(root):
+        rel_dir = os.path.relpath(dirpath, root)
+        if exclude and _matches(rel_dir, exclude):
+            continue
+        if include and not _matches(rel_dir, include):
+            continue
+
+        dirnames[:] = [
+            d for d in dirnames if not _matches(os.path.join(rel_dir, d), exclude)
+        ]
+
         for filename in filenames:
+            rel_file = os.path.join(rel_dir, filename)
+            if exclude and _matches(rel_file, exclude):
+                continue
+            if include and not _matches(rel_file, include):
+                continue
+
             ext = os.path.splitext(filename)[1].lower()
             if ext not in supported:
                 continue
@@ -117,10 +153,27 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Lookup sample using parser metadata instead of directory name",
     )
+    parser.add_argument(
+        "--include",
+        action="append",
+        default=[],
+        help="Glob pattern of files or directories to include (may repeat)",
+    )
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        help="Glob pattern of files or directories to exclude (may repeat)",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO)
-    return import_directory(args.root, sample_lookup=args.sample_lookup)
+    return import_directory(
+        args.root,
+        sample_lookup=args.sample_lookup,
+        include=args.include,
+        exclude=args.exclude,
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry
