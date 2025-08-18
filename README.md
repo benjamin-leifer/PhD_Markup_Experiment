@@ -132,3 +132,10 @@ To promote a script:
 
 Following this process keeps experimental ideas available while providing a
 clear path for integrating mature tools into the main dashboard.
+
+## Migration Notes
+
+Existing databases should backfill the newly added `created_at` and
+`updated_at` fields on `TestResult` documents. A simple approach is to run a
+database update that sets both fields to the current time for documents where
+they are missing.
