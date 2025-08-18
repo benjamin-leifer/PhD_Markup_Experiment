@@ -76,6 +76,8 @@ class TestResult(Document):
         default=list,
         help_text="List of timestamped note entries",
     )
+    created_at = fields.DateTimeField(default=datetime.datetime.utcnow)
+    updated_at = fields.DateTimeField(default=datetime.datetime.utcnow)
 
     meta = {
         "collection": "test_results",
@@ -125,6 +127,7 @@ class TestResult(Document):
 
     def clean(self):
         """Custom validation and automatic protocol assignment."""
+        self.updated_at = datetime.datetime.utcnow()
         # Merge metadata from parent hierarchy
         self.metadata = inherit_metadata(self)
 
@@ -173,6 +176,7 @@ class TestResult(Document):
                     self.protocol = proto
             except Exception:  # pragma: no cover - summarization is optional
                 pass
+        super().clean()
 
     def full_clean(self) -> None:
         """Run MongoEngine validation, including :meth:`clean`."""
