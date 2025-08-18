@@ -1,7 +1,8 @@
-"""Assign default CellDataset to Sample documents.
+"""Assign default :class:`CellDataset` to each :class:`Sample`.
 
-This migration iterates over all samples and ensures their
-``default_dataset`` field references the dataset built from their tests.
+Run ``python migrate_default_datasets.py`` to iterate over existing samples
+and ensure their ``default_dataset`` field references the dataset built from
+their tests.
 """
 
 import os
