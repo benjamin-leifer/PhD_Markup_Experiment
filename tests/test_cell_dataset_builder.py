@@ -8,6 +8,10 @@ for path in (ROOT, PACKAGE_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
+import types  # noqa: E402
+
+sys.modules.setdefault("advanced_analysis", types.ModuleType("advanced_analysis"))
+
 from battery_analysis.models import (  # noqa: E402
     Sample,
     TestResult,
@@ -32,7 +36,7 @@ def _cycle(idx: int) -> CycleSummary:
     )
 
 
-def test_builder_flow():
+def test_builder_flow() -> None:
     connect("builder_db", mongo_client_class=mongomock.MongoClient, alias="default")
     sample = Sample(name="S1").save()
     t1 = TestResult(

@@ -34,7 +34,7 @@ def gather_tests(cell_code: str) -> List[TestResult]:
         return []
 
     try:
-        qs = TestResult.objects(cell_code=cell_code).order_by("date")  # type: ignore[attr-defined]
+        qs = TestResult.objects(cell_code=cell_code).order_by("date")
     except Exception:
         return []
     return list(qs)
@@ -88,7 +88,7 @@ def update_cell_dataset(cell_code: str) -> CellDataset | None:
     if not tests:
         return None
 
-    dataset = CellDataset.objects(cell_code=cell_code).first()
+    dataset = CellDataset.get_by_cell_code(cell_code)
     if not dataset:
         dataset = CellDataset.build_from_tests(tests)
         dataset.combined_cycles = merge_tests(tests)

@@ -7,6 +7,10 @@ for path in (ROOT, PACKAGE_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
+import types  # noqa: E402
+
+sys.modules.setdefault("advanced_analysis", types.ModuleType("advanced_analysis"))
+
 from battery_analysis.models import (  # noqa: E402
     Sample,
     TestResult,
@@ -26,7 +30,7 @@ def _cycle(idx: int) -> CycleSummary:
     )
 
 
-def test_build_and_append_dataset():
+def test_build_and_append_dataset() -> None:
     connect("testdb", mongo_client_class=mongomock.MongoClient, alias="default")
     sample = Sample(name="S1").save()
     tr1 = TestResult(
@@ -55,4 +59,26 @@ def test_build_and_append_dataset():
     dataset.append_test(tr2)
     assert dataset.tests == [tr1, tr2]
     assert len(dataset.combined_cycles) == 2
+    disconnect()
+
+
+def test_get_or_create_behaviour() -> None:
+    connect("helper_db", mongo_client_class=mongomock.MongoClient, alias="default")
+    sample = Sample(name="S1").save()
+
+    ds1 = CellDataset.get_or_create("C1", sample)
+    assert ds1.cell_code == "C1"
+    assert CellDataset.objects.count() == 1
+
+    ds2 = CellDataset.get_or_create("C1", sample)
+    assert ds2.id == ds1.id
+    assert CellDataset.objects.count() == 1
+
+    ds3 = CellDataset.get_or_create("C2", sample)
+    assert ds3.cell_code == "C2"
+    assert CellDataset.objects.count() == 2
+
+    fetched = CellDataset.get_by_cell_code("C1")
+    assert fetched == ds1
+
     disconnect()

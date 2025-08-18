@@ -4,17 +4,23 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any, Iterable, cast
+
 from mongoengine import Document, fields
 
 try:
-    from .cycle_summary import CycleSummary  # type: ignore
+    from .cycle_summary import CycleSummary
 except ImportError:  # pragma: no cover - allow running as script
     import importlib
 
-    CycleSummary = importlib.import_module("cycle_summary").CycleSummary  # type: ignore
+    CycleSummary = importlib.import_module("cycle_summary").CycleSummary
+
+if TYPE_CHECKING:  # pragma: no cover - for type checking only
+    from .sample import Sample
+    from .test_result import TestResult
 
 
-class CellDataset(Document):
+class CellDataset(Document):  # type: ignore[misc]
     """Represents a collection of tests aggregated for a given cell code."""
 
     cell_code = fields.StringField(required=True, unique=True)
@@ -30,7 +36,21 @@ class CellDataset(Document):
     # Helpers
     # ------------------------------------------------------------------
     @classmethod
-    def build_from_tests(cls, test_results):
+    def get_by_cell_code(cls, code: str) -> "CellDataset | None":
+        """Return the dataset for ``code`` or ``None`` if missing."""
+        return cast("CellDataset | None", cls.objects(cell_code=code).first())
+
+    @classmethod
+    def get_or_create(cls, code: str, sample: "Sample", **attrs: Any) -> "CellDataset":
+        """Retrieve a dataset by ``code`` or create and save a new one."""
+        dataset = cls.get_by_cell_code(code)
+        if dataset is None:
+            dataset = cls(cell_code=code, sample=sample, **attrs)
+            dataset.save()
+        return dataset
+
+    @classmethod
+    def build_from_tests(cls, test_results: Iterable["TestResult"]) -> "CellDataset":
         """Construct a dataset from an iterable of :class:`TestResult` objects."""
         tests = list(test_results)
         if not tests:
@@ -57,7 +77,7 @@ class CellDataset(Document):
                 pass
         return dataset
 
-    def append_test(self, test_result):
+    def append_test(self, test_result: "TestResult") -> "CellDataset":
         """Add a test result and extend the combined cycle summaries."""
         self.tests.append(test_result)
         cycles = getattr(test_result, "cycles", None) or []
