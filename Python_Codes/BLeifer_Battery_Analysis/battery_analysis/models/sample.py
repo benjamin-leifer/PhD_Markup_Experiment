@@ -13,6 +13,11 @@ class Sample(Document):
     Use :meth:`add_note` to append timestamped notes for tracking::
 
         sample.add_note("checked performance", author="researcher")
+
+    Use :meth:`get_or_create` to fetch an existing sample or create it if
+    missing::
+
+        sample = Sample.get_or_create("Cell-42")
     """
 
     name = fields.StringField(required=True, unique=True)
