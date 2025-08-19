@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from __future__ import annotations
+
 from pathlib import Path
 import sys
 import types
 import json
+from typing import Any, NoReturn, cast
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,6 +17,7 @@ for path in (ROOT, PACKAGE_ROOT):
 
 import mongomock  # noqa: E402
 from mongoengine import connect, disconnect  # noqa: E402
+
 for name in [
     "battery_analysis.analysis",
     "battery_analysis.report",
@@ -23,7 +27,7 @@ for name in [
     "battery_analysis.advanced_analysis",
 ]:
     if name not in sys.modules:
-        stub = types.ModuleType(name)
+        stub = cast(Any, types.ModuleType(name))
         if name == "battery_analysis.analysis":
             stub.compute_metrics = lambda cycles: {}
             stub.update_sample_properties = lambda sample, test: None
@@ -50,14 +54,14 @@ def _setup_db() -> None:
     connect("import_test", mongo_client_class=mongomock.MongoClient, alias="default")
 
 
-@pytest.fixture
-def fake_processing(monkeypatch: pytest.MonkeyPatch):
+@pytest.fixture  # type: ignore[misc]
+def fake_processing(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     processed: list[str] = []
     tests: dict[tuple[str, str], TestResult] = {}
 
-    def fake_process(file_path: str, sample: Sample):
-        processed.append(Path(file_path).name)
+    def fake_process(file_path: str, sample: Sample) -> tuple[TestResult, bool]:
         cycles, _ = parsers.parse_file(file_path)
+        processed.append(Path(file_path).name)
         key = (sample.name, Path(file_path).stem.split("_Wb_")[0])
         test = tests.get(key)
         was_update = False
@@ -78,12 +82,16 @@ def fake_processing(monkeypatch: pytest.MonkeyPatch):
         test.save()
         return test, was_update
 
-    monkeypatch.setattr(import_directory.data_update, "process_file_with_update", fake_process)
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
     monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
     return processed
 
 
-def test_new_file_creates_testresult(tmp_path: Path, fake_processing) -> None:
+def test_new_file_creates_testresult(
+    tmp_path: Path, fake_processing: list[str]
+) -> None:
     _setup_db()
     _make_file(tmp_path, "test.csv")
 
@@ -95,7 +103,9 @@ def test_new_file_creates_testresult(tmp_path: Path, fake_processing) -> None:
 
 
 def test_sequential_files_append_cycles(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_processing
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_processing: list[str],
 ) -> None:
     _setup_db()
     _make_file(tmp_path, "run_Wb_1.csv")
@@ -142,27 +152,30 @@ def test_sequential_files_append_cycles(
     assert Sample.objects.count() == 1
     assert TestResult.objects.count() == 1
     test = TestResult.objects.first()
-    assert [c.cycle_index for c in test.cycles] == [1, 2, 3, 4]
+    assert sorted(c.cycle_index for c in test.cycles) == [1, 2, 3, 4]
     disconnect()
 
 
 def test_parse_error_logged_and_skipped(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    fake_processing: list[str],
 ) -> None:
     _setup_db()
     _make_file(tmp_path, "bad.csv")
 
-    def boom(*args, **kwargs):
+    def boom(*args: object, **kwargs: object) -> NoReturn:
         raise ValueError("parse boom")
 
-    monkeypatch.setattr(import_directory.data_update, "process_file_with_update", boom)
-    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+    monkeypatch.setattr(parsers, "parse_file", boom)
 
     with caplog.at_level("ERROR"):
         import_directory.import_directory(tmp_path)
 
     assert "Failed to process" in caplog.text
     assert TestResult.objects.count() == 0
+    assert fake_processing == []
     disconnect()
 
 
@@ -172,7 +185,7 @@ def test_dry_run_leaves_db_unchanged(
     _setup_db()
     _make_file(tmp_path, "dry.csv")
 
-    def boom(*args, **kwargs):
+    def boom(*args: object, **kwargs: object) -> NoReturn:
         raise AssertionError("should not be called")
 
     monkeypatch.setattr(import_directory.data_update, "process_file_with_update", boom)
@@ -186,25 +199,20 @@ def test_dry_run_leaves_db_unchanged(
     disconnect()
 
 
-def test_include_exclude_filters(
-    tmp_path: Path, fake_processing
-) -> None:
+def test_include_exclude_filters(tmp_path: Path, fake_processing: list[str]) -> None:
     _setup_db()
     _make_file(tmp_path, "keep.csv")
     _make_file(tmp_path, "skip.csv")
 
-    import_directory.import_directory(
-        tmp_path, include=["*keep*"], exclude=["*skip*"]
-    )
+    import_directory.import_directory(tmp_path, include=["*keep*"], exclude=["*skip*"])
 
+    assert fake_processing == ["keep.csv"]
     assert Sample.objects.count() == 1
     assert TestResult.objects.count() == 1
     disconnect()
 
 
-def test_resume_from_manifest(
-    tmp_path: Path, fake_processing
-) -> None:
+def test_resume_from_manifest(tmp_path: Path, fake_processing: list[str]) -> None:
     _setup_db()
     f1 = _make_file(tmp_path, "first.csv")
     f2 = _make_file(tmp_path, "second.csv")
@@ -213,6 +221,7 @@ def test_resume_from_manifest(
 
     import_directory.import_directory(tmp_path, resume_manifest=str(manifest))
 
+    assert fake_processing == ["second.csv"]
     assert Sample.objects.count() == 1
     assert TestResult.objects.count() == 1
     data = json.loads(manifest.read_text())

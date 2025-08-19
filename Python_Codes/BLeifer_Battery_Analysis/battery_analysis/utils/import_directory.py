@@ -124,7 +124,9 @@ def import_directory(
 
             try:
                 if dry_run:
-                    logger.info("Dry run: would process %s for sample %s", file_path, name)
+                    logger.info(
+                        "Dry run: would process %s for sample %s", file_path, name
+                    )
                 else:
                     sample = Sample.get_or_create(name, **attrs)
                     test, was_update = data_update.process_file_with_update(
