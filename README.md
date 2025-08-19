@@ -139,3 +139,8 @@ Existing databases should backfill the newly added `created_at` and
 `updated_at` fields on `TestResult` documents. A simple approach is to run a
 database update that sets both fields to the current time for documents where
 they are missing.
+
+Raw data files now support additional metadata. Existing `raw_data_files`
+documents can optionally be updated to link to their corresponding `Sample`
+via the new `sample` field and populate auxiliary information such as
+`operator`, `acquisition_device`, and free-form `tags` or `metadata` as needed.

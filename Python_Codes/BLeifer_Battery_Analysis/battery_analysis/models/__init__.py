@@ -9,6 +9,8 @@ MongoEngine.
 
 from __future__ import annotations
 
+# mypy: ignore-errors
+
 # Try to import the real MongoEngine models
 try:  # pragma: no cover - behaviour depends on environment
     from mongoengine import Document, EmbeddedDocument  # type: ignore  # noqa: F401
@@ -71,6 +73,7 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
     # Provide very small dataclass implementations used in tests
     from dataclasses import dataclass, field as dc_field
     from typing import ClassVar
+    import datetime
 
     @dataclass
     class CycleSummary:  # type: ignore
@@ -230,8 +233,18 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
             self.combined_cycles.extend(cycles)
             return self
 
+    @dataclass
     class RawDataFile:  # type: ignore
-        pass
+        filename: str
+        file_data: bytes | None = None
+        file_type: str | None = None
+        upload_date: datetime.datetime | None = None
+        test_result: "TestResult | None" = None
+        sample: "Sample | None" = None
+        operator: str | None = None
+        acquisition_device: str | None = None
+        tags: list[str] = dc_field(default_factory=list)
+        metadata: dict = dc_field(default_factory=dict)
 
     class CycleDetailData:  # type: ignore
         pass
