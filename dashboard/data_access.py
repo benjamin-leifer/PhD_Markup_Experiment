@@ -301,7 +301,9 @@ def add_new_material(name: str, chemistry: str, notes: str) -> None:
 
     if db_connected() and Sample is not None:  # pragma: no cover - requires database
         try:
-            Sample.get_or_create(name, chemistry=chemistry, notes=notes)
+            models.Sample.get_or_create(  # type: ignore[attr-defined]
+                name, chemistry=chemistry, notes=notes
+            )
             return
         except Exception:
             pass

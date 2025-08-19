@@ -131,20 +131,18 @@ def import_samples(file_path, update_existing=True):
     for sample_data in samples:
         try:
             # Check if the sample already exists
-            existing = models.Sample.get_by_name(sample_data["name"])
+            name = sample_data["name"]
+            attrs = {k: v for k, v in sample_data.items() if k != "name"}
+            existing = models.Sample.get_by_name(name)
 
-            if existing and update_existing:
-                # Update existing sample
-                for key, value in sample_data.items():
-                    if key != "name":  # Don't update name
+            if existing:
+                if update_existing:
+                    for key, value in attrs.items():
                         setattr(existing, key, value)
-
-                existing.save()
-                updated_count += 1
-            elif not existing:
-                # Create new sample
-                sample = models.Sample(**sample_data)
-                sample.save()
+                    existing.save()
+                    updated_count += 1
+            else:
+                models.Sample.get_or_create(name, **attrs)
                 success_count += 1
 
         except Exception as e:
