@@ -294,7 +294,9 @@ def add_new_material(name: str, chemistry: str, notes: str) -> None:
     """Store a new material entry in the database or print a message."""
     if db_connected():  # pragma: no cover - requires database
         try:
-            models.Sample(name=name, chemistry=chemistry, notes=notes).save()  # type: ignore[attr-defined]
+            models.Sample.get_or_create(  # type: ignore[attr-defined]
+                name, chemistry=chemistry, notes=notes
+            )
             return
         except Exception:
             pass

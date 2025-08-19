@@ -101,10 +101,7 @@ class MissingDataTab(ttk.Frame):
                 name = ent.get().strip()
                 if not name:
                     continue
-                comp = models.Sample.get_by_name(name)
-                if not comp:
-                    comp = models.Sample(name=name)
-                    comp.save()
+                comp = models.Sample.get_or_create(name)
                 setattr(sample, f, comp)
             sample.save()
             if rec in self.main_app.missing_data:
@@ -141,10 +138,7 @@ class MissingDataTab(ttk.Frame):
             if not name:
                 messagebox.showerror("Error", "Sample name required")
                 return
-            sample = models.Sample.get_by_name(name)
-            if not sample:
-                sample = models.Sample(name=name)
-                sample.save()
+            sample = models.Sample.get_or_create(name)
 
             # remove from old sample
             old_sample = (
