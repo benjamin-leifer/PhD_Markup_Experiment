@@ -221,6 +221,12 @@ def ingest_image_file(
         }
         fallback = {k: v for k, v in fallback.items() if v is not None}
         raw_file = store_raw_data_file(abs_path, **fallback)
+        if sample is not None:
+            raw_file.sample = sample
+
+    if sample is not None and hasattr(sample, "images"):
+        sample.images.append(raw_file)
+        sample.save()
 
     if create_thumbnail:
         generate_thumbnail(raw_file)

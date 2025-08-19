@@ -48,9 +48,19 @@ class TestResult:  # pragma: no cover - placeholder
     pass
 
 
+class Sample:
+    def __init__(self):
+        self.images: list = []
+        self.saved = False
+
+    def save(self):
+        self.saved = True
+
+
 models_stub = types.ModuleType("battery_analysis.models")
 models_stub.RawDataFile = RawDataFile
 models_stub.TestResult = TestResult
+models_stub.Sample = Sample
 sys.modules["battery_analysis.models"] = models_stub
 
 utils_stub = types.ModuleType("battery_analysis.utils")
@@ -119,5 +129,17 @@ def test_ingest_image_file_generates_thumbnail():
         thumb = stored_files[1]
         assert thumb.file_type == "thumbnail"
         assert thumb.tags == ["thumbnail"]
+    finally:
+        os.remove(img_path)
+
+
+def test_ingest_image_file_links_sample():
+    stored_files.clear()
+    img_path = _create_image((200, 200))
+    sample = Sample()
+    try:
+        raw = ingest_image_file(img_path, sample=sample)
+        assert raw in sample.images
+        assert sample.saved
     finally:
         os.remove(img_path)
