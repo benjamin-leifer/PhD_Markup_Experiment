@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import os
 import tempfile
+from io import BytesIO
 from pathlib import Path
-from typing import Iterable, Iterator, Union, Any
+from typing import Any, Iterable, Iterator, Union
+
+from PIL import Image
+
+from battery_analysis.models import RawDataFile
 
 from .file_storage import store_raw_data_file
 
@@ -103,6 +108,75 @@ def validate_image(
         )
 
 
+def generate_thumbnail(
+    raw_file: RawDataFile, size: tuple[int, int] = (256, 256)
+) -> RawDataFile:
+    """Create and store a thumbnail for ``raw_file``.
+
+    The original image is read from GridFS, resized using :mod:`Pillow`, and
+    stored as a new :class:`RawDataFile` with ``file_type='thumbnail'`` and a
+    ``"thumbnail"`` tag. Basic metadata such as image dimensions are recorded
+    on the stored document.
+
+    Parameters
+    ----------
+    raw_file:
+        The original image file stored in GridFS.
+    size:
+        Maximum size (width, height) of the generated thumbnail. Defaults to
+        ``(256, 256)``.
+
+    Returns
+    -------
+    RawDataFile
+        The stored thumbnail document.
+    """
+
+    raw_file.file_data.seek(0)
+    image_bytes = raw_file.file_data.read()
+
+    with Image.open(BytesIO(image_bytes)) as img:
+        img.thumbnail(size)
+        buf = BytesIO()
+        img.save(buf, format=img.format or "PNG")
+        buf.seek(0)
+
+        suffix = f".{(img.format or 'png').lower()}"
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(buf.read())
+            temp_path = tmp.name
+
+    try:
+        try:
+            thumb = store_raw_data_file(
+                temp_path,
+                sample=getattr(raw_file, "sample", None),
+                test_result=getattr(raw_file, "test_result", None),
+                tags=["thumbnail"],
+                file_type="thumbnail",
+            )
+        except TypeError:
+            thumb = store_raw_data_file(
+                temp_path,
+                test_result=getattr(raw_file, "test_result", None),
+                file_type="thumbnail",
+            )
+            if getattr(raw_file, "sample", None) is not None:
+                thumb.sample = raw_file.sample
+            thumb.tags = ["thumbnail"]
+
+        thumb.metadata = {
+            "width": img.width,
+            "height": img.height,
+            "source_file_id": str(raw_file.id),
+            "format": img.format,
+        }
+        thumb.save()
+        return thumb
+    finally:
+        os.remove(temp_path)
+
+
 def ingest_image_file(
     path: Union[str, os.PathLike[str]],
     sample: Any = None,
@@ -110,6 +184,7 @@ def ingest_image_file(
     operator: Any = None,
     device: Any = None,
     tags: Any = None,
+    create_thumbnail: bool = False,
 ) -> Any:
     """Validate and store an image file in persistent storage.
 
@@ -136,7 +211,7 @@ def ingest_image_file(
     metadata = {k: v for k, v in metadata.items() if v is not None}
 
     try:
-        return store_raw_data_file(abs_path, **metadata)
+        raw_file = store_raw_data_file(abs_path, **metadata)
     except TypeError:
         # Fallback for versions of store_raw_data_file that don't support
         # the extended metadata parameters.
@@ -145,4 +220,9 @@ def ingest_image_file(
             "file_type": "image",
         }
         fallback = {k: v for k, v in fallback.items() if v is not None}
-        return store_raw_data_file(abs_path, **fallback)
+        raw_file = store_raw_data_file(abs_path, **fallback)
+
+    if create_thumbnail:
+        generate_thumbnail(raw_file)
+
+    return raw_file
