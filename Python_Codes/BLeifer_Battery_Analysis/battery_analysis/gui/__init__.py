@@ -34,7 +34,17 @@ def __getattr__(name):
                 "scrollable_frame"
             ).ScrollableFrame
         return _ScrollableFrame
+    if name == "launch_doe_builder":
+        try:
+            from .doe_builder_gui import launch as _launch_doe_builder
+        except ImportError:  # pragma: no cover - allow running as script
+            import importlib
+
+            _launch_doe_builder = importlib.import_module(
+                "doe_builder_gui"
+            ).launch
+        return _launch_doe_builder
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-__all__ = ["BatteryAnalysisApp", "ScrollableFrame"]
+__all__ = ["BatteryAnalysisApp", "ScrollableFrame", "launch_doe_builder"]
