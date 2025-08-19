@@ -30,6 +30,7 @@ try:
         comparison_tab,
         document_flow_tab,
         missing_data_tab,
+        doe_tab,
     )
     from . import auth
     from . import preferences
@@ -47,6 +48,7 @@ except ImportError:  # pragma: no cover - allow running as script
     comparison_tab = importlib.import_module("comparison_tab")
     document_flow_tab = importlib.import_module("document_flow_tab")
     missing_data_tab = importlib.import_module("missing_data_tab")
+    doe_tab = importlib.import_module("doe_tab")
     auth = importlib.import_module("auth")
     preferences = importlib.import_module("preferences")
 
@@ -190,6 +192,11 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                     missing_data_tab.layout(),
                     label="Missing Data",
                     value="missing-data",
+                ),
+                dcc.Tab(
+                    doe_tab.layout(),
+                    label="DOE Heatmap",
+                    value="doe-heatmap",
                 ),
                 dcc.Tab(
                     trait_filter_tab.layout(),
@@ -604,6 +611,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
     eis_tab.register_callbacks(app)
     document_flow_tab.register_callbacks(app)
     missing_data_tab.register_callbacks(app)
+    doe_tab.register_callbacks(app)
 
     return app
 
