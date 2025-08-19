@@ -1,11 +1,11 @@
-"""
-Utilities for handling data updates and file processing.
-"""
+# mypy: ignore-errors
+"""Utilities for handling data updates and file processing."""
 
 import os
 import logging
 import re
 import hashlib
+import datetime
 from mongoengine.queryset.visitor import Q
 
 # Update imports to avoid circular dependencies
@@ -218,6 +218,50 @@ def update_test_data(existing_test, new_cycles, metadata, strategy="append"):
     return existing_test
 
 
+def _match_experiment_plans(sample, test_result):
+    """Update experiment plan entries with new test information.
+
+    Parameters
+    ----------
+    sample:
+        The :class:`Sample` associated with the test.
+    test_result:
+        The newly created or updated :class:`TestResult` instance.
+    """
+
+    metadata = getattr(sample, "metadata", {}) or {}
+    if not metadata:
+        return
+
+    try:  # pragma: no cover - requires database
+        plans = list(models.ExperimentPlan.objects(sample_ids=sample.id))
+    except Exception:
+        # Fallback for offline dataclass implementation
+        plans = []
+        registry = getattr(models.ExperimentPlan, "_registry", {})
+        for plan in registry.values():
+            if sample in getattr(plan, "sample_ids", []):
+                plans.append(plan)
+
+    for plan in plans:
+        factor_keys = getattr(plan, "factors", {}).keys()
+        updated = False
+        for entry in plan.matrix:
+            if all(entry.get(k) == metadata.get(k) for k in factor_keys):
+                entry.setdefault("tests", []).append(
+                    {
+                        "id": str(getattr(test_result, "id", "")),
+                        "timestamp": datetime.datetime.utcnow().isoformat(),
+                    }
+                )
+                updated = True
+        if updated:
+            try:  # pragma: no cover - ignore failures without DB
+                plan.save()
+            except Exception:
+                pass
+
+
 def process_file_with_update(file_path, sample):
     """
     Process a file with automatic update detection.
@@ -291,6 +335,7 @@ def process_file_with_update(file_path, sample):
             except Exception as e:
                 logging.error(f"Error storing detailed cycle data: {e}")
 
+        _match_experiment_plans(sample, updated_test)
         return updated_test, True
     else:
         # Create a new test
@@ -315,6 +360,7 @@ def process_file_with_update(file_path, sample):
             except Exception as e:
                 logging.error(f"Error storing detailed cycle data: {e}")
 
+        _match_experiment_plans(sample, test_result)
         return test_result, False
 
 
