@@ -18,8 +18,8 @@ from battery_analysis.utils import data_update  # noqa: E402
 from battery_analysis import parsers  # noqa: E402
 
 
-def _make_file(tmp_path: Path, name: str) -> Path:
-    path = tmp_path / "S1" / name
+def _make_file(tmp_path: Path, rel: str) -> Path:
+    path = tmp_path / rel
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("dummy")
     return path
@@ -32,7 +32,7 @@ def _setup_db() -> None:
 
 def test_new_file_creates_testresult(tmp_path: Path) -> None:
     _setup_db()
-    _make_file(tmp_path, "test.csv")
+    _make_file(tmp_path, "S1/test.csv")
 
     import_directory.import_directory(tmp_path)
 
@@ -95,8 +95,9 @@ def test_sequential_files_append_cycles(
 
 def test_include_exclude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _setup_db()
-    keep = _make_file(tmp_path, "keep.csv")
-    _make_file(tmp_path, "skip.csv")
+    keep = _make_file(tmp_path, "keep/keep.csv")
+    _make_file(tmp_path, "other/other.csv")
+    _make_file(tmp_path, "skip/skip.csv")
 
     processed: list[Path] = []
 
@@ -109,7 +110,9 @@ def test_include_exclude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(data_update, "process_file_with_update", fake_process)
     monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
 
-    import_directory.import_directory(tmp_path, include=["*keep*"], exclude=["*skip*"])
+    import_directory.import_directory(
+        tmp_path, include=["*keep*", "keep/*"], exclude=["skip*"]
+    )
 
     assert processed == [keep]
     disconnect()

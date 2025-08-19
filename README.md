@@ -79,6 +79,9 @@ Limit the files processed with ``--include`` and ``--exclude`` glob patterns::
     python -m battery_analysis.utils.import_directory DATA_DIR \
         --include "*_Wb_*.csv" --exclude "*/old/*"
 
+Repeat the options to provide multiple patterns.  Globs are evaluated against
+paths relative to ``DATA_DIR``.
+
 ## Updating cell datasets
 
 Use the ``update_cell_dataset_cli.py`` script to keep processed datasets in

@@ -58,6 +58,13 @@ def import_directory(
         When ``True`` the parser is invoked to extract metadata (such as a
         ``sample_code``) to determine the sample.  Otherwise the parent
         directory name is used.
+    include:
+        List of glob patterns for paths to include.  Patterns are matched
+        against the relative directory or file path within ``root``.  When
+        omitted, all files are considered.
+    exclude:
+        List of glob patterns for paths to exclude.  Paths matching any pattern
+        are skipped.
 
     Returns
     -------
@@ -80,11 +87,14 @@ def import_directory(
         rel_dir = os.path.relpath(dirpath, root)
         if exclude and _matches(rel_dir, exclude):
             continue
-        if include and not _matches(rel_dir, include):
+        if include and rel_dir != "." and not _matches(rel_dir, include):
             continue
 
         dirnames[:] = [
-            d for d in dirnames if not _matches(os.path.join(rel_dir, d), exclude)
+            d
+            for d in dirnames
+            if not _matches(os.path.join(rel_dir, d), exclude)
+            and (not include or _matches(os.path.join(rel_dir, d), include))
         ]
 
         for filename in filenames:
@@ -156,13 +166,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--include",
         action="append",
-        default=[],
+        default=None,
         help="Glob pattern of files or directories to include (may repeat)",
     )
     parser.add_argument(
         "--exclude",
         action="append",
-        default=[],
+        default=None,
         help="Glob pattern of files or directories to exclude (may repeat)",
     )
     args = parser.parse_args(argv)
