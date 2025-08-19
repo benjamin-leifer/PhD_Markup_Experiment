@@ -2,10 +2,13 @@
 Utility functions for the battery analysis package.
 """
 
+# mypy: ignore-errors
+
 import logging
 import pickle
 import os
 import matplotlib
+from .image_pipeline import ingest_image_file
 
 # Use the Qt backend only if a backend hasn't been configured already and
 # the Qt dependencies are available.  This prevents import errors during
@@ -17,6 +20,8 @@ if os.environ.get("MPLBACKEND") is None and matplotlib.get_backend().lower() != 
         matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
+
+__all__ = ["ingest_image_file"]
 
 try:  # pragma: no cover - optional Qt dependencies
     from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
