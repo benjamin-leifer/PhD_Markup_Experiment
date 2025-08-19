@@ -1,5 +1,7 @@
 import os
 import sys
+from pathlib import Path
+
 import pytest
 
 TESTS_DIR = os.path.dirname(__file__)
@@ -12,6 +14,8 @@ doe_builder = pytest.importorskip("battery_analysis.utils.doe_builder")  # noqa:
 generate_combinations = doe_builder.generate_combinations
 save_plan = doe_builder.save_plan
 main = doe_builder.main
+export_csv = doe_builder.export_csv
+export_pdf = doe_builder.export_pdf
 
 
 def test_generate_combinations_cartesian_product() -> None:
@@ -47,3 +51,14 @@ def test_status_reports_remaining(
     main(["--status", "status_demo"])
     captured = capsys.readouterr().out
     assert "Remaining combinations: 0" in captured
+
+
+def test_export_creates_files(tmp_path: Path) -> None:
+    factors = {"A": [1], "B": [2]}
+    plan = save_plan("export_demo", factors)
+    csv_path = tmp_path / "plan.csv"
+    pdf_path = tmp_path / "plan.pdf"
+    export_csv(plan, csv_path)
+    export_pdf(plan, pdf_path)
+    assert csv_path.is_file()
+    assert pdf_path.is_file()

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import filedialog, messagebox, ttk
+from typing import Any, Dict, cast
 
-from ..utils.doe_builder import generate_combinations, save_plan
+from ..models import ExperimentPlan
+from ..utils.doe_builder import export_csv, export_pdf, generate_combinations, save_plan
 
 
 class DOEBuilderApp(tk.Tk):
@@ -26,8 +28,16 @@ class DOEBuilderApp(tk.Tk):
 
         btn_frame = ttk.Frame(self)
         btn_frame.grid(row=2, column=0, columnspan=2, pady=5)
-        ttk.Button(btn_frame, text="Preview", command=self.on_preview).pack(side=tk.LEFT)
+        ttk.Button(btn_frame, text="Preview", command=self.on_preview).pack(
+            side=tk.LEFT
+        )
         ttk.Button(btn_frame, text="Save", command=self.on_save).pack(side=tk.LEFT)
+        ttk.Button(btn_frame, text="Export CSV", command=self.on_export_csv).pack(
+            side=tk.LEFT
+        )
+        ttk.Button(btn_frame, text="Export PDF", command=self.on_export_pdf).pack(
+            side=tk.LEFT
+        )
 
         self.preview = tk.Text(self, width=40, height=10, state="disabled")
         self.preview.grid(row=3, column=0, columnspan=2, sticky="nsew")
@@ -36,10 +46,10 @@ class DOEBuilderApp(tk.Tk):
         self.grid_rowconfigure(3, weight=1)
 
     # ------------------------------------------------------------------
-    def parse_factors(self) -> dict | None:
+    def parse_factors(self) -> Dict[str, Any] | None:
         text = self.factors_text.get("1.0", tk.END)
         try:
-            return json.loads(text)
+            return cast(Dict[str, Any], json.loads(text))
         except Exception as exc:  # pragma: no cover - user input
             messagebox.showerror("Invalid JSON", str(exc))
             return None
@@ -56,21 +66,49 @@ class DOEBuilderApp(tk.Tk):
         self.preview.configure(state="disabled")
 
     def on_save(self) -> None:
-        factors = self.parse_factors()
-        if factors is None:
+        plan = self._build_plan()
+        if plan is None:
             return
-        name = self.name_var.get().strip()
-        if not name:
-            messagebox.showerror("Missing Name", "Please enter a plan name")
-            return
-        plan = save_plan(name, factors)
         messagebox.showinfo(
             "Plan Saved",
             f"Saved '{plan.name}' with {len(plan.matrix)} combinations",
         )
 
+    def on_export_csv(self) -> None:
+        plan = self._build_plan()
+        if plan is None:
+            return
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".csv", filetypes=[("CSV Files", "*.csv")]
+        )
+        if filename:
+            export_csv(plan, filename)
+            messagebox.showinfo("Exported", f"CSV exported to {filename}")
+
+    def on_export_pdf(self) -> None:
+        plan = self._build_plan()
+        if plan is None:
+            return
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".pdf", filetypes=[("PDF Files", "*.pdf")]
+        )
+        if filename:
+            export_pdf(plan, filename)
+            messagebox.showinfo("Exported", f"PDF exported to {filename}")
+
+    def _build_plan(self) -> ExperimentPlan | None:
+        factors = self.parse_factors()
+        if factors is None:
+            return None
+        name = self.name_var.get().strip()
+        if not name:
+            messagebox.showerror("Missing Name", "Please enter a plan name")
+            return None
+        return save_plan(name, factors)
+
 
 # ----------------------------------------------------------------------
+
 
 def launch() -> None:
     """Launch the DOE builder GUI."""
