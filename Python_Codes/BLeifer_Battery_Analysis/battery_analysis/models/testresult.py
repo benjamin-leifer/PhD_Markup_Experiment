@@ -1,6 +1,7 @@
 # battery_analysis/models/test_result.py
 
 import datetime
+import os
 import re
 from mongoengine import Document, fields, ValidationError
 
@@ -38,6 +39,17 @@ class TestResult(Document):
         help_text="Type of electrochemical test",
     )
     name = fields.StringField(required=False, help_text="Test name or file identifier")
+    # Normalized identifiers for efficient matching
+    base_test_name = fields.StringField(
+        required=False, help_text="Normalized test name for matching"
+    )
+    base_file_name = fields.StringField(
+        required=False, help_text="Normalized file name for matching"
+    )
+    test_id = fields.StringField(required=False, help_text="Tester-provided ID")
+    file_hash = fields.StringField(
+        required=False, help_text="Hash of the raw data file for deduplication"
+    )
     cell_code = fields.StringField(
         required=False, help_text="Identifier derived from name"
     )
@@ -84,6 +96,10 @@ class TestResult(Document):
         "indexes": [
             "sample",
             "name",
+            "base_test_name",
+            "base_file_name",
+            "test_id",
+            "file_hash",
             "cell_code",
             "date",
             "sample.anode",
@@ -111,7 +127,7 @@ class TestResult(Document):
         except Exception:  # pragma: no cover - best-effort update
             pass
         return result
-      
+
     def add_note(self, text: str, author: str | None = None) -> None:
         """Append a note entry to :attr:`notes_log` and persist the change."""
 
@@ -124,12 +140,28 @@ class TestResult(Document):
         )
         self.save()
 
-
     def clean(self):
         """Custom validation and automatic protocol assignment."""
         self.updated_at = datetime.datetime.utcnow()
         # Merge metadata from parent hierarchy
         self.metadata = inherit_metadata(self)
+
+        # Populate normalized identifier fields if not provided
+        def _normalize(value: str | None) -> str | None:
+            if not value:
+                return None
+            base = value.split("/")[-1]  # Ensure only file name portion
+            base = os.path.splitext(base)[0]
+            return re.sub(r"_wb_\d+$", "", base, flags=re.IGNORECASE)
+
+        try:
+            if not self.base_test_name and self.name:
+                self.base_test_name = _normalize(self.name)
+            if not self.base_file_name and self.file_path:
+                self.base_file_name = _normalize(self.file_path)
+        except Exception:
+            # Normalization is best effort; continue even if it fails
+            pass
 
         if not self.cell_code and self.name:
             match = re.search(r"(CN\d+)", self.name)

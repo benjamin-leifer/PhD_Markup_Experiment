@@ -89,10 +89,10 @@ previous stages.
 
 ## Self-referential `Sample` documents
 
-Many parts of the system—cells, electrodes, or even sub-components—share the
-same underlying `Sample` document. Relationships between these pieces are
-represented through self-referential fields on `Sample`, letting one sample link
-to another without introducing additional models.
+All components—cells, electrodes, and sub-components—are stored as `Sample`
+documents. Each component links to others through self-referential fields on
+`Sample`, allowing one sample to reference another without introducing
+additional models.
 
 ```python
 from battery_analysis.models import Sample
