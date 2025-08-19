@@ -18,11 +18,13 @@ try:  # pragma: no cover - behaviour depends on environment
         from .cycle_summary import CycleSummary  # type: ignore
         from .sample import Sample  # type: ignore
 
+        # Convenience export to create or fetch samples by name
         get_or_create_sample = Sample.get_or_create  # type: ignore
         from .testresult import TestResult, CycleDetailData  # type: ignore
         from .raw_file import RawDataFile  # type: ignore
         from .test_protocol import TestProtocol  # type: ignore
         from .cell_dataset import CellDataset  # type: ignore
+        from .experiment_plan import ExperimentPlan  # type: ignore
         from .stages import (
             CathodeMaterial,
             Slurry,
@@ -35,6 +37,7 @@ try:  # pragma: no cover - behaviour depends on environment
 
         CycleSummary = importlib.import_module("cycle_summary").CycleSummary  # type: ignore
         Sample = importlib.import_module("sample").Sample  # type: ignore
+        # Convenience export to create or fetch samples by name
         get_or_create_sample = Sample.get_or_create  # type: ignore
         TestResult = importlib.import_module("testresult").TestResult  # type: ignore
         CycleDetailData = importlib.import_module("testresult").CycleDetailData  # type: ignore
@@ -57,6 +60,7 @@ try:  # pragma: no cover - behaviour depends on environment
         "CycleDetailData",
         "TestProtocol",
         "CellDataset",
+        "ExperimentPlan",
         "CathodeMaterial",
         "Slurry",
         "Electrode",
@@ -238,6 +242,24 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         summary: str
         c_rates: list = dc_field(default_factory=list)
 
+    @dataclass
+    class ExperimentPlan:  # type: ignore
+        name: str
+        factors: dict
+        matrix: list
+        sample_ids: list = dc_field(default_factory=list)
+
+        _registry: ClassVar[dict[str, "ExperimentPlan"]] = {}
+
+        @classmethod
+        def get_by_name(cls, name: str):
+            return cls._registry.get(name)
+
+        def save(self) -> "ExperimentPlan":
+            self.__class__._registry[self.name] = self
+            return self
+
+    # Convenience export to create or fetch samples by name
     get_or_create_sample = Sample.get_or_create
 
     __all__ = [
@@ -249,6 +271,7 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         "CycleDetailData",
         "TestProtocol",
         "CellDataset",
+        "ExperimentPlan",
         "CathodeMaterial",
         "Slurry",
         "Electrode",

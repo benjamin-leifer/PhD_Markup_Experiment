@@ -1368,28 +1368,26 @@ class DataUploadTab(ttk.Frame):
                             if samples:
                                 sample = samples.first()
 
-                    # Create a new sample if no match found
-                    if not sample:
-                        if sample_code:
+                        if not sample:
                             self.main_app.log_message(
                                 f"No matching sample found for code '{sample_code}', creating new sample"
                             )
-                            sample = models.Sample(name=sample_code)
-                            sample.save()
+                            sample = models.Sample.get_or_create(sample_code)  # type: ignore[attr-defined]
                             self.main_app.log_message(
                                 f"Created new sample: {sample.name}"
                             )
+                            unmatched_count += 1
                         else:
                             self.main_app.log_message(
-                                "No sample code detected, using default sample"
+                                f"Matched file to sample: {sample.name}"
                             )
-                            sample = default_sample
-                        unmatched_count += 1
+                            processed_samples[sample_code] = sample
                     else:
                         self.main_app.log_message(
-                            f"Matched file to sample: {sample.name}"
+                            "No sample code detected, using default sample"
                         )
-                        processed_samples[sample_code] = sample
+                        sample = default_sample
+                        unmatched_count += 1
 
                     # Add file path to metadata
                     if metadata is None:
@@ -1542,28 +1540,26 @@ class DataUploadTab(ttk.Frame):
                             if samples:
                                 sample = samples.first()
 
-                    # Create a new sample if no match found
-                    if not sample:
-                        if sample_code:
+                        if not sample:
                             self.main_app.log_message(
                                 f"No matching sample found for code '{sample_code}', creating new sample"
                             )
-                            sample = models.Sample(name=sample_code)
-                            sample.save()
+                            sample = models.Sample.get_or_create(sample_code)  # type: ignore[attr-defined]
                             self.main_app.log_message(
                                 f"Created new sample: {sample.name}"
                             )
+                            unmatched_count += 1
                         else:
                             self.main_app.log_message(
-                                "No sample code detected, using default sample"
+                                f"Matched file to sample: {sample.name}"
                             )
-                            sample = default_sample
-                        unmatched_count += 1
+                            processed_samples[sample_code] = sample
                     else:
                         self.main_app.log_message(
-                            f"Matched file to sample: {sample.name}"
+                            "No sample code detected, using default sample"
                         )
-                        processed_samples[sample_code] = sample
+                        sample = default_sample
+                        unmatched_count += 1
 
                     # Add file path to metadata
                     if metadata is None:

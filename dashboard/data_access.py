@@ -27,9 +27,11 @@ from reportlab.pdfgen import canvas
 
 try:  # pragma: no cover - database optional
     from battery_analysis import models
+    from battery_analysis.models import Sample
     from mongoengine import connect
 except Exception:  # pragma: no cover - allow running without DB
     models = None
+    Sample = None
     connect = None
 
 from Mongodb_implementation import get_client
@@ -81,7 +83,7 @@ def db_connected() -> bool:
     global _DB_CONNECTED
     if _DB_CONNECTED is not None:
         return _DB_CONNECTED
-    if models is None or connect is None:
+    if models is None or connect is None or Sample is None:
         _DB_CONNECTED = False
         return False
     db_name = os.getenv("BATTERY_DB_NAME", "battery_test_db")
@@ -103,7 +105,7 @@ def db_connected() -> bool:
                 alias="default",
                 serverSelectionTimeoutMS=2000,
             )
-        models.Sample.objects.first()  # type: ignore[attr-defined]
+        Sample.objects.first()  # type: ignore[attr-defined]
         _DB_CONNECTED = True
         return True
     except Exception:
@@ -128,7 +130,7 @@ def get_cell_dataset(cell_code: str):
         return None
 
     try:  # pragma: no cover - depends on MongoDB
-        return models.CellDataset.objects.get(cell_code=cell_code)  # type: ignore[attr-defined]
+        return models.CellDataset.get_by_cell_code(cell_code)  # type: ignore[attr-defined]
     except Exception:
         return None
 
@@ -291,10 +293,17 @@ def get_test_metadata(cell_id: str) -> Dict:
 
 
 def add_new_material(name: str, chemistry: str, notes: str) -> None:
-    """Store a new material entry in the database or print a message."""
-    if db_connected():  # pragma: no cover - requires database
+    """Store a new material entry or log the details.
+
+    When the database is available the helper uses
+    :func:`Sample.get_or_create` to ensure a unique entry for the material.
+    """
+
+    if db_connected() and Sample is not None:  # pragma: no cover - requires database
         try:
-            models.Sample(name=name, chemistry=chemistry, notes=notes).save()  # type: ignore[attr-defined]
+            models.Sample.get_or_create(  # type: ignore[attr-defined]
+                name, chemistry=chemistry, notes=notes
+            )
             return
         except Exception:
             pass

@@ -1,6 +1,7 @@
 # battery_analysis/models/test_result.py
 
 import datetime
+import os
 import re
 from mongoengine import Document, fields, ValidationError
 
@@ -17,6 +18,13 @@ except ImportError:  # pragma: no cover - allow running as script
 
 
 class TestResult(Document):
+    """Stores metadata and results for a single electrochemical test.
+
+    Notes can be logged during analysis with :meth:`add_note`::
+
+        test_result.add_note("processed cycle 1", author="analyst")
+    """
+
     # Remove CASCADE to break circular dependency
     sample = fields.LazyReferenceField("Sample", required=True)
     parent = fields.ReferenceField("Cell", required=False)
@@ -31,6 +39,17 @@ class TestResult(Document):
         help_text="Type of electrochemical test",
     )
     name = fields.StringField(required=False, help_text="Test name or file identifier")
+    # Normalized identifiers for efficient matching
+    base_test_name = fields.StringField(
+        required=False, help_text="Normalized test name for matching"
+    )
+    base_file_name = fields.StringField(
+        required=False, help_text="Normalized file name for matching"
+    )
+    test_id = fields.StringField(required=False, help_text="Tester-provided ID")
+    file_hash = fields.StringField(
+        required=False, help_text="Hash of the raw data file for deduplication"
+    )
     cell_code = fields.StringField(
         required=False, help_text="Identifier derived from name"
     )
@@ -51,6 +70,7 @@ class TestResult(Document):
     capacity_retention = fields.FloatField(required=False)
     avg_coulombic_eff = fields.FloatField(required=False)
     avg_energy_efficiency = fields.FloatField(required=False)
+    median_internal_resistance = fields.FloatField(required=False)
 
     # New fields for automated protocol detection
     last_cycle_complete = fields.BooleanField(required=False)
@@ -68,12 +88,18 @@ class TestResult(Document):
         default=list,
         help_text="List of timestamped note entries",
     )
+    created_at = fields.DateTimeField(default=datetime.datetime.utcnow)
+    updated_at = fields.DateTimeField(default=datetime.datetime.utcnow)
 
     meta = {
         "collection": "test_results",
         "indexes": [
             "sample",
             "name",
+            "base_test_name",
+            "base_file_name",
+            "test_id",
+            "file_hash",
             "cell_code",
             "date",
             "sample.anode",
@@ -83,10 +109,59 @@ class TestResult(Document):
         ],
     }
 
+    # ------------------------------------------------------------------
+    # Persistence helpers
+    # ------------------------------------------------------------------
+    def save(self, *args, **kwargs):  # type: ignore[override]
+        """Persist the test result and refresh sample aggregates."""
+        result = super().save(*args, **kwargs)
+        try:
+            sample = (
+                self.sample.fetch() if hasattr(self.sample, "fetch") else self.sample
+            )
+            if sample is not None:
+                existing_ids = [getattr(ref, "id", None) for ref in sample.tests]
+                if self.id not in existing_ids:
+                    sample.tests.append(self)
+                sample.recompute_metrics()
+        except Exception:  # pragma: no cover - best-effort update
+            pass
+        return result
+
+    def add_note(self, text: str, author: str | None = None) -> None:
+        """Append a note entry to :attr:`notes_log` and persist the change."""
+
+        self.notes_log.append(
+            {
+                "text": text,
+                "author": author,
+                "timestamp": datetime.datetime.utcnow(),
+            }
+        )
+        self.save()
+
     def clean(self):
         """Custom validation and automatic protocol assignment."""
+        self.updated_at = datetime.datetime.utcnow()
         # Merge metadata from parent hierarchy
         self.metadata = inherit_metadata(self)
+
+        # Populate normalized identifier fields if not provided
+        def _normalize(value: str | None) -> str | None:
+            if not value:
+                return None
+            base = value.split("/")[-1]  # Ensure only file name portion
+            base = os.path.splitext(base)[0]
+            return re.sub(r"_wb_\d+$", "", base, flags=re.IGNORECASE)
+
+        try:
+            if not self.base_test_name and self.name:
+                self.base_test_name = _normalize(self.name)
+            if not self.base_file_name and self.file_path:
+                self.base_file_name = _normalize(self.file_path)
+        except Exception:
+            # Normalization is best effort; continue even if it fails
+            pass
 
         if not self.cell_code and self.name:
             match = re.search(r"(CN\d+)", self.name)
@@ -133,6 +208,7 @@ class TestResult(Document):
                     self.protocol = proto
             except Exception:  # pragma: no cover - summarization is optional
                 pass
+        super().clean()
 
     def full_clean(self) -> None:
         """Run MongoEngine validation, including :meth:`clean`."""
