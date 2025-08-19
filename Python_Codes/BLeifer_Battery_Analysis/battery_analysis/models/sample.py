@@ -18,6 +18,10 @@ class Sample(Document):
     missing::
 
         sample = Sample.get_or_create("Cell-42")
+
+    Link an image to the sample using :func:`ingest_image_file`::
+
+        ingest_image_file("microscope.png", sample=sample)
     """
 
     name = fields.StringField(required=True, unique=True)
@@ -34,6 +38,7 @@ class Sample(Document):
     electrolyte = fields.LazyReferenceField("self", required=False)
     # Remove CASCADE to break circular dependency
     tests = fields.ListField(fields.LazyReferenceField("TestResult"))
+    images = fields.ListField(fields.LazyReferenceField("RawDataFile"))
     default_dataset = ReferenceField("CellDataset")
 
     created_at = fields.DateTimeField(default=datetime.datetime.utcnow)
