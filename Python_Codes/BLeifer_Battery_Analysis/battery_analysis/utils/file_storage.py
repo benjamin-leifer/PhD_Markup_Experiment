@@ -94,3 +94,39 @@ def get_raw_data_file(test_id, as_file_path=False):
     else:
         # Return the raw bytes
         return raw_file.file_data.read()
+
+
+def get_raw_data_file_by_id(file_id, as_file_path=False):
+    """Retrieve a raw data file directly by its ``RawDataFile`` ID.
+
+    Parameters
+    ----------
+    file_id:
+        The ``id`` of the :class:`~battery_analysis.models.RawDataFile` to
+        retrieve.
+    as_file_path:
+        When ``True``, the file is written to a temporary location and the
+        path is returned. When ``False`` (default) the raw bytes are returned.
+
+    Returns
+    -------
+    bytes | str
+        The file's bytes or the temporary file path, depending on
+        ``as_file_path``.
+    """
+
+    raw_file = RawDataFile.objects(id=file_id).first()
+    if not raw_file:
+        raise ValueError(f"No raw data file found with id {file_id}")
+
+    raw_file.file_data.seek(0)
+    if as_file_path:
+        import tempfile
+
+        ext = os.path.splitext(raw_file.filename)[1]
+        temp_file = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+        temp_file.write(raw_file.file_data.read())
+        temp_file.close()
+        return temp_file.name
+
+    return raw_file.file_data.read()

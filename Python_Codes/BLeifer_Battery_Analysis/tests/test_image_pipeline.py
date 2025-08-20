@@ -21,6 +21,8 @@ sys.modules["battery_analysis"] = package_stub
 
 
 class RawDataFile:
+    _id_counter = 0
+
     def __init__(
         self,
         file_data,
@@ -31,6 +33,7 @@ class RawDataFile:
         tags=None,
         metadata=None,
     ):
+        RawDataFile._id_counter += 1
         self.file_data = file_data
         self.filename = filename
         self.file_type = file_type
@@ -38,7 +41,7 @@ class RawDataFile:
         self.test_result = test_result
         self.tags = tags
         self.metadata = metadata or {}
-        self.id = "dummy"
+        self.id = f"id{RawDataFile._id_counter}"
 
     def save(self):
         pass
@@ -77,6 +80,35 @@ spec.loader.exec_module(image_pipeline)
 stored_files: list[RawDataFile] = []
 
 
+def _objects(**query):
+    results = []
+    for rf in stored_files:
+        match = True
+        for key, value in query.items():
+            if key == "metadata__source_file_id":
+                if rf.metadata.get("source_file_id") != value:
+                    match = False
+                    break
+            elif key == "tags":
+                if not rf.tags or value not in rf.tags:
+                    match = False
+                    break
+            elif getattr(rf, key) != value:
+                match = False
+                break
+        if match:
+            results.append(rf)
+
+    class _Query(list):
+        def first(self):  # pragma: no cover - trivial
+            return self[0] if self else None
+
+    return _Query(results)
+
+
+RawDataFile.objects = staticmethod(_objects)  # type: ignore[attr-defined]
+
+
 def fake_store_raw_data_file(path, **kwargs):
     with open(path, "rb") as f:
         data = f.read()
@@ -94,9 +126,26 @@ def fake_store_raw_data_file(path, **kwargs):
 
 
 image_pipeline.store_raw_data_file = fake_store_raw_data_file
+ 
 
+def fake_get_raw_data_file_by_id(file_id, as_file_path=False):
+    rf = next((r for r in stored_files if r.id == file_id), None)
+    if rf is None:
+        raise ValueError("not found")
+    data = rf.file_data.getvalue()
+    if as_file_path:
+        tmp = tempfile.NamedTemporaryFile(delete=False)
+        tmp.write(data)
+        tmp.close()
+        return tmp.name
+    return data
+
+
+image_pipeline.get_raw_data_file_by_id = fake_get_raw_data_file_by_id
 generate_thumbnail = image_pipeline.generate_thumbnail
 ingest_image_file = image_pipeline.ingest_image_file
+get_image = image_pipeline.get_image
+get_thumbnail = image_pipeline.get_thumbnail
 
 
 def _create_image(size=(512, 512)):
@@ -143,3 +192,24 @@ def test_ingest_image_file_links_sample():
         assert sample.saved
     finally:
         os.remove(img_path)
+
+
+def test_get_image_and_thumbnail():
+    stored_files.clear()
+    img_path = _create_image((128, 128))
+    path = ""
+    try:
+        raw = ingest_image_file(img_path, create_thumbnail=True)
+
+        data = get_image(raw.id)
+        assert isinstance(data, bytes)
+
+        path = get_image(raw, as_file_path=True)
+        assert os.path.exists(path)
+
+        thumb_data = get_thumbnail(raw)
+        assert isinstance(thumb_data, bytes)
+    finally:
+        os.remove(img_path)
+        if path and os.path.exists(path):
+            os.remove(path)
