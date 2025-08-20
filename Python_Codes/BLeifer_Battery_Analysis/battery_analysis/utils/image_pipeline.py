@@ -9,7 +9,9 @@ Examples
 ``get_image`` and ``get_thumbnail`` accept either a :class:`RawDataFile` instance
 or its string ``id``. When ``as_file_path`` is ``True`` the file is written to a
 temporary location and the filesystem path is returned; otherwise the raw bytes
-are provided.
+are provided. Both helpers delegate to
+``battery_analysis.utils.file_storage.get_raw_data_file_by_id`` to read from
+persistent storage.
 """
 
 from __future__ import annotations
