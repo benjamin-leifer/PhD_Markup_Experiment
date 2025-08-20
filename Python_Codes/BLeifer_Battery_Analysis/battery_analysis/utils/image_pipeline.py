@@ -1,4 +1,16 @@
-"""Utility functions for ingesting and validating image files."""
+"""Utility helpers for ingesting, retrieving, and validating image files.
+
+Examples
+--------
+>>> raw = ingest_image_file("foo.png", create_thumbnail=True)
+>>> data = get_image(raw)  # doctest: +SKIP
+>>> thumb_path = get_thumbnail(raw, as_file_path=True)  # doctest: +SKIP
+
+``get_image`` and ``get_thumbnail`` accept either a :class:`RawDataFile` instance
+or its string ``id``. When ``as_file_path`` is ``True`` the file is written to a
+temporary location and the filesystem path is returned; otherwise the raw bytes
+are provided.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +24,7 @@ from PIL import Image
 
 from battery_analysis.models import RawDataFile
 
-from .file_storage import store_raw_data_file
+from .file_storage import get_raw_data_file_by_id, store_raw_data_file
 
 
 _ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff"}
@@ -175,6 +187,52 @@ def generate_thumbnail(
         return thumb
     finally:
         os.remove(temp_path)
+
+
+def get_image(raw_file: RawDataFile | str, as_file_path: bool = False):
+    """Retrieve the original image data for ``raw_file``.
+
+    Parameters
+    ----------
+    raw_file:
+        The original :class:`RawDataFile` instance or its ``id`` as a string.
+    as_file_path:
+        When ``True`` a temporary file path is returned instead of bytes.
+    """
+
+    file_id = str(raw_file.id) if isinstance(raw_file, RawDataFile) else str(raw_file)
+    return get_raw_data_file_by_id(file_id, as_file_path=as_file_path)
+
+
+def get_thumbnail(raw_file: RawDataFile | str, as_file_path: bool = False):
+    """Retrieve the stored thumbnail corresponding to ``raw_file``.
+
+    The thumbnail is searched by looking for a :class:`RawDataFile` whose
+    ``metadata['source_file_id']`` matches the id of ``raw_file`` and which is
+    tagged with ``"thumbnail"`` or has ``file_type='thumbnail'``.
+
+    Parameters
+    ----------
+    raw_file:
+        The original :class:`RawDataFile` or its ``id``.
+    as_file_path:
+        When ``True`` a temporary file path is returned instead of bytes.
+    """
+
+    file_id = str(raw_file.id) if isinstance(raw_file, RawDataFile) else str(raw_file)
+
+    thumb = RawDataFile.objects(
+        metadata__source_file_id=str(file_id), tags="thumbnail"
+    ).first()
+    if not thumb:
+        thumb = RawDataFile.objects(
+            metadata__source_file_id=str(file_id), file_type="thumbnail"
+        ).first()
+
+    if not thumb:
+        raise ValueError(f"No thumbnail found for raw file {file_id}")
+
+    return get_raw_data_file_by_id(str(thumb.id), as_file_path=as_file_path)
 
 
 def ingest_image_file(
