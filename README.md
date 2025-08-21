@@ -67,6 +67,23 @@ Connection details are configured through environment variables:
 Both the dashboard and the `update_cell_dataset_cli.py` script rely on these
 variables when establishing database connections.
 
+### User configuration
+
+Command line utilities such as `import_directory` and `import_watcher` also
+consult an optional user configuration file. Create either
+`~/.battery_analysis.toml` or `~/.battery_analysis.ini` to provide default values
+for database connection and common command line flags. Example TOML file::
+
+    db_uri = "mongodb://localhost:27017/battery_test_db"
+    workers = 4
+    include = ["*.csv"]
+    exclude = ["*/archive/*"]
+    debounce = 1.0
+    depth = 2
+
+Values supplied on the command line always override settings from the
+configuration file.
+
 ## Updating cell datasets
 
 Use the ``update_cell_dataset_cli.py`` script to keep processed datasets in

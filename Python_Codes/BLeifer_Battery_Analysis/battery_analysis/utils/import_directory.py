@@ -36,7 +36,7 @@ import logging
 import os
 import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Set, Tuple
+from typing import BinaryIO, Dict, List, Set, Tuple, cast
 import fnmatch
 
 from battery_analysis import parsers
@@ -44,11 +44,15 @@ from battery_analysis.models import Sample, TestResult, ImportJob
 from battery_analysis.utils.db import ensure_connection
 from battery_analysis.utils import data_update
 from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
+from battery_analysis.utils.config import load_config
 
 logger = logging.getLogger(__name__)
 
+# Load configuration at module import so CLI defaults can reference it
+CONFIG = load_config()
 
-def process_file_with_update(path: str, sample: Sample):
+
+def process_file_with_update(path: str, sample: Sample) -> tuple[TestResult, bool]:
     """Public wrapper around :func:`data_update.process_file_with_update`.
 
     This helper is exposed so external tools like
@@ -69,7 +73,9 @@ def process_file_with_update(path: str, sample: Sample):
         :func:`battery_analysis.utils.data_update.process_file_with_update`.
     """
 
-    return data_update.process_file_with_update(path, sample)
+    return cast(
+        tuple[TestResult, bool], data_update.process_file_with_update(path, sample)
+    )
 
 
 def import_directory(
@@ -117,9 +123,13 @@ def import_directory(
         available.
     """
 
-    if not dry_run and not ensure_connection():
-        logger.error("Database connection not available")
-        return 1
+    if not dry_run:
+        db_kwargs: Dict[str, object] = {}
+        if CONFIG.get("db_uri"):
+            db_kwargs["host"] = CONFIG["db_uri"]
+        if not ensure_connection(**db_kwargs):
+            logger.error("Database connection not available")
+            return 1
 
     job: ImportJob | None = None
     if not dry_run:
@@ -167,8 +177,9 @@ def import_directory(
 
             # compute hash of file contents
             h = hashlib.md5()
-            with open(abs_path, "rb") as fh:
-                for chunk in iter(lambda: fh.read(8192), b""):
+            with open(abs_path, "rb") as bin_fh:
+                reader = cast(BinaryIO, bin_fh)
+                for chunk in iter(lambda: reader.read(8192), b""):
                     h.update(chunk)
             file_hash = h.hexdigest()
 
@@ -208,7 +219,15 @@ def import_directory(
         """Worker function processing a single file."""
         if not ensure_connection():
             logger.error("Database connection not available")
-            return "", "skipped", abs_path, mtime, file_hash, None, "Database connection not available"
+            return (
+                "",
+                "skipped",
+                abs_path,
+                mtime,
+                file_hash,
+                None,
+                "Database connection not available",
+            )
 
         metadata = None
         if sample_lookup or dry_run:
@@ -358,20 +377,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--workers",
         type=int,
-        default=os.cpu_count() or 1,
+        default=CONFIG.get("workers") or (os.cpu_count() or 1),
         help="Number of worker threads to use for importing files",
     )
     parser.add_argument(
         "--include",
         action="append",
-        default=[],
+        default=None,
         metavar="PATTERN",
         help="Glob pattern to include (repeatable)",
     )
     parser.add_argument(
         "--exclude",
         action="append",
-        default=[],
+        default=None,
         metavar="PATTERN",
         help="Glob pattern to exclude (repeatable)",
     )
@@ -388,14 +407,17 @@ def main(argv: list[str] | None = None) -> int:
     if not args.root:
         parser.error("root is required unless --rollback is specified")
 
+    include = args.include if args.include is not None else CONFIG.get("include")
+    exclude = args.exclude if args.exclude is not None else CONFIG.get("exclude")
+
     return import_directory(
         args.root,
         sample_lookup=args.sample_lookup,
         reset=args.reset,
         dry_run=args.dry_run,
         workers=args.workers,
-        include=args.include,
-        exclude=args.exclude,
+        include=include,
+        exclude=exclude,
     )
 
 
