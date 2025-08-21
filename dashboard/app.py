@@ -31,6 +31,7 @@ try:
         document_flow_tab,
         missing_data_tab,
         doe_tab,
+        import_jobs_tab,
     )
     from . import auth
     from . import preferences
@@ -49,6 +50,7 @@ except ImportError:  # pragma: no cover - allow running as script
     document_flow_tab = importlib.import_module("document_flow_tab")
     missing_data_tab = importlib.import_module("missing_data_tab")
     doe_tab = importlib.import_module("doe_tab")
+    import_jobs_tab = importlib.import_module("import_jobs_tab")
     auth = importlib.import_module("auth")
     preferences = importlib.import_module("preferences")
 
@@ -156,6 +158,12 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                     label="Export",
                     disabled=not is_admin,
                     value="export",
+                ),
+                dcc.Tab(
+                    import_jobs_tab.layout(),
+                    label="Import Jobs",
+                    disabled=not is_admin,
+                    value="import-jobs",
                 ),
                 dcc.Tab(
                     comparison_tab.layout(),
@@ -612,6 +620,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
     document_flow_tab.register_callbacks(app)
     missing_data_tab.register_callbacks(app)
     doe_tab.register_callbacks(app)
+    import_jobs_tab.register_callbacks(app)
 
     return app
 

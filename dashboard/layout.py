@@ -374,3 +374,46 @@ def toast_container() -> html.Div:
             "zIndex": 2000,
         },
     )
+
+def import_jobs_table(jobs: List[Dict[str, str]]) -> dbc.Table:
+    """Return a table summarizing import jobs."""
+    header = html.Thead(
+        html.Tr(
+            [
+                html.Th("Start Time"),
+                html.Th("End Time"),
+                html.Th("Files"),
+                html.Th("Errors"),
+                html.Th("Actions"),
+            ]
+        )
+    )
+    rows = []
+    for job in jobs:
+        rows.append(
+            html.Tr(
+                [
+                    html.Td(job.get("start_time", "")),
+                    html.Td(job.get("end_time", "")),
+                    html.Td(job.get("file_count", "")),
+                    html.Td(job.get("errors", "")),
+                    html.Td(
+                        dbc.Button(
+                            "Rollback",
+                            id={"type": "rollback-job", "index": job.get("id")},
+                            color="danger",
+                            size="sm",
+                        )
+                    ),
+                ]
+            )
+        )
+    body = html.Tbody(rows)
+    return dbc.Table(
+        [header, body],
+        id="import-jobs-table",
+        bordered=True,
+        hover=True,
+        responsive=True,
+        striped=True,
+    )
