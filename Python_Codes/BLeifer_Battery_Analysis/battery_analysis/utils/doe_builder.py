@@ -9,6 +9,7 @@ from itertools import product
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
+import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
@@ -102,6 +103,33 @@ def export_pdf(plan: ExperimentPlan, file_path: str | Path) -> Path:
     return path
 
 
+def export_html(plan: ExperimentPlan, file_path: str | Path) -> Path:
+    """Write ``plan`` to ``file_path`` as an interactive HTML table."""
+
+    path = Path(file_path)
+    df = pd.DataFrame(plan.matrix or [])
+    table_html = df.to_html(index=False, table_id="doe-table", classes="display")
+    html = f"""<!DOCTYPE html>
+<html lang=\"en\">
+<head>
+<meta charset=\"utf-8\" />
+<link rel=\"stylesheet\" href=\"https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css\" />
+<script src=\"https://code.jquery.com/jquery-3.6.0.min.js\"></script>
+<script src=\"https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js\"></script>
+</head>
+<body>
+{table_html}
+<script>
+$(document).ready(function() {{
+    $('#doe-table').DataTable();
+}});
+</script>
+</body>
+</html>"""
+    path.write_text(html, encoding="utf-8")
+    return path
+
+
 def remaining_combinations(plan: ExperimentPlan) -> List[Dict[str, Any]]:
     """Return matrix rows that do not yet have associated tests."""
 
@@ -172,6 +200,12 @@ def main(argv: list[str] | None = None) -> List[Dict[str, Any]]:
         "--pdf",
         help="Path to write a PDF summary of the plan",
     )
+    parser.add_argument(
+        "--html",
+        nargs="?",
+        const="",
+        help="Write an interactive HTML summary (default docs/doe_plans/<name>.html)",
+    )
     parser.add_argument("--status", help="Show status for an existing plan")
 
     args = parser.parse_args(argv)
@@ -189,12 +223,16 @@ def main(argv: list[str] | None = None) -> List[Dict[str, Any]]:
             print(combo)
 
     plan = None
-    if args.save or args.csv or args.pdf:
+    if args.save or args.csv or args.pdf or args.html is not None:
         plan = save_plan(args.name, factors, matrix, sample_ids=args.samples)
     if args.csv and plan is not None:
         export_csv(plan, args.csv)
     if args.pdf and plan is not None:
         export_pdf(plan, args.pdf)
+    if args.html is not None and plan is not None:
+        output = Path(args.html) if args.html else Path("docs") / "doe_plans" / f"{plan.name}.html"
+        output.parent.mkdir(parents=True, exist_ok=True)
+        export_html(plan, output)
 
     return matrix
 
