@@ -32,9 +32,11 @@ try:
         missing_data_tab,
         doe_tab,
         import_jobs_tab,
+        watcher_tab,
     )
     from . import auth
     from . import preferences
+    from battery_analysis.utils import import_watcher
 except ImportError:  # pragma: no cover - allow running as script
     import importlib
 
@@ -51,8 +53,15 @@ except ImportError:  # pragma: no cover - allow running as script
     missing_data_tab = importlib.import_module("missing_data_tab")
     doe_tab = importlib.import_module("doe_tab")
     import_jobs_tab = importlib.import_module("import_jobs_tab")
+    watcher_tab = importlib.import_module("watcher_tab")
     auth = importlib.import_module("auth")
     preferences = importlib.import_module("preferences")
+    try:
+        import_watcher = importlib.import_module(
+            "battery_analysis.utils.import_watcher"
+        )
+    except Exception:  # pragma: no cover
+        import_watcher = None  # type: ignore
 
 
 def create_app(test_role: str | None = None, enable_login: bool = False) -> dash.Dash:
@@ -81,6 +90,14 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         suppress_callback_exceptions=True,
         background_callback_manager=background_callback_manager,
     )
+
+    # Start configured import watchers so they persist across restarts
+    if import_watcher:
+        try:  # pragma: no cover - best effort startup
+            for path in preferences.load_preferences().get("watcher_dirs", []):
+                import_watcher.start_watcher(path)
+        except Exception:
+            pass
 
     if enable_login:
         auth.register_callbacks(app)
@@ -164,6 +181,12 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                     label="Import Jobs",
                     disabled=not is_admin,
                     value="import-jobs",
+                ),
+                dcc.Tab(
+                    watcher_tab.layout(),
+                    label="Watchers",
+                    disabled=not is_admin,
+                    value="watchers",
                 ),
                 dcc.Tab(
                     comparison_tab.layout(),
@@ -621,6 +644,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
     missing_data_tab.register_callbacks(app)
     doe_tab.register_callbacks(app)
     import_jobs_tab.register_callbacks(app)
+    watcher_tab.register_callbacks(app)
 
     return app
 

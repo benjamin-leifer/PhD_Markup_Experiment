@@ -117,6 +117,63 @@ def watch(root: str, *, debounce: float = 1.0, depth: int | None = None) -> Obse
     return observer
 
 
+# --- Programmatic watcher management ------------------------------------
+
+# Store active observers keyed by their root directory.  The start time is
+# tracked so callers can report how long a watcher has been running.
+_WATCHERS: dict[str, tuple[Observer, float]] = {}
+_WATCHERS_LOCK = threading.Lock()
+
+
+def start_watcher(root: str, *, debounce: float = 1.0, depth: int | None = None) -> None:
+    """Start watching ``root`` and remember the observer.
+
+    This is a thin wrapper around :func:`watch` that keeps track of active
+    watchers so they can later be queried or stopped programmatically.
+    ``watch`` is still exposed for backwards compatibility.
+    """
+
+    with _WATCHERS_LOCK:
+        if root in _WATCHERS:
+            return
+        observer = watch(root, debounce=debounce, depth=depth)
+        _WATCHERS[root] = (observer, time.time())
+
+
+def stop_watcher(root: str) -> None:
+    """Stop the watcher monitoring ``root`` if it is running."""
+
+    with _WATCHERS_LOCK:
+        info = _WATCHERS.pop(root, None)
+    if not info:
+        return
+    observer, _ = info
+    observer.stop()
+    observer.join()
+
+
+def list_watchers() -> list[dict[str, float]]:
+    """Return information about all active watchers.
+
+    Each dictionary contains ``directory`` and ``uptime`` (in seconds).
+    """
+
+    with _WATCHERS_LOCK:
+        items = list(_WATCHERS.items())
+    now = time.time()
+    return [
+        {"directory": path, "uptime": now - start}
+        for path, (_, start) in items
+    ]
+
+
+def is_watching(root: str) -> bool:
+    """Return ``True`` if ``root`` currently has an active watcher."""
+
+    with _WATCHERS_LOCK:
+        return root in _WATCHERS
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point for the import watcher."""
 

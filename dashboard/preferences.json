@@ -1,4 +1,5 @@
 {
   "theme": "light",
-  "default_tab": "missing-data"
+  "default_tab": "missing-data",
+  "watcher_dirs": []
 }
