@@ -118,6 +118,10 @@ Repeat the options to provide multiple patterns. Any file whose path matches an
 ``--exclude`` pattern is skipped, while ``--include`` restricts processing to
 paths that match at least one provided pattern.
 
+Each file processed by ``import_directory`` is archived to MongoDB's GridFS so
+the original data can be retrieved later. Specify ``--no-archive`` to disable
+this behaviour when storing the raw files is unnecessary.
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).

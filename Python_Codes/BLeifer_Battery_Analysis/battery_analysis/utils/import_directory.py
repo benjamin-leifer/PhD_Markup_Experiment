@@ -3,7 +3,9 @@
 This module scans a directory tree for files supported by
 :func:`battery_analysis.parsers.parse_file`, imports each test using
 ``process_file_with_update`` and refreshes any affected cell datasets. Samples
-are retrieved or created via :func:`Sample.get_or_create`.
+are retrieved or created via :func:`Sample.get_or_create`.  Each imported file
+is archived to MongoDB's GridFS for future retrieval unless ``--no-archive`` is
+specified.
 
 The script can be executed directly::
 
@@ -47,7 +49,7 @@ except Exception:  # pragma: no cover - optional dependency
 from battery_analysis import parsers
 from battery_analysis.models import Sample, TestResult, ImportJob
 from battery_analysis.utils.db import ensure_connection
-from battery_analysis.utils import data_update
+from battery_analysis.utils import data_update, file_storage
 from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
 from battery_analysis.utils.config import load_config
 from battery_analysis.utils import notifications
@@ -58,12 +60,15 @@ logger = logging.getLogger(__name__)
 CONFIG = load_config()
 
 
-def process_file_with_update(path: str, sample: Sample) -> tuple[TestResult, bool]:
-    """Public wrapper around :func:`data_update.process_file_with_update`.
+def process_file_with_update(
+    path: str, sample: Sample, *, archive: bool = True
+) -> tuple[TestResult, bool]:
+    """Process ``path`` for ``sample`` and optionally archive the raw file.
 
-    This helper is exposed so external tools like
-    :mod:`battery_analysis.utils.import_watcher` can reuse the same file
-    processing logic as the directory importer.
+    This helper wraps :func:`battery_analysis.utils.data_update.process_file_with_update`
+    to attach a SHA256 hash of the raw bytes and persist the original file in
+    GridFS.  External tools such as :mod:`battery_analysis.utils.import_watcher`
+    use this function to ensure consistent processing.
 
     Parameters
     ----------
@@ -71,6 +76,10 @@ def process_file_with_update(path: str, sample: Sample) -> tuple[TestResult, boo
         Path to the data file.
     sample:
         :class:`Sample` instance the file belongs to.
+    archive:
+        When ``True`` (default) the raw file is saved to GridFS via
+        :func:`battery_analysis.utils.file_storage.save_raw` and the resulting
+        ``file_id`` recorded on the :class:`~battery_analysis.models.TestResult`.
 
     Returns
     -------
@@ -79,9 +88,30 @@ def process_file_with_update(path: str, sample: Sample) -> tuple[TestResult, boo
         :func:`battery_analysis.utils.data_update.process_file_with_update`.
     """
 
-    return cast(
-        tuple[TestResult, bool], data_update.process_file_with_update(path, sample)
-    )
+    test, was_update = data_update.process_file_with_update(path, sample)
+
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(8192), b""):
+            h.update(chunk)
+    digest = h.hexdigest()
+
+    if isinstance(test, TestResult):
+        test.file_hash = digest
+
+        if archive:
+            try:
+                file_id = file_storage.save_raw(path, test_result=test)
+                test.file_id = file_id
+            except Exception as exc:  # pragma: no cover - best effort
+                logger.warning("Failed to archive %s: %s", path, exc)
+
+        try:
+            test.save()
+        except Exception:  # pragma: no cover - best effort
+            pass
+
+    return cast(tuple[TestResult, bool], (test, was_update))
 
 
 def import_directory(
@@ -94,6 +124,7 @@ def import_directory(
     include: list[str] | None = None,
     exclude: list[str] | None = None,
     notify: bool = False,
+    archive: bool = True,
 ) -> int:
     """Import all supported files within ``root``.
 
@@ -124,6 +155,9 @@ def import_directory(
         cause the file to be skipped.
     notify:
         When ``True`` send a completion notification.
+    archive:
+        When ``True`` (default) archive raw files to GridFS. Disable with
+        ``--no-archive``.
 
     Returns
     -------
@@ -139,7 +173,9 @@ def import_directory(
         if not ensure_connection(**db_kwargs):
             logger.error("Database connection not available")
             if notify:
-                notifications.send("Import job failed: database connection not available")
+                notifications.send(
+                    "Import job failed: database connection not available"
+                )
             return 1
 
     job: ImportJob | None = None
@@ -239,7 +275,9 @@ def import_directory(
             pass
         if pub:
             try:
-                pub.publish(channel, json.dumps({"job_id": str(job.id), "total": total}))
+                pub.publish(
+                    channel, json.dumps({"job_id": str(job.id), "total": total})
+                )
             except Exception:
                 pass
 
@@ -283,7 +321,9 @@ def import_directory(
 
         sample = Sample.get_or_create(name, **attrs)
         try:
-            test, was_update = data_update.process_file_with_update(abs_path, sample)
+            test, was_update = process_file_with_update(
+                abs_path, sample, archive=archive
+            )
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("Failed to process %s: %s", abs_path, exc)
             return name, "skipped", abs_path, mtime, file_hash, None, str(exc)
@@ -378,7 +418,9 @@ def import_directory(
             pass
         if pub:
             try:
-                pub.publish(channel, json.dumps({"job_id": str(job.id), "status": "completed"}))
+                pub.publish(
+                    channel, json.dumps({"job_id": str(job.id), "status": "completed"})
+                )
             except Exception:
                 pass
 
@@ -471,6 +513,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Send notification on completion or error",
     )
+    parser.add_argument(
+        "--no-archive",
+        action="store_true",
+        help="Do not store raw files in GridFS",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO)
@@ -491,6 +538,7 @@ def main(argv: list[str] | None = None) -> int:
         include=include,
         exclude=exclude,
         notify=args.notify,
+        archive=not args.no_archive,
     )
 
 

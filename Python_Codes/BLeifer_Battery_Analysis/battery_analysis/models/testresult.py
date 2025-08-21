@@ -48,7 +48,12 @@ class TestResult(Document):
     )
     test_id = fields.StringField(required=False, help_text="Tester-provided ID")
     file_hash = fields.StringField(
-        required=False, help_text="Hash of the raw data file for deduplication"
+        required=False,
+        help_text="Hash of the raw data file for deduplication",
+    )
+    file_id = fields.StringField(
+        required=False,
+        help_text="GridFS identifier of the archived raw data file",
     )
     cell_code = fields.StringField(
         required=False, help_text="Identifier derived from name"

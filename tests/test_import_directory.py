@@ -113,6 +113,83 @@ def test_new_file_creates_testresult(
     assert len(sample.tests) == 1
 
 
+def test_process_file_archives_and_hashes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import hashlib
+    from battery_analysis.utils import file_storage
+
+    data_path = tmp_path / "S1" / "test.csv"
+    data_path.parent.mkdir()
+    content = b"abc"
+    data_path.write_bytes(content)
+
+    sample = Sample(name="S1")
+
+    def fake_process(path: str, sample: Sample) -> tuple[TestResult, bool]:
+        test = TestResult(sample=sample)
+        return test, False
+
+    stored: dict[str, bytes] = {}
+
+    def fake_save_raw(path: str, **_: object) -> str:
+        fid = "1"
+        stored[fid] = Path(path).read_bytes()
+        return fid
+
+    def fake_retrieve_raw(file_id: str, as_file_path: bool = False):
+        return stored[file_id]
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(file_storage, "save_raw", fake_save_raw)
+    monkeypatch.setattr(file_storage, "retrieve_raw", fake_retrieve_raw)
+
+    test, was_update = import_directory.process_file_with_update(str(data_path), sample)
+    assert not was_update
+    assert test.file_hash == hashlib.sha256(content).hexdigest()
+    assert test.file_id == "1"
+    assert stored["1"] == content
+
+
+def test_process_file_no_archive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import hashlib
+    from battery_analysis.utils import file_storage
+
+    data_path = tmp_path / "S1" / "test.csv"
+    data_path.parent.mkdir()
+    content = b"xyz"
+    data_path.write_bytes(content)
+
+    sample = Sample(name="S1")
+
+    def fake_process(path: str, sample: Sample) -> tuple[TestResult, bool]:
+        test = TestResult(sample=sample)
+        return test, False
+
+    called = False
+
+    def fake_save_raw(path: str, **_: object) -> str:  # pragma: no cover - safety
+        nonlocal called
+        called = True
+        return "id"
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(file_storage, "save_raw", fake_save_raw)
+
+    test, _ = import_directory.process_file_with_update(
+        str(data_path), sample, archive=False
+    )
+    assert test.file_hash == hashlib.sha256(content).hexdigest()
+    assert getattr(test, "file_id", None) is None
+    assert not called
+
+
 def test_incomplete_metadata_skips_file(
     import_dir: tuple[Path, Callable[[str, str, str], Path]],
     monkeypatch: pytest.MonkeyPatch,
