@@ -20,13 +20,13 @@ def store_raw_data_file(file_path, test_result=None, file_type=None):
     # Determine file type if not provided
     if not file_type:
         extension = os.path.splitext(filename)[1].lower()
-        if extension in ['.xlsx', '.xls']:
-            if any(pattern in filename for pattern in ['Channel', '_Wb_', 'Rate_Test']):
-                file_type = 'arbin_excel'
+        if extension in [".xlsx", ".xls"]:
+            if any(pattern in filename for pattern in ["Channel", "_Wb_", "Rate_Test"]):
+                file_type = "arbin_excel"
             else:
-                file_type = 'excel'
-        elif extension in ['.mpt', '.mpr']:
-            file_type = 'biologic'
+                file_type = "excel"
+        elif extension in [".mpt", ".mpr"]:
+            file_type = "biologic"
         else:
             file_type = extension[1:]  # Remove the dot
 
@@ -39,7 +39,7 @@ def store_raw_data_file(file_path, test_result=None, file_type=None):
         existing = RawDataFile.objects(test_result=test_result).first()
         if existing:
             # Update existing file
-            with open(file_path, 'rb') as f:
+            with open(file_path, "rb") as f:
                 existing.file_data.replace(f, filename=filename)
             existing.filename = filename
             existing.file_type = file_type
@@ -49,13 +49,11 @@ def store_raw_data_file(file_path, test_result=None, file_type=None):
 
     # Create new file document
     raw_file = RawDataFile(
-        filename=filename,
-        file_type=file_type,
-        upload_date=datetime.datetime.now()
+        filename=filename, file_type=file_type, upload_date=datetime.datetime.now()
     )
 
     # Store the file
-    with open(file_path, 'rb') as f:
+    with open(file_path, "rb") as f:
         raw_file.file_data.put(f, filename=filename)
 
     # Link to test result if provided
@@ -86,6 +84,7 @@ def get_raw_data_file(test_id, as_file_path=False):
     if as_file_path:
         # Save to a temporary file
         import tempfile
+
         ext = os.path.splitext(raw_file.filename)[1]
         temp_file = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
         temp_file.write(raw_file.file_data.read())
@@ -130,3 +129,52 @@ def get_raw_data_file_by_id(file_id, as_file_path=False):
         return temp_file.name
 
     return raw_file.file_data.read()
+
+
+def save_raw(
+    file_path: str,
+    *,
+    test_result: TestResult | None = None,
+    file_type: str | None = None,
+) -> str:
+    """Store ``file_path`` in GridFS and return its identifier.
+
+    Parameters
+    ----------
+    file_path:
+        Path to the file on disk.
+    test_result:
+        Optional :class:`~battery_analysis.models.TestResult` the file belongs to.
+    file_type:
+        Optional file type hint passed through to :func:`store_raw_data_file`.
+
+    Returns
+    -------
+    str
+        The id of the :class:`~battery_analysis.models.RawDataFile` containing
+        the archived bytes.
+    """
+
+    raw = store_raw_data_file(file_path, test_result=test_result, file_type=file_type)
+    return str(raw.id)
+
+
+def retrieve_raw(file_id: str, as_file_path: bool = False) -> bytes | str:
+    """Retrieve archived bytes previously stored with :func:`save_raw`.
+
+    Parameters
+    ----------
+    file_id:
+        Identifier returned by :func:`save_raw`.
+    as_file_path:
+        When ``True`` the file is written to a temporary location and the path
+        is returned.  When ``False`` the raw bytes are returned.
+
+    Returns
+    -------
+    bytes | str
+        The file contents or a path to a temporary file depending on
+        ``as_file_path``.
+    """
+
+    return get_raw_data_file_by_id(file_id, as_file_path=as_file_path)
