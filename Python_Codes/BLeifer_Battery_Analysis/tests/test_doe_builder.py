@@ -16,6 +16,7 @@ save_plan = doe_builder.save_plan
 main = doe_builder.main
 export_csv = doe_builder.export_csv
 export_pdf = doe_builder.export_pdf
+export_html = doe_builder.export_html
 
 
 def test_generate_combinations_cartesian_product() -> None:
@@ -58,7 +59,10 @@ def test_export_creates_files(tmp_path: Path) -> None:
     plan = save_plan("export_demo", factors)
     csv_path = tmp_path / "plan.csv"
     pdf_path = tmp_path / "plan.pdf"
+    html_path = tmp_path / "plan.html"
     export_csv(plan, csv_path)
     export_pdf(plan, pdf_path)
+    export_html(plan, html_path)
     assert csv_path.is_file()
     assert pdf_path.is_file()
+    assert html_path.is_file()
