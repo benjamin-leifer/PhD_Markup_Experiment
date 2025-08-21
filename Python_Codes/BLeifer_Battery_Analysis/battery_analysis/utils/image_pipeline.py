@@ -363,3 +363,42 @@ def ingest_image_file(
         generate_thumbnail(raw_file)
 
     return raw_file
+
+
+def search_images(
+    sample: Any | None = None,
+    tags: Any | None = None,
+    operator: Any | None = None,
+):
+    """Return a queryset of images filtered by ``sample``, ``tags`` and ``operator``.
+
+    Parameters
+    ----------
+    sample:
+        Optional sample to match.
+    tags:
+        Optional tag or iterable of tags that must be present on the image
+        records.
+    operator:
+        Optional operator string to match.
+
+    Returns
+    -------
+    QuerySet
+        A :class:`mongoengine.queryset.QuerySet` of :class:`RawDataFile`
+        instances matching the supplied criteria.
+    """
+
+    query: dict[str, Any] = {"file_type": "image"}
+
+    if sample is not None:
+        query["sample"] = sample
+    if operator is not None:
+        query["operator"] = operator
+    if tags:
+        if isinstance(tags, str):
+            query["tags"] = tags
+        else:
+            query["tags__all"] = list(tags)
+
+    return RawDataFile.objects(**query)

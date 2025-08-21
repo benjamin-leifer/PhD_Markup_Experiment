@@ -17,5 +17,5 @@ class RawDataFile(Document):  # type: ignore[misc]
 
     meta = {
         "collection": "raw_data_files",
-        "indexes": ["filename", "test_result", "sample", "tags"],
+        "indexes": ["filename", "test_result", "sample", "tags", "operator"],
     }
