@@ -12,7 +12,10 @@ for path in (ROOT, PACKAGE_ROOT):
 
 import mongomock  # noqa: E402
 from mongoengine import connect, disconnect  # noqa: E402
-from battery_analysis.models import Sample, TestResult  # noqa: E402
+
+disconnect()
+connect("import_test", mongo_client_class=mongomock.MongoClient, alias="default")
+from battery_analysis.models import Sample  # noqa: E402
 from battery_analysis.utils import import_directory  # noqa: E402
 from battery_analysis import parsers  # noqa: E402
 
@@ -25,18 +28,37 @@ def _make_file(tmp_path: Path, name: str) -> Path:
 
 
 def _setup_db() -> None:
+    Sample._registry.clear()
     disconnect()
     connect("import_test", mongo_client_class=mongomock.MongoClient, alias="default")
 
 
-def test_new_file_creates_testresult(tmp_path: Path) -> None:
+def test_new_file_creates_testresult(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _setup_db()
     _make_file(tmp_path, "test.csv")
 
+    def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
+        cycles, _ = parsers.parse_file(path)
+        if sample.tests:
+            sample.tests[0].cycles.extend(cycles)
+            return sample.tests[0], True
+        test = type("Test", (), {"cycles": cycles})()
+        sample.tests.append(test)
+        return test, False
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
     import_directory.import_directory(tmp_path)
 
-    assert Sample.objects.count() == 1
-    assert TestResult.objects.count() == 1
+    assert len(Sample._registry) == 1
+    sample = Sample.get_by_name("S1")
+    assert sample is not None
+    assert len(sample.tests) == 1
     disconnect()
 
 
@@ -83,12 +105,28 @@ def test_sequential_files_append_cycles(
 
     monkeypatch.setattr(parsers, "parse_file", fake_parse)
 
+    def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
+        cycles, _ = parsers.parse_file(path)
+        if sample.tests:
+            sample.tests[0].cycles.extend(cycles)
+            return sample.tests[0], True
+        test = type("Test", (), {"cycles": cycles})()
+        sample.tests.append(test)
+        return test, False
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
     import_directory.import_directory(tmp_path)
 
-    assert Sample.objects.count() == 1
-    assert TestResult.objects.count() == 1
-    test = TestResult.objects.first()
-    assert [c.cycle_index for c in test.cycles] == [1, 2, 3, 4]
+    assert len(Sample._registry) == 1
+    sample = Sample.get_by_name("S1")
+    assert sample is not None
+    assert len(sample.tests) == 1
+    test = sample.tests[0]
+    assert [c["cycle_index"] for c in test.cycles] == [1, 2, 3, 4]
     disconnect()
 
 
@@ -100,13 +138,17 @@ def test_state_skips_and_reset_reimports(
 
     calls: list[str] = []
 
-    def fake_process(path: str, sample: Sample):
+    def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
         calls.append(path)
+
         class Dummy:
             pass
+
         return Dummy(), False
 
-    monkeypatch.setattr(import_directory.data_update, "process_file_with_update", fake_process)
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
     monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
 
     import_directory.import_directory(tmp_path)
@@ -118,4 +160,25 @@ def test_state_skips_and_reset_reimports(
 
     import_directory.import_directory(tmp_path, reset=True)
     assert len(calls) == 2
+    disconnect()
+
+
+def test_dry_run_skips_processing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _setup_db()
+    _make_file(tmp_path, "test.csv")
+
+    def fail(
+        *_args: object, **_kwargs: object
+    ) -> None:  # pragma: no cover - should not be called
+        raise AssertionError("Should not be called in dry run")
+
+    monkeypatch.setattr(import_directory.data_update, "process_file_with_update", fail)
+    monkeypatch.setattr(import_directory, "update_cell_dataset", fail)
+
+    import_directory.import_directory(tmp_path, dry_run=True)
+
+    assert len(Sample._registry) == 0
+    assert not (tmp_path / ".import_state.json").exists()
     disconnect()
