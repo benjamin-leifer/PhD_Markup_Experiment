@@ -24,7 +24,7 @@ import argparse
 import json
 import logging
 import os
-from typing import Dict, Set
+from typing import Dict, List, Set, Tuple
 
 from battery_analysis import parsers
 from battery_analysis.models import Sample
@@ -35,7 +35,13 @@ from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
 logger = logging.getLogger(__name__)
 
 
-def import_directory(root: str, *, sample_lookup: bool = False, reset: bool = False) -> int:
+def import_directory(
+    root: str,
+    *,
+    sample_lookup: bool = False,
+    reset: bool = False,
+    dry_run: bool = False,
+) -> int:
     """Import all supported files within ``root``.
 
     Parameters
@@ -50,6 +56,9 @@ def import_directory(root: str, *, sample_lookup: bool = False, reset: bool = Fa
     reset:
         When ``True`` any existing import state is ignored and all files are
         reprocessed.
+    dry_run:
+        When ``True`` parse files and report what would happen without creating
+        samples, importing tests, or refreshing datasets.
 
     Returns
     -------
@@ -58,12 +67,14 @@ def import_directory(root: str, *, sample_lookup: bool = False, reset: bool = Fa
         available.
     """
 
-    if not ensure_connection():
+    if not dry_run and not ensure_connection():
         logger.error("Database connection not available")
         return 1
 
     supported = {ext.lower() for ext in parsers.get_supported_formats()}
     processed: Set[str] = set()
+    eligible: List[Tuple[str, float]] = []
+    skipped = 0
 
     state_path = os.path.join(root, ".import_state.json")
     state: Dict[str, float] = {}
@@ -84,42 +95,58 @@ def import_directory(root: str, *, sample_lookup: bool = False, reset: bool = Fa
             mtime = os.path.getmtime(abs_path)
             if not reset and state.get(abs_path) == mtime:
                 logger.info("Skipping %s; already imported", abs_path)
+                skipped += 1
+                continue
+            eligible.append((abs_path, mtime))
+
+    total = len(eligible)
+    created = 0
+    updated = 0
+
+    for idx, (abs_path, mtime) in enumerate(eligible, 1):
+        metadata = None
+        if sample_lookup or dry_run:
+            try:
+                _, metadata = parsers.parse_file(abs_path)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.error("Failed to parse %s: %s", abs_path, exc)
+                skipped += 1
                 continue
 
-            metadata = None
-            if sample_lookup:
-                try:
-                    _, metadata = parsers.parse_file(abs_path)
-                except Exception as exc:  # pragma: no cover - defensive
-                    logger.error("Failed to parse %s: %s", abs_path, exc)
-                    metadata = None
+        name = metadata.get("sample_code") if metadata else None
+        if not name:
+            name = os.path.basename(os.path.dirname(abs_path)) or "unknown"
 
-            name = metadata.get("sample_code") if metadata else None
-            if not name:
-                name = os.path.basename(os.path.dirname(abs_path)) or "unknown"
+        attrs: Dict[str, object] = {}
+        if metadata:
+            attrs = {k: v for k, v in metadata.items() if k != "sample_code"}
 
-            attrs: Dict[str, object] = {}
-            if metadata:
-                attrs = {k: v for k, v in metadata.items() if k != "sample_code"}
+        processed.add(name)
 
+        if dry_run:
+            logger.info("Would process %s for sample %s", abs_path, name)
+        else:
             sample = Sample.get_or_create(name, **attrs)
-
             try:
                 test, was_update = data_update.process_file_with_update(
                     abs_path, sample
                 )
             except Exception as exc:  # pragma: no cover - defensive
                 logger.error("Failed to process %s: %s", abs_path, exc)
+                skipped += 1
                 continue
 
             action = "updated" if was_update else "created"
+            if was_update:
+                updated += 1
+            else:
+                created += 1
             logger.info(
                 "%s test %s for sample %s",
                 action.title(),
                 getattr(test, "id", None),
                 sample.name,
             )
-            processed.add(sample.name)
             state[abs_path] = mtime
             try:
                 with open(state_path, "w", encoding="utf-8") as fh:
@@ -127,11 +154,20 @@ def import_directory(root: str, *, sample_lookup: bool = False, reset: bool = Fa
             except Exception as exc:  # pragma: no cover - defensive
                 logger.error("Failed to write state to %s: %s", state_path, exc)
 
-    for name in processed:
-        try:
-            update_cell_dataset(name)
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.error("Failed to refresh dataset for %s: %s", name, exc)
+        if idx % 10 == 0 or idx == total:
+            logger.info("Processed %s/%s", idx, total)
+
+    if dry_run:
+        for name in processed:
+            logger.info("Would refresh dataset for %s", name)
+    else:
+        for name in processed:
+            try:
+                update_cell_dataset(name)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.error("Failed to refresh dataset for %s: %s", name, exc)
+
+    print(f"Summary: created={created}, updated={updated}, skipped={skipped}")
 
     return 0
 
@@ -151,11 +187,19 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Ignore existing import state and reprocess all files",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Parse files but do not import or update datasets",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO)
     return import_directory(
-        args.root, sample_lookup=args.sample_lookup, reset=args.reset
+        args.root,
+        sample_lookup=args.sample_lookup,
+        reset=args.reset,
+        dry_run=args.dry_run,
     )
 
 
