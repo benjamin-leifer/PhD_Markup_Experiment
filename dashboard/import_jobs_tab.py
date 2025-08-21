@@ -5,20 +5,36 @@ from __future__ import annotations
 from typing import List, Dict
 
 import dash
-from dash import html, Input, Output, ALL, ctx
+from dash import html, Input, Output, ALL, ctx, dcc
 import dash_bootstrap_components as dbc
+import json
 
 from . import layout as layout_components
 
 try:  # pragma: no cover - database may not be available
     from battery_analysis import models
     from battery_analysis.utils import import_directory
+    from battery_analysis.utils.config import load_config
+    import redis  # type: ignore
 except Exception:  # pragma: no cover - fallback when package missing
     models = None  # type: ignore
     import_directory = None  # type: ignore
+    load_config = lambda: {}  # type: ignore
+    redis = None  # type: ignore
+
+cfg = load_config()
+_pubsub = None
+if redis and cfg.get("redis_url"):
+    try:
+        _redis = redis.from_url(cfg["redis_url"])
+        _pubsub = _redis.pubsub(ignore_subscribe_messages=True)
+        _pubsub.subscribe(cfg.get("redis_channel", "import_progress"))
+    except Exception:  # pragma: no cover - optional
+        _pubsub = None
 
 TABLE_CONTAINER = "import-jobs-table-container"
 STATUS_MESSAGE = "import-jobs-status"
+PROGRESS_INTERVAL = "import-jobs-progress"
 
 
 def _get_jobs() -> List[Dict[str, str]]:
@@ -47,9 +63,14 @@ def layout() -> html.Div:
     """Layout for the Import Jobs tab."""
     jobs = _get_jobs()
     table = layout_components.import_jobs_table(jobs)
-    return html.Div(
-        [html.H4("Import Jobs"), html.Div(table, id=TABLE_CONTAINER), html.Div(id=STATUS_MESSAGE)]
-    )
+    components = [
+        html.H4("Import Jobs"),
+        html.Div(table, id=TABLE_CONTAINER),
+        html.Div(id=STATUS_MESSAGE),
+    ]
+    if _pubsub:
+        components.append(dcc.Interval(id=PROGRESS_INTERVAL, interval=2000))
+    return html.Div(components)
 
 
 def register_callbacks(app: dash.Dash) -> None:
@@ -71,3 +92,15 @@ def register_callbacks(app: dash.Dash) -> None:
         refreshed = layout_components.import_jobs_table(_get_jobs())
         message = f"Rolled back job {job_id}" if job_id else ""
         return refreshed, message
+
+    if _pubsub:
+        @app.callback(
+            Output(TABLE_CONTAINER, "children", allow_duplicate=True),
+            Input(PROGRESS_INTERVAL, "n_intervals"),
+            prevent_initial_call=True,
+        )
+        def _refresh_progress(_: int) -> dbc.Table:  # pragma: no cover - callback
+            message = _pubsub.get_message()
+            if not message:
+                raise dash.exceptions.PreventUpdate
+            return layout_components.import_jobs_table(_get_jobs())

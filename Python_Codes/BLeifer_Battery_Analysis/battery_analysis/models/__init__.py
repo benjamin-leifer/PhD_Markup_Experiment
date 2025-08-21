@@ -285,6 +285,9 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         end_time: datetime.datetime | None = None
         files: list = dc_field(default_factory=list)
         errors: list[str] = dc_field(default_factory=list)
+        current_file: str | None = None
+        processed_count: int = 0
+        total_count: int = 0
 
         _registry: ClassVar[dict[str, "ImportJob"]] = {}
 
