@@ -53,7 +53,7 @@ def test_new_file_creates_testresult(
     )
     monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
 
-    import_directory.import_directory(tmp_path)
+    import_directory.import_directory(tmp_path, workers=1)
 
     assert len(Sample._registry) == 1
     sample = Sample.get_by_name("S1")
@@ -119,7 +119,7 @@ def test_sequential_files_append_cycles(
     )
     monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
 
-    import_directory.import_directory(tmp_path)
+    import_directory.import_directory(tmp_path, workers=1)
 
     assert len(Sample._registry) == 1
     sample = Sample.get_by_name("S1")
@@ -151,14 +151,14 @@ def test_state_skips_and_reset_reimports(
     )
     monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
 
-    import_directory.import_directory(tmp_path)
+    import_directory.import_directory(tmp_path, workers=1)
     assert len(calls) == 1
     assert (tmp_path / ".import_state.json").exists()
 
-    import_directory.import_directory(tmp_path)
+    import_directory.import_directory(tmp_path, workers=1)
     assert len(calls) == 1
 
-    import_directory.import_directory(tmp_path, reset=True)
+    import_directory.import_directory(tmp_path, reset=True, workers=1)
     assert len(calls) == 2
     disconnect()
 
@@ -177,7 +177,7 @@ def test_dry_run_skips_processing(
     monkeypatch.setattr(import_directory.data_update, "process_file_with_update", fail)
     monkeypatch.setattr(import_directory, "update_cell_dataset", fail)
 
-    import_directory.import_directory(tmp_path, dry_run=True)
+    import_directory.import_directory(tmp_path, dry_run=True, workers=1)
 
     assert len(Sample._registry) == 0
     assert not (tmp_path / ".import_state.json").exists()

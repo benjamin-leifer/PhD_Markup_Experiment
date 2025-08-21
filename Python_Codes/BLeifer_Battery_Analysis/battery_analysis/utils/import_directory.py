@@ -24,6 +24,7 @@ import argparse
 import json
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Set, Tuple
 
 from battery_analysis import parsers
@@ -41,6 +42,7 @@ def import_directory(
     sample_lookup: bool = False,
     reset: bool = False,
     dry_run: bool = False,
+    workers: int | None = None,
 ) -> int:
     """Import all supported files within ``root``.
 
@@ -59,6 +61,9 @@ def import_directory(
     dry_run:
         When ``True`` parse files and report what would happen without creating
         samples, importing tests, or refreshing datasets.
+    workers:
+        Number of worker threads to use when importing files. ``None`` uses the
+        CPU count.
 
     Returns
     -------
@@ -103,15 +108,21 @@ def import_directory(
     created = 0
     updated = 0
 
-    for idx, (abs_path, mtime) in enumerate(eligible, 1):
+    workers = workers or (os.cpu_count() or 1)
+
+    def _process(abs_path: str, mtime: float) -> tuple[str, str, str, float]:
+        """Worker function processing a single file."""
+        if not ensure_connection():
+            logger.error("Database connection not available")
+            return "", "skipped", abs_path, mtime
+
         metadata = None
         if sample_lookup or dry_run:
             try:
                 _, metadata = parsers.parse_file(abs_path)
             except Exception as exc:  # pragma: no cover - defensive
                 logger.error("Failed to parse %s: %s", abs_path, exc)
-                skipped += 1
-                continue
+                return "", "skipped", abs_path, mtime
 
         name = metadata.get("sample_code") if metadata else None
         if not name:
@@ -121,41 +132,47 @@ def import_directory(
         if metadata:
             attrs = {k: v for k, v in metadata.items() if k != "sample_code"}
 
-        processed.add(name)
-
         if dry_run:
             logger.info("Would process %s for sample %s", abs_path, name)
-        else:
-            sample = Sample.get_or_create(name, **attrs)
-            try:
-                test, was_update = data_update.process_file_with_update(
-                    abs_path, sample
-                )
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.error("Failed to process %s: %s", abs_path, exc)
-                skipped += 1
-                continue
+            return name, "dry_run", abs_path, mtime
 
-            action = "updated" if was_update else "created"
-            if was_update:
+        sample = Sample.get_or_create(name, **attrs)
+        try:
+            test, was_update = data_update.process_file_with_update(abs_path, sample)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error("Failed to process %s: %s", abs_path, exc)
+            return name, "skipped", abs_path, mtime
+
+        action = "updated" if was_update else "created"
+        logger.info(
+            "%s test %s for sample %s",
+            action.title(),
+            getattr(test, "id", None),
+            sample.name,
+        )
+        return name, action, abs_path, mtime
+
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [executor.submit(_process, p, m) for p, m in eligible]
+        for idx, fut in enumerate(as_completed(futures), 1):
+            name, action, abs_path, mtime = fut.result()
+            if name:
+                processed.add(name)
+            if action == "updated":
                 updated += 1
-            else:
+            elif action == "created":
                 created += 1
-            logger.info(
-                "%s test %s for sample %s",
-                action.title(),
-                getattr(test, "id", None),
-                sample.name,
-            )
-            state[abs_path] = mtime
-            try:
-                with open(state_path, "w", encoding="utf-8") as fh:
-                    json.dump(state, fh, indent=2, sort_keys=True)
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.error("Failed to write state to %s: %s", state_path, exc)
-
-        if idx % 10 == 0 or idx == total:
-            logger.info("Processed %s/%s", idx, total)
+            elif action == "skipped":
+                skipped += 1
+            if action in {"updated", "created"} and not dry_run:
+                state[abs_path] = mtime
+                try:
+                    with open(state_path, "w", encoding="utf-8") as fh:
+                        json.dump(state, fh, indent=2, sort_keys=True)
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.error("Failed to write state to %s: %s", state_path, exc)
+            if idx % 10 == 0 or idx == total:
+                logger.info("Processed %s/%s", idx, total)
 
     if dry_run:
         for name in processed:
@@ -192,6 +209,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Parse files but do not import or update datasets",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=os.cpu_count() or 1,
+        help="Number of worker threads to use for importing files",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO)
@@ -200,6 +223,7 @@ def main(argv: list[str] | None = None) -> int:
         sample_lookup=args.sample_lookup,
         reset=args.reset,
         dry_run=args.dry_run,
+        workers=args.workers,
     )
 
 
