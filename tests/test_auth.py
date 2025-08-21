@@ -26,3 +26,11 @@ def test_login_failure() -> None:
     role, message = handle_login(1, "admin", "wrong")
     assert role is dash.no_update
     assert isinstance(message, dbc.Alert)
+
+
+def test_role_permissions() -> None:
+    assert auth.has_permission("viewer", "overview")
+    assert not auth.has_permission("viewer", "data-import")
+    assert auth.has_permission("operator", "data-import")
+    assert not auth.has_permission("operator", "import-jobs")
+    assert auth.has_permission("admin", "trait-filter")

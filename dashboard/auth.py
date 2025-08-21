@@ -4,12 +4,20 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import Set, TypedDict, cast
 
 import dash
 from dash import Input, Output, State, dcc, html
 import dash_bootstrap_components as dbc
 import bcrypt
+
+try:  # pragma: no cover - allow running as script
+    from .permissions import ROLE_PERMISSIONS
+except ImportError:  # pragma: no cover - allow running as script
+    from permissions import ROLE_PERMISSIONS
+
+
+Role = str
 
 
 class UserRecord(TypedDict):
@@ -58,6 +66,13 @@ def check_credentials(
     if bcrypt.checkpw((password or "").encode(), stored):
         return user.get("role")
     return None
+
+
+def has_permission(role: Role, permission: str) -> bool:
+    """Return ``True`` if ``role`` grants ``permission``."""
+
+    perms: Set[str] = ROLE_PERMISSIONS.get(role, set())
+    return permission in perms
 
 
 def layout() -> html.Div:
