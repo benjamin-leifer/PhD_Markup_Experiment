@@ -22,14 +22,16 @@ option. For example, to import only ``.csv`` files while skipping anything in
         --include "*.csv" --exclude "*/archive/*"
 
 A manifest file (``.import_state.json``) in the root directory records the
-modification time of processed files so subsequent runs skip unchanged inputs.
-Use ``--reset`` to ignore this state and re-import everything.
+modification time and content hash of processed files so subsequent runs skip
+unchanged inputs. Use ``--reset`` to ignore this state and re-import
+everything.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import hashlib
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -102,11 +104,12 @@ def import_directory(
 
     supported = {ext.lower() for ext in parsers.get_supported_formats()}
     processed: Set[str] = set()
-    eligible: List[Tuple[str, float]] = []
+    eligible: List[Tuple[str, float, str]] = []
     skipped = 0
 
     state_path = os.path.join(root, ".import_state.json")
-    state: Dict[str, float] = {}
+    state: Dict[str, object] = {}
+    state_dirty = False
     if not reset and os.path.exists(state_path):
         try:
             with open(state_path, "r", encoding="utf-8") as fh:
@@ -129,11 +132,37 @@ def import_directory(
             file_path = os.path.join(dirpath, filename)
             abs_path = os.path.abspath(file_path)
             mtime = os.path.getmtime(abs_path)
-            if not reset and state.get(abs_path) == mtime:
-                logger.info("Skipping %s; already imported", abs_path)
-                skipped += 1
-                continue
-            eligible.append((abs_path, mtime))
+
+            # compute hash of file contents
+            h = hashlib.md5()
+            with open(abs_path, "rb") as fh:
+                for chunk in iter(lambda: fh.read(8192), b""):
+                    h.update(chunk)
+            file_hash = h.hexdigest()
+
+            if not reset and abs_path in state:
+                entry = state[abs_path]
+                if isinstance(entry, dict):
+                    prev_mtime = entry.get("mtime")
+                    prev_hash = entry.get("hash")
+                else:
+                    prev_mtime = entry
+                    prev_hash = None
+
+                if prev_mtime == mtime and prev_hash == file_hash:
+                    logger.info("Skipping %s; already imported", abs_path)
+                    skipped += 1
+                    continue
+
+                if prev_mtime == mtime and prev_hash is None:
+                    logger.info("Skipping %s; already imported", abs_path)
+                    if not dry_run:
+                        state[abs_path] = {"mtime": mtime, "hash": file_hash}
+                        state_dirty = True
+                    skipped += 1
+                    continue
+
+            eligible.append((abs_path, mtime, file_hash))
 
     total = len(eligible)
     created = 0
@@ -141,11 +170,11 @@ def import_directory(
 
     workers = workers or (os.cpu_count() or 1)
 
-    def _process(abs_path: str, mtime: float) -> tuple[str, str, str, float]:
+    def _process(abs_path: str, mtime: float, file_hash: str) -> tuple[str, str, str, float, str]:
         """Worker function processing a single file."""
         if not ensure_connection():
             logger.error("Database connection not available")
-            return "", "skipped", abs_path, mtime
+            return "", "skipped", abs_path, mtime, file_hash
 
         metadata = None
         if sample_lookup or dry_run:
@@ -153,7 +182,7 @@ def import_directory(
                 _, metadata = parsers.parse_file(abs_path)
             except Exception as exc:  # pragma: no cover - defensive
                 logger.error("Failed to parse %s: %s", abs_path, exc)
-                return "", "skipped", abs_path, mtime
+                return "", "skipped", abs_path, mtime, file_hash
 
         name = metadata.get("sample_code") if metadata else None
         if not name:
@@ -165,14 +194,14 @@ def import_directory(
 
         if dry_run:
             logger.info("Would process %s for sample %s", abs_path, name)
-            return name, "dry_run", abs_path, mtime
+            return name, "dry_run", abs_path, mtime, file_hash
 
         sample = Sample.get_or_create(name, **attrs)
         try:
             test, was_update = data_update.process_file_with_update(abs_path, sample)
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("Failed to process %s: %s", abs_path, exc)
-            return name, "skipped", abs_path, mtime
+            return name, "skipped", abs_path, mtime, file_hash
 
         action = "updated" if was_update else "created"
         logger.info(
@@ -181,12 +210,12 @@ def import_directory(
             getattr(test, "id", None),
             sample.name,
         )
-        return name, action, abs_path, mtime
+        return name, action, abs_path, mtime, file_hash
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = [executor.submit(_process, p, m) for p, m in eligible]
+        futures = [executor.submit(_process, p, m, h) for p, m, h in eligible]
         for idx, fut in enumerate(as_completed(futures), 1):
-            name, action, abs_path, mtime = fut.result()
+            name, action, abs_path, mtime, file_hash = fut.result()
             if name:
                 processed.add(name)
             if action == "updated":
@@ -196,7 +225,7 @@ def import_directory(
             elif action == "skipped":
                 skipped += 1
             if action in {"updated", "created"} and not dry_run:
-                state[abs_path] = mtime
+                state[abs_path] = {"mtime": mtime, "hash": file_hash}
                 try:
                     with open(state_path, "w", encoding="utf-8") as fh:
                         json.dump(state, fh, indent=2, sort_keys=True)
@@ -214,6 +243,13 @@ def import_directory(
                 update_cell_dataset(name)
             except Exception as exc:  # pragma: no cover - defensive
                 logger.error("Failed to refresh dataset for %s: %s", name, exc)
+
+    if state_dirty and not dry_run:
+        try:
+            with open(state_path, "w", encoding="utf-8") as fh:
+                json.dump(state, fh, indent=2, sort_keys=True)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error("Failed to write state to %s: %s", state_path, exc)
 
     print(f"Summary: created={created}, updated={updated}, skipped={skipped}")
 

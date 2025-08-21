@@ -2,13 +2,27 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+import json
+import os
 import pytest
+import types
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = ROOT / "Python_Codes" / "BLeifer_Battery_Analysis"
 for path in (ROOT, PACKAGE_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
+
+# Stub out heavy optional dependencies
+if "scipy" not in sys.modules:
+    class _ScipyStub(types.ModuleType):
+        def __getattr__(self, name: str) -> types.ModuleType:  # pragma: no cover - stub
+            mod = types.ModuleType(name)
+            sys.modules[f"scipy.{name}"] = mod
+            setattr(self, name, mod)
+            return mod
+
+    sys.modules["scipy"] = _ScipyStub("scipy")
 
 import mongomock  # noqa: E402
 from mongoengine import connect, disconnect  # noqa: E402
@@ -134,7 +148,7 @@ def test_state_skips_and_reset_reimports(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _setup_db()
-    _make_file(tmp_path, "test.csv")
+    file_path = _make_file(tmp_path, "test.csv")
 
     calls: list[str] = []
 
@@ -153,13 +167,77 @@ def test_state_skips_and_reset_reimports(
 
     import_directory.import_directory(tmp_path, workers=1)
     assert len(calls) == 1
-    assert (tmp_path / ".import_state.json").exists()
+    state_path = tmp_path / ".import_state.json"
+    assert state_path.exists()
+    data = json.loads(state_path.read_text())
+    entry = data[str(file_path.resolve())]
+    assert {"mtime", "hash"} <= set(entry)
 
     import_directory.import_directory(tmp_path, workers=1)
     assert len(calls) == 1
 
     import_directory.import_directory(tmp_path, reset=True, workers=1)
     assert len(calls) == 2
+    disconnect()
+
+
+def test_hash_change_triggers_processing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _setup_db()
+    file_path = _make_file(tmp_path, "test.csv")
+
+    calls: list[str] = []
+
+    def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
+        calls.append(path)
+        return object(), False
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
+    import_directory.import_directory(tmp_path, workers=1)
+    assert len(calls) == 1
+
+    state = json.loads((tmp_path / ".import_state.json").read_text())
+    mtime = state[str(file_path.resolve())]["mtime"]
+
+    file_path.write_text("modified")
+    os.utime(file_path, (mtime, mtime))
+
+    import_directory.import_directory(tmp_path, workers=1)
+    assert len(calls) == 2
+    disconnect()
+
+
+def test_missing_hash_migrates_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _setup_db()
+    file_path = _make_file(tmp_path, "test.csv")
+    mtime = os.path.getmtime(file_path)
+    state_path = tmp_path / ".import_state.json"
+    state_path.write_text(json.dumps({str(file_path.resolve()): mtime}))
+
+    calls: list[str] = []
+
+    def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
+        calls.append(path)
+        return object(), False
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
+    import_directory.import_directory(tmp_path, workers=1)
+    assert calls == []
+
+    data = json.loads(state_path.read_text())
+    entry = data[str(file_path.resolve())]
+    assert {"mtime", "hash"} <= set(entry)
     disconnect()
 
 
