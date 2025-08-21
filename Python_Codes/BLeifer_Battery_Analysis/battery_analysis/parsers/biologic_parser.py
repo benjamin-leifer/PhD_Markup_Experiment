@@ -457,3 +457,21 @@ def extract_test_metadata(file_path):
         logging.error(f"Error extracting BioLogic metadata: {e}")
 
     return metadata
+
+
+# Register the parser for BioLogic formats
+from . import register_parser
+
+
+def _parse_biologic_file(file_path):
+    cycles_summary = parse_biologic(file_path)
+    metadata = {
+        "tester": "BioLogic",
+        "name": os.path.basename(file_path),
+        "date": None,
+    }
+    return cycles_summary, metadata
+
+
+for _ext in (".mpt", ".mpr", ".z"):
+    register_parser(_ext, _parse_biologic_file)
