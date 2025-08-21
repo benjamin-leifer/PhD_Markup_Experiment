@@ -88,6 +88,19 @@ After new data are added for a cell, run ``update_cell_dataset_cli.py --cell
 <CODE>`` to rebuild its dataset. This command can also be scheduled in a CI job
 or a cron task to ensure datasets remain current.
 
+## Importing data from directories
+
+Use the ``battery_analysis.utils.import_directory`` module to scan a directory
+tree for supported files and import them into the database. The ``--include``
+and ``--exclude`` options accept glob patterns that filter directories or
+filenames::
+
+    python -m battery_analysis.utils.import_directory data --include "*.csv" --exclude "*/archive/*"
+
+Repeat the options to provide multiple patterns. Any file whose path matches an
+``--exclude`` pattern is skipped, while ``--include`` restricts processing to
+paths that match at least one provided pattern.
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).

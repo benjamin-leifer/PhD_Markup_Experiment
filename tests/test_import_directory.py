@@ -182,3 +182,37 @@ def test_dry_run_skips_processing(
     assert len(Sample._registry) == 0
     assert not (tmp_path / ".import_state.json").exists()
     disconnect()
+
+
+def test_include_exclude_patterns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _setup_db()
+    keep_dir = tmp_path / "keep"
+    skip_dir = tmp_path / "skip"
+    (keep_dir / "keep.csv").parent.mkdir(parents=True, exist_ok=True)
+    (keep_dir / "keep.csv").write_text("dummy")
+    (keep_dir / "ignore.txt").write_text("dummy")
+    (skip_dir / "skip.csv").parent.mkdir(parents=True, exist_ok=True)
+    (skip_dir / "skip.csv").write_text("dummy")
+
+    calls: list[str] = []
+
+    def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
+        calls.append(Path(path).name)
+        return object(), False
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
+    import_directory.import_directory(
+        tmp_path,
+        workers=1,
+        include=["*.csv", "*keep*"],
+        exclude=["*.txt", "*skip*"],
+    )
+
+    assert calls == ["keep.csv"]
+    disconnect()

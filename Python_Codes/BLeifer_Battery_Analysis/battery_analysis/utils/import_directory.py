@@ -13,6 +13,14 @@ Use ``--sample-lookup`` to attempt detecting the sample from parser metadata
 (e.g. a ``sample_code`` field). Without this option the parent directory name
 is used as the sample identifier.
 
+``--include`` and ``--exclude`` options accept glob patterns to filter
+directories or filenames. Multiple patterns may be supplied by repeating the
+option. For example, to import only ``.csv`` files while skipping anything in
+``archive`` folders::
+
+    python -m battery_analysis.utils.import_directory data \
+        --include "*.csv" --exclude "*/archive/*"
+
 A manifest file (``.import_state.json``) in the root directory records the
 modification time of processed files so subsequent runs skip unchanged inputs.
 Use ``--reset`` to ignore this state and re-import everything.
@@ -26,6 +34,7 @@ import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Set, Tuple
+import fnmatch
 
 from battery_analysis import parsers
 from battery_analysis.models import Sample
@@ -43,6 +52,8 @@ def import_directory(
     reset: bool = False,
     dry_run: bool = False,
     workers: int | None = None,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
 ) -> int:
     """Import all supported files within ``root``.
 
@@ -65,6 +76,13 @@ def import_directory(
         Number of worker threads to use when importing files. ``None`` uses the
         CPU count.
 
+    include:
+        Glob patterns that must match either the directory path or filename for
+        a file to be processed. If omitted, all paths are included.
+    exclude:
+        Glob patterns that, when matched against the directory path or filename,
+        cause the file to be skipped.
+
     Returns
     -------
     int
@@ -75,6 +93,12 @@ def import_directory(
     if not dry_run and not ensure_connection():
         logger.error("Database connection not available")
         return 1
+
+    include = include or []
+    exclude = exclude or []
+
+    def _match(path: str, patterns: list[str]) -> bool:
+        return any(fnmatch.fnmatch(path, pat) for pat in patterns)
 
     supported = {ext.lower() for ext in parsers.get_supported_formats()}
     processed: Set[str] = set()
@@ -91,7 +115,14 @@ def import_directory(
             logger.error("Failed to load state from %s: %s", state_path, exc)
 
     for dirpath, _, filenames in os.walk(root):
+        if exclude and _match(dirpath, exclude):
+            continue
+        dir_included = True if not include else _match(dirpath, include)
         for filename in filenames:
+            if exclude and _match(filename, exclude):
+                continue
+            if include and not (dir_included or _match(filename, include)):
+                continue
             ext = os.path.splitext(filename)[1].lower()
             if ext not in supported:
                 continue
@@ -215,6 +246,20 @@ def main(argv: list[str] | None = None) -> int:
         default=os.cpu_count() or 1,
         help="Number of worker threads to use for importing files",
     )
+    parser.add_argument(
+        "--include",
+        action="append",
+        default=[],
+        metavar="PATTERN",
+        help="Glob pattern to include (repeatable)",
+    )
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="PATTERN",
+        help="Glob pattern to exclude (repeatable)",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO)
@@ -224,6 +269,8 @@ def main(argv: list[str] | None = None) -> int:
         reset=args.reset,
         dry_run=args.dry_run,
         workers=args.workers,
+        include=args.include,
+        exclude=args.exclude,
     )
 
 
