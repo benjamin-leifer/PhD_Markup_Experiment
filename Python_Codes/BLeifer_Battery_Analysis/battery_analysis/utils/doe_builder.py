@@ -7,13 +7,52 @@ import csv
 import json
 from itertools import product
 from pathlib import Path
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Tuple, cast
 
 import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
 from ..models import ExperimentPlan
+
+
+def load_from_csv(
+    path: str | Path,
+) -> Tuple[Dict[str, List[Any]], List[Dict[str, Any]]]:
+    """Return factors and matrix parsed from a CSV file."""
+
+    csv_path = Path(path)
+    matrix: List[Dict[str, Any]] = []
+    with csv_path.open(newline="") as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            matrix.append(dict(row))
+        headers = reader.fieldnames or []
+    factors: Dict[str, List[Any]] = {
+        h: sorted({row.get(h) for row in matrix}) for h in headers
+    }
+    return factors, matrix
+
+
+def load_from_json(
+    path: str | Path,
+) -> Tuple[Dict[str, List[Any]], List[Dict[str, Any]]]:
+    """Return factors and matrix parsed from a JSON file."""
+
+    json_path = Path(path)
+    data = json.loads(json_path.read_text())
+    if isinstance(data, dict) and "matrix" in data:
+        matrix = list(data["matrix"])
+        factors = data.get("factors")
+    else:
+        matrix = list(data)
+        factors = None
+    if not factors:
+        headers: set[str] = set()
+        for row in matrix:
+            headers.update(row.keys())
+        factors = {h: sorted({row.get(h) for row in matrix}) for h in headers}
+    return factors, matrix
 
 
 def generate_combinations(factors: Dict[str, Iterable[Any]]) -> List[Dict[str, Any]]:
@@ -46,12 +85,36 @@ def save_plan(
 
     if matrix is None:
         matrix = generate_combinations(factors)
-    plan = ExperimentPlan(
-        name=name,
-        factors=factors,
-        matrix=matrix,
-        sample_ids=list(sample_ids or []),
-    )
+
+    existing: ExperimentPlan | None = None
+    try:  # pragma: no cover - requires database
+        existing = ExperimentPlan.get_by_name(name)
+    except Exception:
+        existing = None
+
+    if existing:
+        plan = existing
+        # merge matrices while avoiding duplicates
+        existing_rows = list(plan.matrix)
+        for row in matrix:
+            if row not in existing_rows:
+                existing_rows.append(row)
+        plan.matrix = existing_rows
+        # recompute factors from merged matrix
+        headers: set[str] = set()
+        for row in plan.matrix:
+            headers.update(row.keys())
+        plan.factors = {h: sorted({r.get(h) for r in plan.matrix}) for h in headers}
+        if sample_ids:
+            plan.sample_ids = list(set(plan.sample_ids).union(sample_ids))
+    else:
+        plan = ExperimentPlan(
+            name=name,
+            factors=factors,
+            matrix=matrix,
+            sample_ids=list(sample_ids or []),
+        )
+
     try:
         plan.save()
     except Exception:
@@ -177,6 +240,10 @@ def main(argv: list[str] | None = None) -> List[Dict[str, Any]]:
         help="JSON mapping of factor names to levels",
     )
     parser.add_argument(
+        "--input",
+        help="Path to CSV or JSON file with factor matrix",
+    )
+    parser.add_argument(
         "--samples",
         nargs="*",
         default=[],
@@ -212,11 +279,24 @@ def main(argv: list[str] | None = None) -> List[Dict[str, Any]]:
     if args.status:
         return status_report(args.status)
 
-    if not args.name or not args.factors:
-        parser.error("--name and --factors required unless --status is provided")
+    if not args.name:
+        parser.error("--name required")
 
-    factors = json.loads(args.factors)
-    matrix = generate_combinations(factors)
+    factors: Dict[str, Iterable[Any]]
+    matrix: List[Dict[str, Any]]
+    if args.input:
+        input_path = Path(args.input)
+        if input_path.suffix.lower() == ".csv":
+            factors_dict, matrix = load_from_csv(input_path)
+            factors = cast(Dict[str, Iterable[Any]], factors_dict)
+        else:
+            factors_dict, matrix = load_from_json(input_path)
+            factors = cast(Dict[str, Iterable[Any]], factors_dict)
+    else:
+        if not args.factors:
+            parser.error("--factors or --input required unless --status is provided")
+        factors = cast(Dict[str, Iterable[Any]], json.loads(args.factors))
+        matrix = generate_combinations(factors)
 
     if args.preview:
         for combo in matrix:
@@ -230,7 +310,11 @@ def main(argv: list[str] | None = None) -> List[Dict[str, Any]]:
     if args.pdf and plan is not None:
         export_pdf(plan, args.pdf)
     if args.html is not None and plan is not None:
-        output = Path(args.html) if args.html else Path("docs") / "doe_plans" / f"{plan.name}.html"
+        output = (
+            Path(args.html)
+            if args.html
+            else Path("docs") / "doe_plans" / f"{plan.name}.html"
+        )
         output.parent.mkdir(parents=True, exist_ok=True)
         export_html(plan, output)
 

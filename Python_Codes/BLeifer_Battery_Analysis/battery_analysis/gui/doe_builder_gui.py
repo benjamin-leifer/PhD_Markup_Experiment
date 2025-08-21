@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import tkinter as tk
+from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import Any, Dict, cast
 
 from ..models import ExperimentPlan
-from ..utils.doe_builder import export_csv, export_pdf, generate_combinations, save_plan
+from ..utils.doe_builder import (
+    export_csv,
+    export_pdf,
+    generate_combinations,
+    load_from_csv,
+    load_from_json,
+    save_plan,
+)
 
 
 class DOEBuilderApp(tk.Tk):
@@ -110,10 +119,24 @@ class DOEBuilderApp(tk.Tk):
 # ----------------------------------------------------------------------
 
 
-def launch() -> None:
+def launch(argv: list[str] | None = None) -> None:
     """Launch the DOE builder GUI."""
 
+    parser = argparse.ArgumentParser(description="DOE Builder GUI")
+    parser.add_argument("--input", help="Path to DOE definition file")
+    args = parser.parse_args(argv)
+
+    pre_factors: Dict[str, Any] | None = None
+    if args.input:
+        path = Path(args.input)
+        if path.suffix.lower() == ".csv":
+            pre_factors, _ = load_from_csv(path)
+        else:
+            pre_factors, _ = load_from_json(path)
+
     app = DOEBuilderApp()
+    if pre_factors:
+        app.factors_text.insert("1.0", json.dumps(pre_factors, indent=2))
     app.mainloop()
 
 
