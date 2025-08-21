@@ -39,12 +39,18 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import BinaryIO, Dict, List, Set, Tuple, cast
 import fnmatch
 
+try:
+    import redis
+except Exception:  # pragma: no cover - optional dependency
+    redis = None
+
 from battery_analysis import parsers
 from battery_analysis.models import Sample, TestResult, ImportJob
 from battery_analysis.utils.db import ensure_connection
 from battery_analysis.utils import data_update
 from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
 from battery_analysis.utils.config import load_config
+from battery_analysis.utils import notifications
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +93,7 @@ def import_directory(
     workers: int | None = None,
     include: list[str] | None = None,
     exclude: list[str] | None = None,
+    notify: bool = False,
 ) -> int:
     """Import all supported files within ``root``.
 
@@ -115,6 +122,8 @@ def import_directory(
     exclude:
         Glob patterns that, when matched against the directory path or filename,
         cause the file to be skipped.
+    notify:
+        When ``True`` send a completion notification.
 
     Returns
     -------
@@ -129,6 +138,8 @@ def import_directory(
             db_kwargs["host"] = CONFIG["db_uri"]
         if not ensure_connection(**db_kwargs):
             logger.error("Database connection not available")
+            if notify:
+                notifications.send("Import job failed: database connection not available")
             return 1
 
     job: ImportJob | None = None
@@ -211,6 +222,27 @@ def import_directory(
     created = 0
     updated = 0
 
+    pub = None
+    channel = CONFIG.get("redis_channel", "import_progress")
+    if redis and CONFIG.get("redis_url"):
+        try:  # pragma: no cover - optional
+            pub = redis.from_url(CONFIG["redis_url"])
+        except Exception:
+            pub = None
+
+    if job is not None:
+        job.total_count = total
+        job.processed_count = 0
+        try:
+            job.save()
+        except Exception:
+            pass
+        if pub:
+            try:
+                pub.publish(channel, json.dumps({"job_id": str(job.id), "total": total}))
+            except Exception:
+                pass
+
     workers = workers or (os.cpu_count() or 1)
 
     def _process(
@@ -292,6 +324,28 @@ def import_directory(
                     entry["error"] = error
                     job.errors.append(error)
                 job.files.append(entry)
+                job.current_file = abs_path
+                job.processed_count = idx
+                if idx % 5 == 0 or idx == total:
+                    try:
+                        job.save()
+                    except Exception:
+                        pass
+                    if pub:
+                        try:
+                            pub.publish(
+                                channel,
+                                json.dumps(
+                                    {
+                                        "job_id": str(job.id),
+                                        "current_file": abs_path,
+                                        "processed": idx,
+                                        "total": total,
+                                    }
+                                ),
+                            )
+                        except Exception:
+                            pass
             if idx % 10 == 0 or idx == total:
                 logger.info("Processed %s/%s", idx, total)
 
@@ -316,10 +370,23 @@ def import_directory(
 
     if job is not None:
         job.end_time = datetime.datetime.utcnow()
+        job.current_file = None
+        job.processed_count = total
         try:
             job.save()
         except Exception:  # pragma: no cover - best effort
             pass
+        if pub:
+            try:
+                pub.publish(channel, json.dumps({"job_id": str(job.id), "status": "completed"}))
+            except Exception:
+                pass
+
+    if notify:
+        msg = f"Import job completed: created={created}, updated={updated}, skipped={skipped}"
+        if job is not None and job.errors:
+            msg += f" with {len(job.errors)} errors"
+        notifications.send(msg)
 
     return 0
 
@@ -399,6 +466,11 @@ def main(argv: list[str] | None = None) -> int:
         metavar="JOB_ID",
         help="Remove TestResult entries created during the specified job",
     )
+    parser.add_argument(
+        "--notify",
+        action="store_true",
+        help="Send notification on completion or error",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO)
@@ -418,6 +490,7 @@ def main(argv: list[str] | None = None) -> int:
         workers=args.workers,
         include=include,
         exclude=exclude,
+        notify=args.notify,
     )
 
 

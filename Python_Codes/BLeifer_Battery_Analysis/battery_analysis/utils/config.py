@@ -49,6 +49,12 @@ DEFAULTS: Dict[str, Any] = {
     "workers": None,
     "debounce": 1.0,
     "depth": None,
+    "slack_webhook": None,
+    "email_recipients": [],
+    "smtp_host": None,
+    "email_sender": None,
+    "redis_url": None,
+    "redis_channel": "import_progress",
 }
 
 
@@ -120,11 +126,24 @@ def load_config(path: str | None = None) -> Dict[str, Any]:
     if not isinstance(data, dict):
         return cfg
 
-    for key in ("db_uri", "workers", "include", "exclude", "debounce", "depth"):
+    for key in (
+        "db_uri",
+        "workers",
+        "include",
+        "exclude",
+        "debounce",
+        "depth",
+        "slack_webhook",
+        "email_recipients",
+        "smtp_host",
+        "email_sender",
+        "redis_url",
+        "redis_channel",
+    ):
         if key not in data:
             continue
         value = data[key]
-        if key in {"include", "exclude"}:
+        if key in {"include", "exclude", "email_recipients"}:
             cfg[key] = _to_list(value)
         elif key in {"workers", "depth"}:
             try:
