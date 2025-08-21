@@ -2,7 +2,7 @@
 
 import dash_bootstrap_components as dbc
 from dash import html, dcc, dash_table
-from typing import List, Dict
+from typing import List, Dict, Any
 
 
 def flagged_table(flags: List[Dict[str, str]]) -> dbc.Table:
@@ -412,6 +412,49 @@ def import_jobs_table(jobs: List[Dict[str, str]]) -> dbc.Table:
     return dbc.Table(
         [header, body],
         id="import-jobs-table",
+        bordered=True,
+        hover=True,
+        responsive=True,
+        striped=True,
+    )
+
+
+def watcher_table(watchers: List[Dict[str, Any]]) -> dbc.Table:
+    """Return a table summarizing active directory watchers."""
+
+    header = html.Thead(
+        html.Tr(
+            [html.Th("Directory"), html.Th("Uptime"), html.Th("Actions")]
+        )
+    )
+    rows = []
+    for w in watchers:
+        idx = w.get("index")
+        rows.append(
+            html.Tr(
+                [
+                    html.Td(
+                        dbc.Input(
+                            value=w.get("path", ""),
+                            id={"type": "watcher-path", "index": idx},
+                        )
+                    ),
+                    html.Td(w.get("uptime", "")),
+                    html.Td(
+                        dbc.Button(
+                            "Stop" if w.get("running") else "Start",
+                            id={"type": "watcher-toggle", "index": idx},
+                            color="danger" if w.get("running") else "success",
+                            size="sm",
+                        )
+                    ),
+                ]
+            )
+        )
+    body = html.Tbody(rows)
+    return dbc.Table(
+        [header, body],
+        id="watcher-table",
         bordered=True,
         hover=True,
         responsive=True,

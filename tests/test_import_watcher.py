@@ -90,3 +90,15 @@ def test_watcher_triggers_import(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     finally:
         observer.stop()
         observer.join()
+
+
+def test_start_stop_api(tmp_path: Path) -> None:
+    """The programmatic API should track running watchers."""
+
+    import_watcher.start_watcher(str(tmp_path), debounce=0.1)
+    try:
+        running = import_watcher.list_watchers()
+        assert any(w["directory"] == str(tmp_path) for w in running)
+    finally:
+        import_watcher.stop_watcher(str(tmp_path))
+    assert all(w["directory"] != str(tmp_path) for w in import_watcher.list_watchers())
