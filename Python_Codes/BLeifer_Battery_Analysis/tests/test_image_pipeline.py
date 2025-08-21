@@ -31,6 +31,7 @@ class RawDataFile:
         file_type=None,
         sample=None,
         test_result=None,
+        operator=None,
         tags=None,
         metadata=None,
     ):
@@ -40,6 +41,7 @@ class RawDataFile:
         self.file_type = file_type
         self.sample = sample
         self.test_result = test_result
+        self.operator = operator
         self.tags = tags
         self.metadata = metadata or {}
         self.id = f"id{RawDataFile._id_counter}"
@@ -94,6 +96,10 @@ def _objects(**query):
                 if not rf.tags or value not in rf.tags:
                     match = False
                     break
+            elif key == "tags__all":
+                if not rf.tags or any(tag not in rf.tags for tag in value):
+                    match = False
+                    break
             elif getattr(rf, key) != value:
                 match = False
                 break
@@ -119,6 +125,7 @@ def fake_store_raw_data_file(path, **kwargs):
         file_type=kwargs.get("file_type"),
         sample=kwargs.get("sample"),
         test_result=kwargs.get("test_result"),
+        operator=kwargs.get("operator"),
         tags=kwargs.get("tags"),
         metadata=kwargs.get("metadata", {}),
     )
@@ -148,6 +155,7 @@ ingest_image_file = image_pipeline.ingest_image_file
 get_image = image_pipeline.get_image
 get_thumbnail = image_pipeline.get_thumbnail
 process_image = image_pipeline.process_image
+search_images = image_pipeline.search_images
 
 
 def _create_image(size=(512, 512)):
@@ -253,3 +261,26 @@ def test_process_image_preserves_original_bytes():
         assert before == after
     finally:
         os.remove(img_path)
+
+
+def test_search_images_filters_by_metadata():
+    stored_files.clear()
+    sample_a = Sample()
+    sample_b = Sample()
+    img1 = _create_image((10, 10))
+    img2 = _create_image((10, 10))
+    img3 = _create_image((10, 10))
+
+    try:
+        ingest_image_file(img1, sample=sample_a, tags=["foo"], operator="alice")
+        ingest_image_file(img2, sample=sample_a, tags=["foo", "bar"], operator="bob")
+        ingest_image_file(img3, sample=sample_b, tags=["bar"], operator="alice")
+
+        assert set(search_images(sample=sample_a)) == {stored_files[0], stored_files[1]}
+        assert set(search_images(tags="foo")) == {stored_files[0], stored_files[1]}
+        assert set(search_images(tags=["foo", "bar"])) == {stored_files[1]}
+        assert set(search_images(operator="alice")) == {stored_files[0], stored_files[2]}
+        assert set(search_images(sample=sample_a, operator="alice")) == {stored_files[0]}
+    finally:
+        for p in (img1, img2, img3):
+            os.remove(p)
