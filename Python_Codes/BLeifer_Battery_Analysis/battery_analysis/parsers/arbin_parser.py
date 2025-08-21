@@ -257,3 +257,26 @@ def find_column(df, patterns):
         if any(pattern in str(col).lower() for pattern in patterns):
             return col
     return None
+
+
+# Register the parser for Excel-based Arbin exports
+from . import register_parser
+
+
+def _parse_arbin(file_path):
+    filename = os.path.basename(file_path)
+    if not any(pattern in filename for pattern in ["Channel", "_Wb_", "Rate_Test"]):
+        raise ValueError("Not an Arbin file")
+    cycles_summary, metadata, detailed_cycles = parse_arbin_excel(
+        file_path,
+        return_metadata=True,
+        return_detailed=True,
+    )
+    if metadata is None:
+        metadata = {}
+    metadata["detailed_cycles"] = detailed_cycles
+    return cycles_summary, metadata
+
+
+register_parser(".xlsx", _parse_arbin)
+register_parser(".xls", _parse_arbin)
