@@ -7,10 +7,12 @@ import re
 import hashlib
 import datetime
 from mongoengine.queryset.visitor import Q
+from pydantic import ValidationError
 
 # Update imports to avoid circular dependencies
 from battery_analysis import models, parsers
 from battery_analysis.utils.db import ensure_connection
+from battery_analysis.utils.validators import TestMetadataModel, CycleSummaryModel
 
 # Import directly from the analysis package
 from battery_analysis.analysis import (
@@ -304,16 +306,13 @@ def process_file_with_update(file_path, sample):
         metadata = {}
     metadata["file_hash"] = file_hash
 
-    # Validate required metadata fields
-    required_keys = ["tester", "name", "date"]
-    missing = [key for key in required_keys if not metadata.get(key)]
-    if missing:
-        missing_str = ", ".join(missing)
-        logging.error(
-            "Metadata for %s missing required keys: %s", file_path, missing_str
-        )
-        # Raising an error ensures callers can treat this file as skipped
-        raise ValueError(f"Missing required metadata: {missing_str}")
+    # Validate parser output
+    try:
+        TestMetadataModel(**metadata)
+    except ValidationError as exc:  # pragma: no cover - simple handling
+        missing = ", ".join(err["loc"][0] for err in exc.errors())
+        logging.error("Metadata for %s missing required keys: %s", file_path, missing)
+        raise ValueError(f"Missing required metadata: {missing}") from exc
 
     # Extract detailed_cycles if present in metadata
     detailed_cycles = None
@@ -328,6 +327,13 @@ def process_file_with_update(file_path, sample):
     ) and detailed_cycles:
         logging.info("Building cycle summaries from detailed data")
         parsed_data = summarize_detailed_cycles(detailed_cycles)
+
+    try:
+        for cycle in parsed_data:
+            CycleSummaryModel(**cycle)
+    except ValidationError as exc:  # pragma: no cover - simple handling
+        logging.error("Invalid cycle data in %s: %s", file_path, exc)
+        raise ValueError("Invalid cycle data") from exc
 
     # Add file path to metadata
     metadata["file_path"] = file_path

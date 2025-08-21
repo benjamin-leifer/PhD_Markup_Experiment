@@ -1,12 +1,12 @@
+# mypy: ignore-errors
 """
 Parser for Arbin battery test data files.
 """
+
 import pandas as pd
-import numpy as np
 import os
 import re
 import datetime
-import logging
 
 
 def parse_arbin_excel(
@@ -45,7 +45,7 @@ def parse_arbin_excel(
         print(f"Parsing Arbin file: {filename}")
 
         # Extract sample code from filename
-        sample_code_match = re.search(r'([A-Z]{2,4}\d{2})', filename)
+        sample_code_match = re.search(r"([A-Z]{2,4}\d{2})", filename)
         sample_code = sample_code_match.group(1) if sample_code_match else None
 
         # Read the Excel file
@@ -55,22 +55,22 @@ def parse_arbin_excel(
 
         # Find metadata in Global_Info sheet
         metadata = {
-            'tester': 'Arbin',
-            'name': os.path.splitext(filename)[0],
-            'sample_code': sample_code,
-            'file_path': file_path
+            "tester": "Arbin",
+            "name": os.path.splitext(filename)[0],
+            "sample_code": sample_code,
+            "file_path": file_path,
         }
 
-        if 'Global_Info' in sheet_names:
+        if "Global_Info" in sheet_names:
             try:
-                global_info = pd.read_excel(file_path, sheet_name='Global_Info')
+                _ = pd.read_excel(file_path, sheet_name="Global_Info")
                 # Extract metadata - implementation depends on your specific format
             except Exception as e:
                 print(f"Error reading Global_Info sheet: {e}")
 
         # Find data sheet - look for Channel sheets
         data_sheet = None
-        channel_sheets = [s for s in sheet_names if re.match(r'Channel\d+_\d+', s)]
+        channel_sheets = [s for s in sheet_names if re.match(r"Channel\d+_\d+", s)]
 
         if channel_sheets:
             data_sheet = channel_sheets[0]
@@ -78,14 +78,14 @@ def parse_arbin_excel(
         else:
             # Fallbacks if no Channel##_# sheet found
             for sheet in sheet_names:
-                if 'Channel' in sheet:
+                if "Channel" in sheet:
                     data_sheet = sheet
                     print(f"Using alternative channel sheet: {data_sheet}")
                     break
 
-            if not data_sheet and 'Data' in sheet_names:
-                data_sheet = 'Data'
-                print(f"Using 'Data' sheet as fallback")
+            if not data_sheet and "Data" in sheet_names:
+                data_sheet = "Data"
+                print("Using 'Data' sheet as fallback")
             elif not data_sheet:
                 data_sheet = sheet_names[0]
                 print(f"Using first sheet as last resort: {data_sheet}")
@@ -96,36 +96,40 @@ def parse_arbin_excel(
 
         # Identify key columns
         # Cycle column
-        cycle_col = find_column(df, ['cycle', 'cycle_index', 'cycle number', 'cycle_id'])
+        cycle_col = find_column(
+            df, ["cycle", "cycle_index", "cycle number", "cycle_id"]
+        )
         if not cycle_col:
             print("Could not find cycle column, creating one")
-            df['Cycle'] = 1  # Default to single cycle if none found
-            cycle_col = 'Cycle'
+            df["Cycle"] = 1  # Default to single cycle if none found
+            cycle_col = "Cycle"
 
         # Voltage column
-        voltage_col = find_column(df, ['voltage', 'potential', 'volt'])
+        voltage_col = find_column(df, ["voltage", "potential", "volt"])
         if not voltage_col:
             print("Could not find voltage column")
             return [], metadata, {}
 
         # Current column
-        current_col = find_column(df, ['current', 'i(', 'i ', 'curr'])
+        current_col = find_column(df, ["current", "i(", "i ", "curr"])
         if not current_col:
             print("Could not find current column")
             return [], metadata, {}
 
         # Capacity columns
-        charge_cap_col = find_column(df, ['charge_cap', 'chg cap', 'charge capacity'])
-        discharge_cap_col = find_column(df, ['discharge_cap', 'dischg cap', 'discharge capacity'])
+        charge_cap_col = find_column(df, ["charge_cap", "chg cap", "charge capacity"])
+        discharge_cap_col = find_column(
+            df, ["discharge_cap", "dischg cap", "discharge capacity"]
+        )
 
         # General capacity column
         capacity_col = None
         if not charge_cap_col or not discharge_cap_col:
-            capacity_col = find_column(df, ['capacity', 'cap(', 'cap '])
+            capacity_col = find_column(df, ["capacity", "cap(", "cap "])
             print(f"Using general capacity column: {capacity_col}")
 
         # Time column
-        time_col = find_column(df, ['time', 'test_time', 'elapsed'])
+        time_col = find_column(df, ["time", "test_time", "elapsed"])
 
         # Process cycles
         cycles_summary = []
@@ -144,12 +148,28 @@ def parse_arbin_excel(
             # Calculate capacities
             if charge_cap_col and discharge_cap_col:
                 # Direct capacity columns
-                charge_capacity = charge_data[charge_cap_col].max() if not charge_data.empty and charge_cap_col in charge_data else 0
-                discharge_capacity = discharge_data[discharge_cap_col].max() if not discharge_data.empty and discharge_cap_col in discharge_data else 0
+                charge_capacity = (
+                    charge_data[charge_cap_col].max()
+                    if not charge_data.empty and charge_cap_col in charge_data
+                    else 0
+                )
+                discharge_capacity = (
+                    discharge_data[discharge_cap_col].max()
+                    if not discharge_data.empty and discharge_cap_col in discharge_data
+                    else 0
+                )
             elif capacity_col:
                 # Use general capacity and split by current
-                charge_capacity = charge_data[capacity_col].max() if not charge_data.empty and capacity_col in charge_data else 0
-                discharge_capacity = discharge_data[capacity_col].max() if not discharge_data.empty and capacity_col in discharge_data else 0
+                charge_capacity = (
+                    charge_data[capacity_col].max()
+                    if not charge_data.empty and capacity_col in charge_data
+                    else 0
+                )
+                discharge_capacity = (
+                    discharge_data[capacity_col].max()
+                    if not discharge_data.empty and capacity_col in discharge_data
+                    else 0
+                )
             else:
                 # Fallback values
                 charge_capacity = 100.0
@@ -161,14 +181,16 @@ def parse_arbin_excel(
                 discharge_capacity *= 1000
 
             # Calculate coulombic efficiency
-            coulombic_efficiency = discharge_capacity / charge_capacity if charge_capacity > 0 else 0
+            coulombic_efficiency = (
+                discharge_capacity / charge_capacity if charge_capacity > 0 else 0
+            )
 
             # Create cycle summary
             cycle_data = {
-                'cycle_index': int(cycle),
-                'charge_capacity': float(abs(charge_capacity)),
-                'discharge_capacity': float(abs(discharge_capacity)),
-                'coulombic_efficiency': float(coulombic_efficiency)
+                "cycle_index": int(cycle),
+                "charge_capacity": float(abs(charge_capacity)),
+                "discharge_capacity": float(abs(discharge_capacity)),
+                "coulombic_efficiency": float(coulombic_efficiency),
             }
 
             cycles_summary.append(cycle_data)
@@ -178,30 +200,51 @@ def parse_arbin_excel(
             detailed_charge = {}
             if not charge_data.empty and voltage_col in charge_data:
                 detailed_charge = {
-                    'voltage': charge_data[voltage_col].tolist(),
-                    'current': charge_data[current_col].tolist() if current_col in charge_data else [],
-                    'capacity': charge_data[capacity_col or charge_cap_col].tolist()
-                        if (capacity_col or charge_cap_col) in charge_data else [],
-                    'time': charge_data[time_col].tolist() if time_col in charge_data else []
+                    "voltage": charge_data[voltage_col].tolist(),
+                    "current": (
+                        charge_data[current_col].tolist()
+                        if current_col in charge_data
+                        else []
+                    ),
+                    "capacity": (
+                        charge_data[capacity_col or charge_cap_col].tolist()
+                        if (capacity_col or charge_cap_col) in charge_data
+                        else []
+                    ),
+                    "time": (
+                        charge_data[time_col].tolist()
+                        if time_col in charge_data
+                        else []
+                    ),
                 }
 
             # Extract detailed discharge data
             detailed_discharge = {}
             if not discharge_data.empty and voltage_col in discharge_data:
                 detailed_discharge = {
-                    'voltage': discharge_data[voltage_col].tolist(),
-                    'current': discharge_data[current_col].tolist()
-                        if current_col in discharge_data else [],
-                    'capacity': discharge_data[capacity_col or discharge_cap_col].tolist()
-                        if (capacity_col or discharge_cap_col) in discharge_data else [],
-                    'time': discharge_data[time_col].tolist() if time_col in discharge_data else []
+                    "voltage": discharge_data[voltage_col].tolist(),
+                    "current": (
+                        discharge_data[current_col].tolist()
+                        if current_col in discharge_data
+                        else []
+                    ),
+                    "capacity": (
+                        discharge_data[capacity_col or discharge_cap_col].tolist()
+                        if (capacity_col or discharge_cap_col) in discharge_data
+                        else []
+                    ),
+                    "time": (
+                        discharge_data[time_col].tolist()
+                        if time_col in discharge_data
+                        else []
+                    ),
                 }
 
             # Add to detailed cycles if we have data
             if detailed_charge or detailed_discharge:
                 detailed_cycles[int(cycle)] = {
-                    'charge_data': detailed_charge,
-                    'discharge_data': detailed_discharge
+                    "charge_data": detailed_charge,
+                    "discharge_data": detailed_discharge,
                 }
 
         print(
@@ -222,21 +265,22 @@ def parse_arbin_excel(
     except Exception as e:
         print(f"Error parsing Arbin file: {e}")
         import traceback
+
         traceback.print_exc()
 
         # Return minimal valid data
         cycles_summary = [
             {
-                'cycle_index': 1,
-                'charge_capacity': 100.0,
-                'discharge_capacity': 95.0,
-                'coulombic_efficiency': 0.95,
+                "cycle_index": 1,
+                "charge_capacity": 100.0,
+                "discharge_capacity": 95.0,
+                "coulombic_efficiency": 0.95,
             }
         ]
         metadata = {
-            'tester': 'Arbin',
-            'name': os.path.basename(file_path),
-            'error': str(e),
+            "tester": "Arbin",
+            "name": os.path.basename(file_path),
+            "error": str(e),
         }
         detailed_cycles = {}
 
@@ -260,7 +304,7 @@ def find_column(df, patterns):
 
 
 # Register the parser for Excel-based Arbin exports
-from . import register_parser
+from . import register_parser  # noqa: E402
 
 
 def _parse_arbin(file_path):
@@ -274,6 +318,17 @@ def _parse_arbin(file_path):
     )
     if metadata is None:
         metadata = {}
+    metadata.setdefault("tester", "Arbin")
+    metadata.setdefault("name", os.path.splitext(filename)[0])
+    if not metadata.get("date"):
+        try:
+            metadata["date"] = datetime.datetime.fromtimestamp(
+                os.path.getmtime(file_path)
+            )
+        except Exception as exc:
+            raise ValueError(
+                f"Arbin parser could not determine test date: {exc}"
+            ) from exc
     metadata["detailed_cycles"] = detailed_cycles
     return cycles_summary, metadata
 
