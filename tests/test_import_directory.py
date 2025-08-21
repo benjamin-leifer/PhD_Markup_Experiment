@@ -30,7 +30,7 @@ from mongoengine import connect, disconnect  # noqa: E402
 
 disconnect()
 connect("import_test", mongo_client_class=mongomock.MongoClient, alias="default")
-from battery_analysis.models import Sample  # noqa: E402
+from battery_analysis.models import Sample, ImportJob, TestResult  # noqa: E402
 from battery_analysis.utils import import_directory  # noqa: E402
 from battery_analysis import parsers  # noqa: E402
 
@@ -49,6 +49,7 @@ def import_dir(tmp_path: Path) -> tuple[Path, Callable[[str, str, str], Path]]:
 @pytest.fixture(autouse=True)
 def fresh_db() -> None:
     Sample._registry.clear()
+    ImportJob._registry.clear()
     disconnect()
     connect("import_test", mongo_client_class=mongomock.MongoClient, alias="default")
     yield
@@ -356,3 +357,35 @@ def test_include_exclude_patterns(
     )
 
     assert calls == ["keep.csv"]
+
+
+def test_import_job_and_rollback(
+    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, make = import_dir
+    file_path = make("test.csv")
+
+    def fake_process(path: str, sample: Sample) -> tuple[TestResult, bool]:
+        test = TestResult(sample=sample)
+        setattr(test, "tester", "Other")
+        setattr(test, "file_path", path)
+        sample.tests.append(test)
+        return test, False
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
+    import_directory.import_directory(root, workers=1)
+
+    assert ImportJob._registry
+    job = next(iter(ImportJob._registry.values()))
+    assert job.end_time is not None
+    assert job.files and job.files[0]["path"] == str(file_path)
+    sample = Sample.get_by_name("S1")
+    assert sample and sample.tests
+
+    import_directory.rollback_job(job.id)
+    assert Sample.get_by_name("S1").tests == []
