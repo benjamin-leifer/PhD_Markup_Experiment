@@ -288,6 +288,17 @@ def process_file_with_update(file_path, sample):
         metadata = {}
     metadata["file_hash"] = file_hash
 
+    # Validate required metadata fields
+    required_keys = ["tester", "name", "date"]
+    missing = [key for key in required_keys if not metadata.get(key)]
+    if missing:
+        missing_str = ", ".join(missing)
+        logging.error(
+            "Metadata for %s missing required keys: %s", file_path, missing_str
+        )
+        # Raising an error ensures callers can treat this file as skipped
+        raise ValueError(f"Missing required metadata: {missing_str}")
+
     # Extract detailed_cycles if present in metadata
     detailed_cycles = None
     if metadata and "detailed_cycles" in metadata:
