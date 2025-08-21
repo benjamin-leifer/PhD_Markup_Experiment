@@ -5,6 +5,7 @@ Examples
 >>> raw = ingest_image_file("foo.png", create_thumbnail=True)
 >>> data = get_image(raw)  # doctest: +SKIP
 >>> thumb_path = get_thumbnail(raw, as_file_path=True)  # doctest: +SKIP
+>>> arr = process_image(raw, preprocess=lambda img: img[::2, ::2])  # doctest: +SKIP
 
 ``get_image`` and ``get_thumbnail`` accept either a :class:`RawDataFile` instance
 or its string ``id``. When ``as_file_path`` is ``True`` the file is written to a
@@ -20,9 +21,10 @@ import os
 import tempfile
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Union
+from typing import Any, Callable, Iterable, Iterator, Union, cast
 
 from PIL import Image
+import numpy as np
 
 from battery_analysis.models import RawDataFile
 
@@ -191,7 +193,7 @@ def generate_thumbnail(
         os.remove(temp_path)
 
 
-def get_image(raw_file: RawDataFile | str, as_file_path: bool = False):
+def get_image(raw_file: RawDataFile | str, as_file_path: bool = False) -> bytes | str:
     """Retrieve the original image data for ``raw_file``.
 
     Parameters
@@ -203,10 +205,14 @@ def get_image(raw_file: RawDataFile | str, as_file_path: bool = False):
     """
 
     file_id = str(raw_file.id) if isinstance(raw_file, RawDataFile) else str(raw_file)
-    return get_raw_data_file_by_id(file_id, as_file_path=as_file_path)
+    return cast(
+        bytes | str, get_raw_data_file_by_id(file_id, as_file_path=as_file_path)
+    )
 
 
-def get_thumbnail(raw_file: RawDataFile | str, as_file_path: bool = False):
+def get_thumbnail(
+    raw_file: RawDataFile | str, as_file_path: bool = False
+) -> bytes | str:
     """Retrieve the stored thumbnail corresponding to ``raw_file``.
 
     The thumbnail is searched by looking for a :class:`RawDataFile` whose
@@ -234,7 +240,72 @@ def get_thumbnail(raw_file: RawDataFile | str, as_file_path: bool = False):
     if not thumb:
         raise ValueError(f"No thumbnail found for raw file {file_id}")
 
-    return get_raw_data_file_by_id(str(thumb.id), as_file_path=as_file_path)
+    return cast(
+        bytes | str, get_raw_data_file_by_id(str(thumb.id), as_file_path=as_file_path)
+    )
+
+
+def process_image(
+    raw_file: RawDataFile | str,
+    preprocess: Callable[[np.ndarray], np.ndarray] | None = None,
+) -> np.ndarray:
+    """Load ``raw_file`` as an array and optionally apply ``preprocess``.
+
+    Parameters
+    ----------
+    raw_file:
+        The :class:`RawDataFile` instance or its ``id``.
+    preprocess:
+        Optional callable ``preprocess(image)`` that receives the image array
+        and returns a transformed array. Typical operations include resizing,
+        cropping, or color-space conversions.
+
+    Returns
+    -------
+    numpy.ndarray
+        The processed image data.
+    """
+
+    file_id = str(raw_file.id) if isinstance(raw_file, RawDataFile) else str(raw_file)
+
+    data = cast(bytes, get_image(file_id))
+
+    try:  # Prefer OpenCV when available
+        import cv2
+
+        nparr = np.frombuffer(data, np.uint8)
+        image = cv2.imdecode(nparr, cv2.IMREAD_UNCHANGED)
+        if image is None:
+            raise ValueError("Failed to decode image with OpenCV")
+    except Exception:
+        with Image.open(BytesIO(data)) as img:
+            image = np.array(img)
+
+    if callable(preprocess):
+        image = preprocess(image)
+
+    if not isinstance(image, np.ndarray):
+        image = np.array(image)
+
+    if callable(preprocess) and isinstance(raw_file, RawDataFile):
+        buffer = BytesIO()
+        Image.fromarray(image).save(buffer, format="PNG")
+        buffer.seek(0)
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp.write(buffer.read())
+            temp_path = tmp.name
+        try:
+            store_raw_data_file(
+                temp_path,
+                sample=getattr(raw_file, "sample", None),
+                test_result=getattr(raw_file, "test_result", None),
+                file_type="processed",
+                metadata={"source_file_id": str(raw_file.id)},
+            )
+        finally:
+            os.remove(temp_path)
+
+    return image
 
 
 def ingest_image_file(
