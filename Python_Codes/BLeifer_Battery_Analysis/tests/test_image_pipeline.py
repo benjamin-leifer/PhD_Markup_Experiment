@@ -10,6 +10,7 @@ import types
 import sys
 
 from PIL import Image
+import numpy as np
 
 TESTS_DIR = os.path.dirname(__file__)
 PACKAGE_DIR = os.path.abspath(os.path.join(TESTS_DIR, "..", "battery_analysis"))
@@ -119,14 +120,14 @@ def fake_store_raw_data_file(path, **kwargs):
         sample=kwargs.get("sample"),
         test_result=kwargs.get("test_result"),
         tags=kwargs.get("tags"),
-        metadata={},
+        metadata=kwargs.get("metadata", {}),
     )
     stored_files.append(raw)
     return raw
 
 
 image_pipeline.store_raw_data_file = fake_store_raw_data_file
- 
+
 
 def fake_get_raw_data_file_by_id(file_id, as_file_path=False):
     rf = next((r for r in stored_files if r.id == file_id), None)
@@ -146,6 +147,7 @@ generate_thumbnail = image_pipeline.generate_thumbnail
 ingest_image_file = image_pipeline.ingest_image_file
 get_image = image_pipeline.get_image
 get_thumbnail = image_pipeline.get_thumbnail
+process_image = image_pipeline.process_image
 
 
 def _create_image(size=(512, 512)):
@@ -213,3 +215,41 @@ def test_get_image_and_thumbnail():
         os.remove(img_path)
         if path and os.path.exists(path):
             os.remove(path)
+
+
+def test_process_image_invokes_preprocess():
+    stored_files.clear()
+    img_path = _create_image((20, 20))
+    try:
+        raw = ingest_image_file(img_path)
+
+        called = {"count": 0}
+
+        def preprocess(arr):
+            called["count"] += 1
+            return arr[::2, ::2]
+
+        result = process_image(raw, preprocess=preprocess)
+        assert called["count"] == 1
+        assert isinstance(result, np.ndarray)
+        assert result.shape[:2] == (10, 10)
+    finally:
+        os.remove(img_path)
+
+
+def test_process_image_preserves_original_bytes():
+    stored_files.clear()
+    img_path = _create_image((20, 20))
+    try:
+        raw = ingest_image_file(img_path)
+        before = get_image(raw)
+
+        def preprocess(arr):
+            arr[:] = 0
+            return arr
+
+        process_image(raw, preprocess=preprocess)
+        after = get_image(raw)
+        assert before == after
+    finally:
+        os.remove(img_path)
