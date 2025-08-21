@@ -2,7 +2,14 @@
 
 import dash_bootstrap_components as dbc
 from dash import html
-from typing import List, Dict
+from typing import List, Dict, Any
+
+try:  # pragma: no cover - allow running as script
+    from . import doe_tab
+except ImportError:  # pragma: no cover - package not available
+    import importlib
+
+    doe_tab = importlib.import_module("doe_tab")
 
 
 def navbar() -> dbc.Navbar:
@@ -14,7 +21,7 @@ def navbar() -> dbc.Navbar:
     )
 
 
-def summary_panel(stats: Dict) -> dbc.Card:
+def summary_panel(stats: Dict[str, int]) -> dbc.Card:
     """Summary statistics card."""
     return dbc.Card(
         dbc.CardBody(
@@ -30,7 +37,7 @@ def summary_panel(stats: Dict) -> dbc.Card:
     )
 
 
-def live_tests_panel(tests: List[Dict]) -> dbc.Card:
+def live_tests_panel(tests: List[Dict[str, Any]]) -> dbc.Card:
     """Panel showing live tests."""
     rows = [html.Li(f"{t['cell_id']} - {t['status']}") for t in tests]
     return dbc.Card(
@@ -41,7 +48,7 @@ def live_tests_panel(tests: List[Dict]) -> dbc.Card:
     )
 
 
-def upcoming_tests_panel(tests: List[Dict]) -> dbc.Card:
+def upcoming_tests_panel(tests: List[Dict[str, Any]]) -> dbc.Card:
     """Panel showing upcoming tests."""
     # fmt: off
     rows = [
@@ -59,7 +66,7 @@ def upcoming_tests_panel(tests: List[Dict]) -> dbc.Card:
     )
 
 
-def recent_results_panel(results: List[Dict]) -> dbc.Card:
+def recent_results_panel(results: List[Dict[str, Any]]) -> dbc.Card:
     """Panel showing recent results."""
     # fmt: off
     rows = [
@@ -75,13 +82,13 @@ def recent_results_panel(results: List[Dict]) -> dbc.Card:
 
 
 def dashboard_layout(
-    stats,
-    live_tests,
-    upcoming_tests,
-    recent_results,
+    stats: Dict[str, int],
+    live_tests: List[Dict[str, Any]],
+    upcoming_tests: List[Dict[str, Any]],
+    recent_results: List[Dict[str, Any]],
 ) -> html.Div:
-    """Main dashboard layout."""
-    return html.Div(
+    """Main dashboard layout with navigation tabs."""
+    overview = html.Div(
         [
             dbc.Row(
                 [
@@ -100,6 +107,16 @@ def dashboard_layout(
                 ]
             ),
         ]
+    )
+    return html.Div(
+        dbc.Tabs(
+            [
+                dbc.Tab(overview, label="Overview", tab_id="overview"),
+                dbc.Tab(doe_tab.layout(), label="DOE Heatmap", tab_id="doe"),
+            ],
+            id="dashboard-tabs",
+            active_tab="overview",
+        )
     )
 
 
