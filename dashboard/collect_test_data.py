@@ -18,7 +18,6 @@ The database name can still be overridden with ``BATTERY_DB_NAME``.
 from __future__ import annotations
 
 import json
-import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -28,8 +27,9 @@ import gridfs
 
 from Mongodb_implementation import get_client
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from battery_analysis.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def export_dataset(limit: int = 10) -> Path:

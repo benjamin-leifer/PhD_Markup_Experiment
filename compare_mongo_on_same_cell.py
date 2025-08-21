@@ -11,7 +11,6 @@ shows ``<cell code> - <electrolyte>`` based on the Spring 2025 cell list.
 from __future__ import annotations
 
 import argparse
-import logging
 import re
 from typing import Iterable, List, Tuple, Dict
 import numpy as np
@@ -21,9 +20,12 @@ import pandas as pd
 from mongoengine import connect
 
 from battery_analysis import models
+from battery_analysis.utils.logging import get_logger
 
 
 CycleData = Tuple[List[int], List[float], List[float], List[float]]
+
+logger = get_logger(__name__)
 
 
 def extract_cycle_data(test: models.TestResult, normalized: bool = False) -> CycleData:
@@ -60,11 +62,11 @@ def load_lookup_table(path: str) -> Dict[str, str]:
     try:
         df = pd.read_excel(path)
     except Exception as exc:  # File not found or parse error
-        logging.warning("Could not read lookup table %s: %s", path, exc)
+        logger.warning("Could not read lookup table %s: %s", path, exc)
         return {}
 
     if "Cell Code" not in df.columns or "Electrolyte" not in df.columns:
-        logging.warning(
+        logger.warning(
             "Lookup table %s missing required columns", path
         )
         return {}
@@ -194,7 +196,7 @@ def plot_mean_capacity_with_std(
                     group_cycles = cycles
 
         if not group_charge_caps:
-            logging.warning("No data found for group %d", group_idx + 1)
+            logger.warning("No data found for group %d", group_idx + 1)
             continue
 
         # ----- pad to common length -----
@@ -270,7 +272,6 @@ def main() -> None:
     parser.add_argument("--save", help="File prefix for saving the plot")
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
     connect(args.db, host=args.host, port=args.port)
 
     electrolyte_lookup = load_lookup_table(args.lookup)
@@ -279,11 +280,11 @@ def main() -> None:
     for code in args.codes:
         results = find_tests_by_cell_code(code)
         if not results:
-            logging.warning("No tests found for code %s", code)
+            logger.warning("No tests found for code %s", code)
         tests.extend(results)
 
     if not tests:
-        logging.error("No matching tests found.")
+        logger.error("No matching tests found.")
         return
 
     # ---------- NEW: mean ± std first ----------
@@ -316,11 +317,11 @@ def main() -> None:
             for code in cell_codes:
                 results = find_tests_by_cell_code(code)
                 if not results:
-                    logging.warning("No tests found for code %s", code)
+                    logger.warning("No tests found for code %s", code)
                 tests.extend(results)
 
             if not tests:
-                logging.warning("No matching tests found for group %d", group_idx + 1)
+                logger.warning("No matching tests found for group %d", group_idx + 1)
                 continue
 
             # Generate and save the discharge capacity/CE vs. cycle number plot

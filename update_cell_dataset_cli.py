@@ -6,7 +6,6 @@ dataset. Run ``python update_cell_dataset_cli.py --help`` for usage details.
 """
 
 import argparse
-import logging
 import os
 import sys
 
@@ -45,7 +44,9 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO)
+    from battery_analysis.utils.logging import get_logger
+
+    logger = get_logger(__name__)
 
     client = get_client()
     db_name = os.getenv("BATTERY_DB_NAME", "battery_test_db")
@@ -67,26 +68,26 @@ def main() -> None:
                 serverSelectionTimeoutMS=2000,
             )
     except Exception:
-        logging.error("Could not connect to database.")
+        logger.error("Could not connect to database.")
         return
 
     codes = [code for code in TestResult.objects.distinct("cell_code") if code]
 
     if args.count:
-        logging.info("%d", len(codes))
+        logger.info("%d", len(codes))
         return
 
     if args.cell:
         Sample.get_or_create(args.cell)  # Ensure the sample exists
         update_cell_dataset(args.cell)
-        logging.info("Updated dataset for %s", args.cell)
+        logger.info("Updated dataset for %s", args.cell)
         return
 
     if args.all:
         for code in codes:
             Sample.get_or_create(code)  # Ensure the sample exists
             update_cell_dataset(code)
-        logging.info("Updated datasets for all cell codes")
+        logger.info("Updated datasets for all cell codes")
         return
 
     parser.print_help()

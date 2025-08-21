@@ -23,7 +23,6 @@ before processing after a change) and maximum recursion depth.
 from __future__ import annotations
 
 import argparse
-import logging
 import os
 import threading
 import time
@@ -36,8 +35,9 @@ from battery_analysis.models import Sample
 from battery_analysis.utils import import_directory
 from battery_analysis.utils.db import ensure_connection
 from battery_analysis.utils.config import load_config
+from battery_analysis.utils.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Load configuration at import so CLI defaults and watch() can use it
 CONFIG = load_config()
@@ -193,7 +193,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO)
     observer = watch(args.path, debounce=args.debounce, depth=args.depth)
     try:
         while True:
