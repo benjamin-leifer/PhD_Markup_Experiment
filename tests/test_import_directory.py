@@ -111,6 +111,31 @@ def test_new_file_creates_testresult(
     assert len(sample.tests) == 1
 
 
+def test_incomplete_metadata_skips_file(
+    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    root, make = import_dir
+    make("bad.csv")
+
+    def fake_parse(path: str) -> tuple[list[dict[str, float]], dict[str, object]]:
+        # Return metadata missing required keys like 'name' and 'date'
+        return [], {"tester": "X"}
+
+    monkeypatch.setattr(parsers, "parse_file", fake_parse)
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
+    with caplog.at_level("ERROR"):
+        import_directory.import_directory(root, workers=1)
+
+    # Validation error should be logged and no tests created
+    assert "Missing required metadata" in caplog.text
+    sample = Sample.get_by_name("S1")
+    assert sample is not None
+    assert len(sample.tests) == 0
+
+
 @pytest.mark.slow
 def test_sequential_files_append_cycles(
     import_dir: tuple[Path, Callable[[str, str, str], Path]],
