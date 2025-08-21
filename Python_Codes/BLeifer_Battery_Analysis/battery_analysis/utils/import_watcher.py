@@ -27,19 +27,23 @@ import logging
 import os
 import threading
 import time
-from pathlib import Path
 
-from watchdog.events import FileSystemEventHandler
+from watchdog.events import FileSystemEventHandler, FileSystemEvent
 from watchdog.observers import Observer
 
 from battery_analysis import parsers
 from battery_analysis.models import Sample
 from battery_analysis.utils import import_directory
+from battery_analysis.utils.db import ensure_connection
+from battery_analysis.utils.config import load_config
 
 logger = logging.getLogger(__name__)
 
+# Load configuration at import so CLI defaults and watch() can use it
+CONFIG = load_config()
 
-class _ImportEventHandler(FileSystemEventHandler):
+
+class _ImportEventHandler(FileSystemEventHandler):  # type: ignore[misc]
     """Handle filesystem events and trigger imports."""
 
     def __init__(self, root: str, debounce: float, max_depth: int | None) -> None:
@@ -70,10 +74,14 @@ class _ImportEventHandler(FileSystemEventHandler):
         self._timers[src_path] = timer
         timer.start()
 
-    def on_created(self, event):  # pragma: no cover - behaviour tested via _queue
+    def on_created(
+        self, event: FileSystemEvent
+    ) -> None:  # pragma: no cover - behaviour tested via _queue
         self._queue(event.src_path)
 
-    def on_modified(self, event):  # pragma: no cover - behaviour tested via _queue
+    def on_modified(
+        self, event: FileSystemEvent
+    ) -> None:  # pragma: no cover - behaviour tested via _queue
         self._queue(event.src_path)
 
     def _process(self, src_path: str) -> None:
@@ -99,6 +107,9 @@ def watch(root: str, *, debounce: float = 1.0, depth: int | None = None) -> Obse
         Maximum recursion depth relative to ``root``. ``None`` means unlimited.
     """
 
+    if not ensure_connection(host=CONFIG.get("db_uri")):
+        raise RuntimeError("Database connection not available")
+
     handler = _ImportEventHandler(root, debounce, depth)
     observer = Observer()
     observer.schedule(handler, root, recursive=True)
@@ -114,13 +125,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--debounce",
         type=float,
-        default=1.0,
+        default=CONFIG.get("debounce", 1.0),
         help="Seconds to wait after changes before processing",
     )
     parser.add_argument(
         "--depth",
         type=int,
-        default=None,
+        default=CONFIG.get("depth"),
         help="Maximum recursion depth to monitor (default: unlimited)",
     )
     args = parser.parse_args(argv)

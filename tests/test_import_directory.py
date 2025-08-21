@@ -16,6 +16,7 @@ for path in (ROOT, PACKAGE_ROOT):
 
 # Stub out heavy optional dependencies
 if "scipy" not in sys.modules:
+
     class _ScipyStub(types.ModuleType):
         def __getattr__(self, name: str) -> types.ModuleType:  # pragma: no cover - stub
             mod = types.ModuleType(name)
@@ -357,6 +358,53 @@ def test_include_exclude_patterns(
     )
 
     assert calls == ["keep.csv"]
+
+
+def test_config_file_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Config file values are used when CLI options are absent."""
+
+    from importlib import reload
+    from battery_analysis.utils import config as config_mod
+    from battery_analysis.utils import import_directory as import_directory_mod
+
+    # Create configuration file in temporary home directory
+    home = tmp_path / "home"
+    home.mkdir()
+    cfg = home / ".battery_analysis.toml"
+    cfg.write_text('include = ["*.csv"]\nexclude = ["*skip*"]\n')
+
+    # Patch Path.home and reload modules to pick up config
+    monkeypatch.setattr(Path, "home", lambda: home)
+    reload(config_mod)
+    reload(import_directory_mod)
+
+    root = tmp_path / "data"
+    keep_dir = root / "keep"
+    skip_dir = root / "skip"
+    keep_dir.mkdir(parents=True)
+    skip_dir.mkdir(parents=True)
+    (keep_dir / "keep.csv").write_text("dummy")
+    (skip_dir / "skip.csv").write_text("dummy")
+
+    calls: list[str] = []
+
+    def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
+        calls.append(Path(path).name)
+        return object(), False
+
+    monkeypatch.setattr(
+        import_directory_mod.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(import_directory_mod, "update_cell_dataset", lambda name: None)
+
+    import_directory_mod.main([str(root), "--workers", "1"])
+
+    assert calls == ["keep.csv"]
+
+    # Restore modules to default state for other tests
+    monkeypatch.undo()
+    reload(config_mod)
+    reload(import_directory_mod)
 
 
 def test_import_job_and_rollback(
