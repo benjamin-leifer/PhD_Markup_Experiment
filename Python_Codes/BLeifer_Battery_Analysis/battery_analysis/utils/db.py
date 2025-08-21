@@ -15,8 +15,11 @@ except Exception:  # pragma: no cover - executed when mongoengine missing
     connect = None
     get_connection = None
     ConnectionFailure = Exception
-import logging
 import sys
+
+from battery_analysis.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def connect_with_fallback(
@@ -34,7 +37,7 @@ def connect_with_fallback(
         True if a connection was established, False otherwise.
     """
     if connect is None:
-        logging.warning("mongoengine not available; cannot connect to database")
+        logger.warning("mongoengine not available; cannot connect to database")
         return False
     try:
         connect(
@@ -45,24 +48,24 @@ def connect_with_fallback(
             alias="default",
             **connect_kwargs,
         )
-        logging.info(f"✅ Connected to MongoDB at {host}:{port}")
+        logger.info("✅ Connected to MongoDB at %s:%s", host, port)
         return True
     except Exception as exc:
-        logging.warning(f"Local MongoDB connection failed: {exc}")
+        logger.warning("Local MongoDB connection failed: %s", exc)
         if not ask_if_fails:
             return False
 
     # ── interactive fallback ───────────────────────────────────────────────
-    print("⚠️  Couldn’t reach MongoDB on localhost.")
+    logger.warning("⚠️  Couldn’t reach MongoDB on localhost.")
     new_uri = input("MongoDB URI (blank to abort) > ").strip()
     if not new_uri:
         return False
     try:
         connect(host=new_uri, alias="default", **connect_kwargs)
-        logging.info(f"✅ Connected via URI {new_uri}")
+        logger.info("✅ Connected via URI %s", new_uri)
         return True
     except Exception as exc:
-        logging.error(f"Connection via {new_uri} also failed: {exc}")
+        logger.error("Connection via %s also failed: %s", new_uri, exc)
         return False
 
 
@@ -82,7 +85,7 @@ def ensure_connection(**connect_kwargs) -> bool:
     """
 
     if connect is None or get_connection is None:
-        logging.warning("mongoengine not available; cannot ensure DB connection")
+        logger.warning("mongoengine not available; cannot ensure DB connection")
         return False
 
     try:
@@ -93,7 +96,7 @@ def ensure_connection(**connect_kwargs) -> bool:
     except ConnectionFailure:
         return connect_with_fallback(ask_if_fails=False, **connect_kwargs)
     except Exception as exc:  # pragma: no cover - unexpected failures
-        logging.error(f"Failed to ensure DB connection: {exc}")
+        logger.error("Failed to ensure DB connection: %s", exc)
         return False
 
 

@@ -9,6 +9,7 @@ import pickle
 import os
 import matplotlib
 from .image_pipeline import ingest_image_file
+from .logging import get_logger
 
 # Use the Qt backend only if a backend hasn't been configured already and
 # the Qt dependencies are available.  This prevents import errors during
@@ -107,15 +108,15 @@ def debug_connection_status():
 
         conn = get_connection()
         if conn:
-            print(f"MongoDB connection exists: {conn}")
+            get_logger(__name__).info("MongoDB connection exists: %s", conn)
             db = get_db()
-            print(f"Current database: {db.name}")
+            get_logger(__name__).info("Current database: %s", db.name)
             return True
         else:
-            print("No MongoDB connection exists")
+            get_logger(__name__).info("No MongoDB connection exists")
             return False
     except Exception as e:
-        print(f"Error checking MongoDB connection: {str(e)}")
+        get_logger(__name__).error("Error checking MongoDB connection: %s", e)
         return False
 
 

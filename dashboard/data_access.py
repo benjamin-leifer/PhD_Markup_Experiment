@@ -36,8 +36,9 @@ except Exception:  # pragma: no cover - allow running without DB
 
 from Mongodb_implementation import get_client
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from battery_analysis.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 BASE_DIR = Path(__file__).resolve().parent

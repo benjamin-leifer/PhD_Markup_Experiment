@@ -34,7 +34,6 @@ from __future__ import annotations
 import argparse
 import json
 import hashlib
-import logging
 import os
 import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -53,8 +52,9 @@ from battery_analysis.utils import data_update, file_storage
 from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
 from battery_analysis.utils.config import load_config
 from battery_analysis.utils import notifications
+from battery_analysis.utils.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Load configuration at module import so CLI defaults can reference it
 CONFIG = load_config()
@@ -406,7 +406,12 @@ def import_directory(
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("Failed to write state to %s: %s", state_path, exc)
 
-    print(f"Summary: created={created}, updated={updated}, skipped={skipped}")
+    logger.info(
+        "Summary: created=%s, updated=%s, skipped=%s",
+        created,
+        updated,
+        skipped,
+    )
 
     if job is not None:
         job.end_time = datetime.datetime.utcnow()
@@ -520,7 +525,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO)
+    from battery_analysis.utils.logging import get_logger
+
+    logger = get_logger(__name__)
     if args.rollback:
         return rollback_job(args.rollback)
     if not args.root:

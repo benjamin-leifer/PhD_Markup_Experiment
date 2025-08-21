@@ -1,50 +1,54 @@
-import logging
 from mongoengine import get_connection
 from mongoengine.connection import get_db
 from mongoengine.base.common import _document_registry
 
+from battery_analysis.utils.logging import get_logger
+
+logger = get_logger(__name__)
+
+
 def debug_connection_status():
-    print("\n🔍 [MongoEngine Debug Info]")
+    logger.info("\n🔍 [MongoEngine Debug Info]")
 
     # Check connection info
     try:
         conn = get_connection()
-        print("✅ Connected to:", conn.address)
-        print("🗃️  Databases:", conn.list_database_names())
+        logger.info("✅ Connected to: %s", conn.address)
+        logger.info("🗃️  Databases: %s", conn.list_database_names())
     except Exception as e:
-        print("❌ Failed to connect:", e)
+        logger.error("❌ Failed to connect: %s", e)
         return
 
     # Check current DB
     try:
         db = get_db()
-        print("📦 Current DB Name:", db.name)
-        print("📂 Collections in DB:", db.list_collection_names())
+        logger.info("📦 Current DB Name: %s", db.name)
+        logger.info("📂 Collections in DB: %s", db.list_collection_names())
     except Exception as e:
-        print("❌ Failed to get DB info:", e)
+        logger.error("❌ Failed to get DB info: %s", e)
 
     # Registered models
-    print("📘 Registered Models:", list(_document_registry.keys()))
+    logger.info("📘 Registered Models: %s", list(_document_registry.keys()))
 
     # Check actual counts from each collection if registered
     try:
         from battery_analysis.models import Sample, TestResult
-        print("📊 Sample count:", Sample.objects.count())
-        print("📊 TestResult count:", TestResult.objects.count())
+        logger.info("📊 Sample count: %s", Sample.objects.count())
+        logger.info("📊 TestResult count: %s", TestResult.objects.count())
     except Exception as e:
-        print("⚠️  Model query failed:", e)
+        logger.warning("⚠️  Model query failed: %s", e)
 
     # Enable verbose query logging
-    logger = logging.getLogger('mongoengine')
-    if not logger.hasHandlers():
-        logger.setLevel(logging.DEBUG)
+    mongo_logger = logging.getLogger('mongoengine')
+    if not mongo_logger.hasHandlers():
+        mongo_logger.setLevel(logging.DEBUG)
         handler = logging.StreamHandler()
-        logger.addHandler(handler)
-        print("🧪 Enabled mongoengine debug logging")
+        mongo_logger.addHandler(handler)
+        logger.info("🧪 Enabled mongoengine debug logging")
     else:
-        print("🧪 MongoEngine debug logging already active")
+        logger.info("🧪 MongoEngine debug logging already active")
 
-    print("🔍 End debug info\n")
+    logger.info("🔍 End debug info\n")
 
 
 def ensure_models_registered():

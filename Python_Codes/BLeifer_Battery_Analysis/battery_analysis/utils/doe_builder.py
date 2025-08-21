@@ -14,6 +14,9 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
 from ..models import ExperimentPlan
+from .logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def generate_combinations(factors: Dict[str, Iterable[Any]]) -> List[Dict[str, Any]]:
@@ -155,15 +158,15 @@ def status_report(plan_id: str) -> List[Dict[str, Any]]:
             plan = ExperimentPlan.get_by_name(plan_id)
 
     if not plan:
-        print(f"No experiment plan found with id or name '{plan_id}'")
+        logger.info("No experiment plan found with id or name '%s'", plan_id)
         return []
 
     remaining = remaining_combinations(plan)
-    print(f"Experiment Plan: {plan.name}")
-    print(f"Total combinations: {len(plan.matrix)}")
-    print(f"Remaining combinations: {len(remaining)}")
+    logger.info("Experiment Plan: %s", plan.name)
+    logger.info("Total combinations: %s", len(plan.matrix))
+    logger.info("Remaining combinations: %s", len(remaining))
     for combo in remaining:
-        print(combo)
+        logger.info("%s", combo)
     return remaining
 
 
@@ -219,8 +222,9 @@ def main(argv: list[str] | None = None) -> List[Dict[str, Any]]:
     matrix = generate_combinations(factors)
 
     if args.preview:
+        logger.info("Generated combinations:")
         for combo in matrix:
-            print(combo)
+            logger.info("%s", combo)
 
     plan = None
     if args.save or args.csv or args.pdf or args.html is not None:

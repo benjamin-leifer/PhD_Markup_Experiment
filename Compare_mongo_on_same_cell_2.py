@@ -30,11 +30,13 @@ Adjust the DEFAULT_* constants to suit your environment.
 from __future__ import annotations
 
 import argparse
-import logging
 from typing import List
 
 from mongoengine import connect           # or change to pymongo.MongoClient
 
+from battery_analysis.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 # ---- user-editable defaults ------------------------------------------------
@@ -86,11 +88,11 @@ def load_lookup_table(path: str) -> Dict[str, str]:
     try:
         df = pd.read_excel(path)
     except Exception as exc:  # File not found or parse error
-        logging.warning("Could not read lookup table %s: %s", path, exc)
+        logger.warning("Could not read lookup table %s: %s", path, exc)
         return {}
 
     if "Cell Code" not in df.columns or "Electrolyte" not in df.columns:
-        logging.warning(
+        logger.warning(
             "Lookup table %s missing required columns", path
         )
         return {}
@@ -209,12 +211,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-
     # ------------------------------------------------------------------ DB --
     connect(args.db, host=args.host, port=args.port)
-    logging.info("Connected to MongoDB '%s' @ %s:%s", args.db, args.host, args.port)
+    logger.info("Connected to MongoDB '%s' @ %s:%s", args.db, args.host, args.port)
 
     electrolyte_lookup = load_lookup_table(args.lookup)
 
@@ -233,7 +232,7 @@ def main() -> None:
         tests.extend(find_tests_by_cell_code(code))
 
     if not tests:
-        logging.error("No matching tests for codes: %s", args.codes)
+        logger.error("No matching tests for codes: %s", args.codes)
         return
 
     compare_tests_on_same_plot(
@@ -243,7 +242,7 @@ def main() -> None:
         electrolyte_lookup=electrolyte_lookup,
     )
 
-    logging.info("Plotting complete.")
+    logger.info("Plotting complete.")
 
 
 if __name__ == "__main__":

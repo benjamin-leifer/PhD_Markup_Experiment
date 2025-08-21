@@ -10,7 +10,6 @@ field for a cell code (two letters followed by two digits).
 from __future__ import annotations
 
 import argparse
-import logging
 import re
 from typing import Iterable, List, Tuple
 
@@ -130,7 +129,9 @@ def main() -> None:
     parser.add_argument("--save", help="File prefix for saving the plot")
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    from battery_analysis.utils.logging import get_logger
+
+    logger = get_logger(__name__)
     client = get_client()
     uri = getattr(client, "_configured_uri", None)
     if uri:
@@ -144,11 +145,11 @@ def main() -> None:
     for code in args.codes:
         results = find_tests_by_cell_code(code)
         if not results:
-            logging.warning("No tests found for code %s", code)
+            logger.warning("No tests found for code %s", code)
         tests.extend(results)
 
     if not tests:
-        logging.error("No matching tests found.")
+        logger.error("No matching tests found.")
         return
 
     compare_tests_on_same_plot(tests, normalized=args.normalized, save_str=args.save)
