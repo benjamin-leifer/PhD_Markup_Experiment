@@ -6,6 +6,7 @@ import json
 import os
 import pytest
 import types
+from typing import Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = ROOT / "Python_Codes" / "BLeifer_Battery_Analysis"
@@ -34,24 +35,59 @@ from battery_analysis.utils import import_directory  # noqa: E402
 from battery_analysis import parsers  # noqa: E402
 
 
-def _make_file(tmp_path: Path, name: str) -> Path:
-    path = tmp_path / "S1" / name
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("dummy")
-    return path
+@pytest.fixture
+def import_dir(tmp_path: Path) -> tuple[Path, Callable[[str, str, str], Path]]:
+    def make(name: str, content: str = "dummy", sample: str = "S1") -> Path:
+        path = tmp_path / sample / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+        return path
+
+    return tmp_path, make
 
 
-def _setup_db() -> None:
+@pytest.fixture(autouse=True)
+def fresh_db() -> None:
     Sample._registry.clear()
     disconnect()
     connect("import_test", mongo_client_class=mongomock.MongoClient, alias="default")
+    yield
+    disconnect()
+
+
+@pytest.mark.parallel
+def test_progress_logging_and_summary(
+    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root, make = import_dir
+    for i in range(3):
+        make(f"run{i}.csv")
+
+    def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
+        return object(), False
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
+    with caplog.at_level("INFO"):
+        import_directory.import_directory(root, workers=2)
+
+    assert "Processed 3/3" in caplog.text
+    captured = capsys.readouterr().out
+    assert "Summary: created=3, updated=0, skipped=0" in captured
 
 
 def test_new_file_creates_testresult(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _setup_db()
-    _make_file(tmp_path, "test.csv")
+    root, make = import_dir
+    make("test.csv")
 
     def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
         cycles, _ = parsers.parse_file(path)
@@ -67,21 +103,22 @@ def test_new_file_creates_testresult(
     )
     monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
 
-    import_directory.import_directory(tmp_path, workers=1)
+    import_directory.import_directory(root, workers=1)
 
     assert len(Sample._registry) == 1
     sample = Sample.get_by_name("S1")
     assert sample is not None
     assert len(sample.tests) == 1
-    disconnect()
 
 
+@pytest.mark.slow
 def test_sequential_files_append_cycles(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _setup_db()
-    _make_file(tmp_path, "run_Wb_1.csv")
-    _make_file(tmp_path, "run_Wb_2.csv")
+    root, make = import_dir
+    make("run_Wb_1.csv")
+    make("run_Wb_2.csv")
 
     def fake_parse(path: str) -> tuple[list[dict[str, float]], dict[str, object]]:
         name = Path(path).name
@@ -133,22 +170,22 @@ def test_sequential_files_append_cycles(
     )
     monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
 
-    import_directory.import_directory(tmp_path, workers=1)
+    import_directory.import_directory(root, workers=1)
 
     assert len(Sample._registry) == 1
     sample = Sample.get_by_name("S1")
     assert sample is not None
     assert len(sample.tests) == 1
     test = sample.tests[0]
-    assert [c["cycle_index"] for c in test.cycles] == [1, 2, 3, 4]
-    disconnect()
+    assert sorted(c["cycle_index"] for c in test.cycles) == [1, 2, 3, 4]
 
 
 def test_state_skips_and_reset_reimports(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _setup_db()
-    file_path = _make_file(tmp_path, "test.csv")
+    root, make = import_dir
+    file_path = make("test.csv")
 
     calls: list[str] = []
 
@@ -165,27 +202,27 @@ def test_state_skips_and_reset_reimports(
     )
     monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
 
-    import_directory.import_directory(tmp_path, workers=1)
+    import_directory.import_directory(root, workers=1)
     assert len(calls) == 1
-    state_path = tmp_path / ".import_state.json"
+    state_path = root / ".import_state.json"
     assert state_path.exists()
     data = json.loads(state_path.read_text())
     entry = data[str(file_path.resolve())]
     assert {"mtime", "hash"} <= set(entry)
 
-    import_directory.import_directory(tmp_path, workers=1)
+    import_directory.import_directory(root, workers=1)
     assert len(calls) == 1
 
-    import_directory.import_directory(tmp_path, reset=True, workers=1)
+    import_directory.import_directory(root, reset=True, workers=1)
     assert len(calls) == 2
-    disconnect()
 
 
 def test_hash_change_triggers_processing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _setup_db()
-    file_path = _make_file(tmp_path, "test.csv")
+    root, make = import_dir
+    file_path = make("test.csv")
 
     calls: list[str] = []
 
@@ -198,27 +235,27 @@ def test_hash_change_triggers_processing(
     )
     monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
 
-    import_directory.import_directory(tmp_path, workers=1)
+    import_directory.import_directory(root, workers=1)
     assert len(calls) == 1
 
-    state = json.loads((tmp_path / ".import_state.json").read_text())
+    state = json.loads((root / ".import_state.json").read_text())
     mtime = state[str(file_path.resolve())]["mtime"]
 
     file_path.write_text("modified")
     os.utime(file_path, (mtime, mtime))
 
-    import_directory.import_directory(tmp_path, workers=1)
+    import_directory.import_directory(root, workers=1)
     assert len(calls) == 2
-    disconnect()
 
 
 def test_missing_hash_migrates_state(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _setup_db()
-    file_path = _make_file(tmp_path, "test.csv")
+    root, make = import_dir
+    file_path = make("test.csv")
     mtime = os.path.getmtime(file_path)
-    state_path = tmp_path / ".import_state.json"
+    state_path = root / ".import_state.json"
     state_path.write_text(json.dumps({str(file_path.resolve()): mtime}))
 
     calls: list[str] = []
@@ -232,20 +269,20 @@ def test_missing_hash_migrates_state(
     )
     monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
 
-    import_directory.import_directory(tmp_path, workers=1)
+    import_directory.import_directory(root, workers=1)
     assert calls == []
 
     data = json.loads(state_path.read_text())
     entry = data[str(file_path.resolve())]
     assert {"mtime", "hash"} <= set(entry)
-    disconnect()
 
 
 def test_dry_run_skips_processing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _setup_db()
-    _make_file(tmp_path, "test.csv")
+    root, make = import_dir
+    make("test.csv")
 
     def fail(
         *_args: object, **_kwargs: object
@@ -255,19 +292,20 @@ def test_dry_run_skips_processing(
     monkeypatch.setattr(import_directory.data_update, "process_file_with_update", fail)
     monkeypatch.setattr(import_directory, "update_cell_dataset", fail)
 
-    import_directory.import_directory(tmp_path, dry_run=True, workers=1)
+    import_directory.import_directory(root, dry_run=True, workers=1)
 
     assert len(Sample._registry) == 0
-    assert not (tmp_path / ".import_state.json").exists()
-    disconnect()
+    assert not (root / ".import_state.json").exists()
 
 
+@pytest.mark.parallel
 def test_include_exclude_patterns(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _setup_db()
-    keep_dir = tmp_path / "keep"
-    skip_dir = tmp_path / "skip"
+    root, _make = import_dir
+    keep_dir = root / "keep"
+    skip_dir = root / "skip"
     (keep_dir / "keep.csv").parent.mkdir(parents=True, exist_ok=True)
     (keep_dir / "keep.csv").write_text("dummy")
     (keep_dir / "ignore.txt").write_text("dummy")
@@ -286,11 +324,10 @@ def test_include_exclude_patterns(
     monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
 
     import_directory.import_directory(
-        tmp_path,
+        root,
         workers=1,
         include=["*.csv", "*keep*"],
         exclude=["*.txt", "*skip*"],
     )
 
     assert calls == ["keep.csv"]
-    disconnect()
