@@ -134,36 +134,52 @@ def update_test_data(existing_test, new_cycles, metadata, strategy="append"):
         existing_test.cycles = []
 
     # Get existing cycle indices
-    existing_indices = set(c.cycle_index for c in existing_test.cycles)
+    existing_indices = {c.cycle_index for c in existing_test.cycles}
 
     # Add new cycles that don't exist yet
     for cycle in new_cycles:
-        if strategy == "replace" or cycle["cycle_index"] not in existing_indices:
-            # Create and add the cycle
-            cycle_doc = models.CycleSummary(
-                cycle_index=cycle["cycle_index"],
-                charge_capacity=cycle["charge_capacity"],
-                discharge_capacity=cycle["discharge_capacity"],
-                coulombic_efficiency=cycle["coulombic_efficiency"],
+        idx = cycle["cycle_index"]
+        if strategy != "replace" and idx in existing_indices:
+            logging.warning(
+                "Cycle index %s already exists for test %s; skipping",
+                idx,
+                getattr(existing_test, "id", "<unsaved>"),
             )
+            continue
 
-            # Add optional fields if present
-            if "charge_energy" in cycle and cycle["charge_energy"] is not None:
-                cycle_doc.charge_energy = cycle["charge_energy"]
+        # Create and add the cycle
+        cycle_doc = models.CycleSummary(
+            cycle_index=idx,
+            charge_capacity=cycle["charge_capacity"],
+            discharge_capacity=cycle["discharge_capacity"],
+            coulombic_efficiency=cycle["coulombic_efficiency"],
+        )
 
-            if "discharge_energy" in cycle and cycle["discharge_energy"] is not None:
-                cycle_doc.discharge_energy = cycle["discharge_energy"]
+        # Add optional fields if present
+        if "charge_energy" in cycle and cycle["charge_energy"] is not None:
+            cycle_doc.charge_energy = cycle["charge_energy"]
 
-            if "energy_efficiency" in cycle and cycle["energy_efficiency"] is not None:
-                cycle_doc.energy_efficiency = cycle["energy_efficiency"]
+        if "discharge_energy" in cycle and cycle["discharge_energy"] is not None:
+            cycle_doc.discharge_energy = cycle["discharge_energy"]
 
-            if (
-                "internal_resistance" in cycle
-                and cycle["internal_resistance"] is not None
-            ):
-                cycle_doc.internal_resistance = cycle["internal_resistance"]
+        if "energy_efficiency" in cycle and cycle["energy_efficiency"] is not None:
+            cycle_doc.energy_efficiency = cycle["energy_efficiency"]
 
-            existing_test.cycles.append(cycle_doc)
+        if "internal_resistance" in cycle and cycle["internal_resistance"] is not None:
+            cycle_doc.internal_resistance = cycle["internal_resistance"]
+
+        existing_test.cycles.append(cycle_doc)
+        existing_indices.add(idx)
+
+    # Verify cycle indices are strictly increasing without gaps
+    sorted_indices = sorted(c.cycle_index for c in existing_test.cycles)
+    for prev, curr in zip(sorted_indices, sorted_indices[1:]):
+        if curr <= prev or curr - prev > 1:
+            logging.error(
+                "Cycle indices are not strictly increasing: %s",
+                sorted_indices,
+            )
+            break
 
     # Update metadata if provided
     if metadata:
