@@ -121,7 +121,10 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
             color="light",
             fixed="bottom",
         )
-        is_admin = user_role == "admin"
+
+        def can(perm: str) -> bool:
+            return auth.has_permission(user_role, perm)
+
         tabs = dcc.Tabs(
             [
                 # Order mirrors the original Tkinter GUI tabs
@@ -141,75 +144,84 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                     ],
                     label="Overview",
                     value="overview",
+                    disabled=not can("overview"),
                 ),
                 dcc.Tab(
                     layout_components.new_material_form(),
                     label="New Material",
                     value="new-material",
+                    disabled=not can("new-material"),
                 ),
                 dcc.Tab(
                     layout_components.data_import_layout(),
                     label="Data Import",
-                    disabled=not is_admin,
+                    disabled=not can("data-import"),
                     value="data-import",
                 ),
                 dcc.Tab(
                     layout_components.export_button(),
                     label="Export",
-                    disabled=not is_admin,
+                    disabled=not can("export"),
                     value="export",
                 ),
                 dcc.Tab(
                     import_jobs_tab.layout(),
                     label="Import Jobs",
-                    disabled=not is_admin,
+                    disabled=not can("import-jobs"),
                     value="import-jobs",
                 ),
                 dcc.Tab(
                     comparison_tab.layout(),
                     label="Comparison",
                     value="comparison",
+                    disabled=not can("comparison"),
                 ),
                 dcc.Tab(
                     advanced_analysis_tab.layout(),
                     label="Advanced Analysis",
-                    disabled=not is_admin,
+                    disabled=not can("advanced-analysis"),
                     value="advanced-analysis",
                 ),
                 dcc.Tab(
                     ad_hoc_analysis_tab.layout(),
                     label="Ad Hoc Analysis",
                     value="ad-hoc",
+                    disabled=not can("ad-hoc"),
                 ),
                 dcc.Tab(
                     cycle_detail_tab.layout(),
                     label="Cycle Detail",
                     value="cycle-detail",
+                    disabled=not can("cycle-detail"),
                 ),
                 dcc.Tab(
                     eis_tab.layout(),
                     label="EIS",
                     value="eis",
+                    disabled=not can("eis"),
                 ),
                 dcc.Tab(
                     document_flow_tab.layout(),
                     label="Document Status",
                     value="document-status",
+                    disabled=not can("document-status"),
                 ),
                 dcc.Tab(
                     missing_data_tab.layout(),
                     label="Missing Data",
                     value="missing-data",
+                    disabled=not can("missing-data"),
                 ),
                 dcc.Tab(
                     doe_tab.layout(),
                     label="DOE Heatmap",
                     value="doe-heatmap",
+                    disabled=not can("doe-heatmap"),
                 ),
                 dcc.Tab(
                     trait_filter_tab.layout(),
                     label="Trait Filter",
-                    disabled=not is_admin,
+                    disabled=not can("trait-filter"),
                     value="trait-filter",
                 ),
                 dcc.Tab(
@@ -219,6 +231,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                     ),
                     label="Flags",
                     value="flags",
+                    disabled=not can("flags"),
                 ),
             ],
             id="tabs",
@@ -333,9 +346,12 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         State("material-name", "value"),
         State("material-chemistry", "value"),
         State("material-notes", "value"),
+        State("user-role", "data"),
         prevent_initial_call=True,
     )
-    def submit_material(n_clicks, name, chemistry, notes):
+    def submit_material(n_clicks, name, chemistry, notes, role):
+        if not auth.has_permission(role, "new-material"):
+            raise dash.exceptions.PreventUpdate
         data_access.add_new_material(name or "", chemistry or "", notes or "")
         return dbc.Alert("Material submitted", color="success", dismissable=True)
 
@@ -344,9 +360,12 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         Input("open-export", "n_clicks"),
         Input("close-export", "n_clicks"),
         State("export-modal", "is_open"),
+        State("user-role", "data"),
         prevent_initial_call=True,
     )
-    def toggle_export(open_clicks, close_clicks, is_open):
+    def toggle_export(open_clicks, close_clicks, is_open, role):
+        if not auth.has_permission(role, "export"):
+            raise dash.exceptions.PreventUpdate
         if open_clicks or close_clicks:
             return not is_open
         return is_open
