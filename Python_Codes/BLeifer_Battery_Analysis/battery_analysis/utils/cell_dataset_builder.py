@@ -10,7 +10,9 @@ from typing import Iterable, List
 
 import logging
 
-from battery_analysis.models import CellDataset, TestResult, CycleSummary
+from battery_analysis.models.cell_dataset import CellDataset
+from battery_analysis.models.testresult import TestResult
+from battery_analysis.models.cycle_summary import CycleSummary
 
 
 # ---------------------------------------------------------------------------
@@ -80,27 +82,35 @@ def merge_tests(
 def update_cell_dataset(cell_code: str) -> CellDataset | None:
     """Build or refresh the :class:`CellDataset` for ``cell_code``.
 
-    A dataset is created if absent; otherwise any newly available tests are
-    appended and the combined cycles re-indexed accordingly.
+    A new dataset document is created each time to preserve version history.
+    The previous dataset's ``id`` is stored in :attr:`CellDataset.previous_id` of
+    the newly created document.
     """
 
     tests = gather_tests(cell_code)
     if not tests:
         return None
 
-    dataset = CellDataset.get_by_cell_code(cell_code)
-    if not dataset:
+    existing = CellDataset.get_by_cell_code(cell_code)
+    if not existing:
         dataset = CellDataset.build_from_tests(tests)
         dataset.combined_cycles = merge_tests(tests)
+        dataset.version = 1
         sample = dataset.sample
     else:
+        data = existing.to_mongo().to_dict()
+        data.pop("_id", None)
+        dataset = CellDataset(**data)
+        dataset.version = existing.version + 1
+        dataset.previous_id = existing.id
+
         existing_ids = {t.id for t in dataset.tests}
         new_tests = [t for t in tests if t.id not in existing_ids]
         if new_tests:
             logger.info(
                 "Appending %d new tests to dataset %s: %s",
                 len(new_tests),
-                dataset.id,
+                existing.id,
                 [getattr(t, "name", str(t.id)) for t in new_tests],
             )
             dataset.tests.extend(new_tests)
@@ -111,6 +121,41 @@ def update_cell_dataset(cell_code: str) -> CellDataset | None:
         dataset.sample = sample
 
     dataset.tests.sort(key=lambda t: t.fetch().date if hasattr(t, "fetch") else t.date)
+    dataset.save()
+
+    sample.default_dataset = dataset
+    try:
+        sample.save()
+    except Exception:
+        pass
+    return dataset
+
+
+def rollback(cell_code: str, version: int) -> CellDataset | None:
+    """Restore ``cell_code`` to a previous ``version``.
+
+    A new dataset is created by copying the specified version and linking the
+    current dataset via ``previous_id``. The new dataset becomes the default for
+    the sample.
+    """
+
+    target = CellDataset.objects(cell_code=cell_code, version=version).first()
+    if target is None:
+        return None
+
+    current = CellDataset.get_by_cell_code(cell_code)
+    data = target.to_mongo().to_dict()
+    data.pop("_id", None)
+    dataset = CellDataset(**data)
+    if current:
+        dataset.version = current.version + 1
+        dataset.previous_id = current.id
+    else:
+        dataset.version = 1
+
+    sample_ref = dataset.sample
+    sample = sample_ref.fetch() if hasattr(sample_ref, "fetch") else sample_ref
+    dataset.sample = sample
     dataset.save()
 
     sample.default_dataset = dataset

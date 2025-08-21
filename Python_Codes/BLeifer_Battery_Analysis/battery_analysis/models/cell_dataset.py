@@ -23,22 +23,25 @@ if TYPE_CHECKING:  # pragma: no cover - for type checking only
 class CellDataset(Document):  # type: ignore[misc]
     """Represents a collection of tests aggregated for a given cell code."""
 
-    cell_code = fields.StringField(required=True, unique=True)
+    cell_code = fields.StringField(required=True)
     sample = fields.ReferenceField("Sample", required=True)
     tests = fields.ListField(fields.LazyReferenceField("TestResult"), default=list)
     combined_cycles = fields.ListField(
         fields.EmbeddedDocumentField(CycleSummary), default=list
     )
+    version = fields.IntField(default=1)
+    previous_id = fields.ObjectIdField(required=False)
 
-    meta = {"collection": "cell_datasets", "indexes": ["cell_code"]}
+    meta = {"collection": "cell_datasets", "indexes": ["cell_code", "version"]}
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
     @classmethod
     def get_by_cell_code(cls, code: str) -> "CellDataset | None":
-        """Return the dataset for ``code`` or ``None`` if missing."""
-        return cast("CellDataset | None", cls.objects(cell_code=code).first())
+        """Return the latest dataset for ``code`` or ``None`` if missing."""
+        qs = cls.objects(cell_code=code).order_by("-version")
+        return cast("CellDataset | None", qs.first())
 
     @classmethod
     def get_or_create(cls, code: str, sample: "Sample", **attrs: Any) -> "CellDataset":

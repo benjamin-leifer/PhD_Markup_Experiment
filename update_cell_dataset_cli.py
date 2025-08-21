@@ -16,9 +16,10 @@ PACKAGE_ROOT = os.path.join(
 if PACKAGE_ROOT not in sys.path:
     sys.path.insert(0, PACKAGE_ROOT)
 
-from battery_analysis.models import Sample, TestResult  # noqa: E402
+from battery_analysis.models import Sample, TestResult, CellDataset  # noqa: E402
 from battery_analysis.utils.cell_dataset_builder import (  # noqa: E402
     update_cell_dataset,
+    rollback,
 )
 from Mongodb_implementation import get_client  # noqa: E402
 from mongoengine import connect  # noqa: E402
@@ -37,6 +38,17 @@ def main() -> None:
         "--all",
         action="store_true",
         help="Refresh datasets for all cell codes",
+    )
+    group.add_argument(
+        "--list",
+        metavar="CODE",
+        help="List available dataset versions for the specified cell code",
+    )
+    group.add_argument(
+        "--rollback",
+        nargs=2,
+        metavar=("CODE", "VERSION"),
+        help="Rollback dataset for CODE to VERSION",
     )
     parser.add_argument(
         "--count",
@@ -87,6 +99,22 @@ def main() -> None:
             Sample.get_or_create(code)  # Ensure the sample exists
             update_cell_dataset(code)
         logging.info("Updated datasets for all cell codes")
+        return
+
+    if args.list:
+        datasets = CellDataset.objects(cell_code=args.list).order_by("version")
+        for ds in datasets:
+            logging.info("version %d: %s", ds.version, ds.id)
+        return
+
+    if args.rollback:
+        code, ver = args.rollback[0], int(args.rollback[1])
+        Sample.get_or_create(code)
+        ds = rollback(code, ver)
+        if ds:
+            logging.info("Rolled back %s to version %d", code, ver)
+        else:
+            logging.error("Version %d not found for %s", ver, code)
         return
 
     parser.print_help()
