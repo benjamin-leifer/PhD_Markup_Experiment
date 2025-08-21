@@ -34,12 +34,13 @@ import json
 import hashlib
 import logging
 import os
+import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Set, Tuple
 import fnmatch
 
 from battery_analysis import parsers
-from battery_analysis.models import Sample
+from battery_analysis.models import Sample, TestResult, ImportJob
 from battery_analysis.utils.db import ensure_connection
 from battery_analysis.utils import data_update
 from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
@@ -120,6 +121,13 @@ def import_directory(
         logger.error("Database connection not available")
         return 1
 
+    job: ImportJob | None = None
+    if not dry_run:
+        try:
+            job = ImportJob().save()
+        except Exception:  # pragma: no cover - best effort
+            job = None
+
     include = include or []
     exclude = exclude or []
 
@@ -194,11 +202,13 @@ def import_directory(
 
     workers = workers or (os.cpu_count() or 1)
 
-    def _process(abs_path: str, mtime: float, file_hash: str) -> tuple[str, str, str, float, str]:
+    def _process(
+        abs_path: str, mtime: float, file_hash: str
+    ) -> tuple[str, str, str, float, str, object | None, str | None]:
         """Worker function processing a single file."""
         if not ensure_connection():
             logger.error("Database connection not available")
-            return "", "skipped", abs_path, mtime, file_hash
+            return "", "skipped", abs_path, mtime, file_hash, None, "Database connection not available"
 
         metadata = None
         if sample_lookup or dry_run:
@@ -206,7 +216,7 @@ def import_directory(
                 _, metadata = parsers.parse_file(abs_path)
             except Exception as exc:  # pragma: no cover - defensive
                 logger.error("Failed to parse %s: %s", abs_path, exc)
-                return "", "skipped", abs_path, mtime, file_hash
+                return "", "skipped", abs_path, mtime, file_hash, None, str(exc)
 
         name = metadata.get("sample_code") if metadata else None
         if not name:
@@ -218,14 +228,14 @@ def import_directory(
 
         if dry_run:
             logger.info("Would process %s for sample %s", abs_path, name)
-            return name, "dry_run", abs_path, mtime, file_hash
+            return name, "dry_run", abs_path, mtime, file_hash, None, None
 
         sample = Sample.get_or_create(name, **attrs)
         try:
             test, was_update = data_update.process_file_with_update(abs_path, sample)
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("Failed to process %s: %s", abs_path, exc)
-            return name, "skipped", abs_path, mtime, file_hash
+            return name, "skipped", abs_path, mtime, file_hash, None, str(exc)
 
         action = "updated" if was_update else "created"
         logger.info(
@@ -234,12 +244,12 @@ def import_directory(
             getattr(test, "id", None),
             sample.name,
         )
-        return name, action, abs_path, mtime, file_hash
+        return name, action, abs_path, mtime, file_hash, getattr(test, "id", None), None
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = [executor.submit(_process, p, m, h) for p, m, h in eligible]
         for idx, fut in enumerate(as_completed(futures), 1):
-            name, action, abs_path, mtime, file_hash = fut.result()
+            name, action, abs_path, mtime, file_hash, test_id, error = fut.result()
             if name:
                 processed.add(name)
             if action == "updated":
@@ -255,6 +265,14 @@ def import_directory(
                         json.dump(state, fh, indent=2, sort_keys=True)
                 except Exception as exc:  # pragma: no cover - defensive
                     logger.error("Failed to write state to %s: %s", state_path, exc)
+            if job is not None:
+                entry = {"path": abs_path, "action": action}
+                if test_id is not None:
+                    entry["test_id"] = str(test_id)
+                if error is not None:
+                    entry["error"] = error
+                    job.errors.append(error)
+                job.files.append(entry)
             if idx % 10 == 0 or idx == total:
                 logger.info("Processed %s/%s", idx, total)
 
@@ -277,6 +295,43 @@ def import_directory(
 
     print(f"Summary: created={created}, updated={updated}, skipped={skipped}")
 
+    if job is not None:
+        job.end_time = datetime.datetime.utcnow()
+        try:
+            job.save()
+        except Exception:  # pragma: no cover - best effort
+            pass
+
+    return 0
+
+
+def rollback_job(job_id: str) -> int:
+    """Remove ``TestResult`` entries created during a previous import job."""
+
+    if not ensure_connection():
+        logger.error("Database connection not available")
+        return 1
+
+    job = ImportJob.objects(id=job_id).first()
+    if not job:
+        logger.error("ImportJob %s not found", job_id)
+        return 1
+
+    for entry in getattr(job, "files", []):
+        test_id = entry.get("test_id")
+        path = entry.get("path")
+        if test_id:
+            try:
+                TestResult.objects(id=test_id).delete()
+            except Exception:  # pragma: no cover - defensive
+                logger.error("Failed to delete TestResult %s", test_id)
+        elif path:
+            # Dataclass fallback: remove tests by matching file_path
+            for sample in getattr(Sample, "_registry", {}).values():
+                sample.tests = [
+                    t for t in sample.tests if getattr(t, "file_path", None) != path
+                ]
+    logger.info("Rolled back import job %s", job_id)
     return 0
 
 
@@ -284,7 +339,7 @@ def main(argv: list[str] | None = None) -> int:
     """Entry point for command-line execution."""
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("root", help="Root directory containing data files")
+    parser.add_argument("root", nargs="?", help="Root directory containing data files")
     parser.add_argument(
         "--sample-lookup",
         action="store_true",
@@ -320,9 +375,19 @@ def main(argv: list[str] | None = None) -> int:
         metavar="PATTERN",
         help="Glob pattern to exclude (repeatable)",
     )
+    parser.add_argument(
+        "--rollback",
+        metavar="JOB_ID",
+        help="Remove TestResult entries created during the specified job",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO)
+    if args.rollback:
+        return rollback_job(args.rollback)
+    if not args.root:
+        parser.error("root is required unless --rollback is specified")
+
     return import_directory(
         args.root,
         sample_lookup=args.sample_lookup,

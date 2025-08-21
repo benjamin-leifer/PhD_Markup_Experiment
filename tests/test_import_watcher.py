@@ -50,13 +50,14 @@ from mongoengine import connect, disconnect  # noqa: E402
 disconnect()
 connect("watcher_test", mongo_client_class=mongomock.MongoClient, alias="default")
 
-from battery_analysis.models import Sample  # noqa: E402
+from battery_analysis.models import Sample, ImportJob  # noqa: E402
 from battery_analysis.utils import import_watcher, import_directory  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
 def fresh_db() -> None:
     Sample._registry.clear()
+    ImportJob._registry.clear()
     disconnect()
     connect("watcher_test", mongo_client_class=mongomock.MongoClient, alias="default")
     yield
