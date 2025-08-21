@@ -47,6 +47,30 @@ from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
 logger = logging.getLogger(__name__)
 
 
+def process_file_with_update(path: str, sample: Sample):
+    """Public wrapper around :func:`data_update.process_file_with_update`.
+
+    This helper is exposed so external tools like
+    :mod:`battery_analysis.utils.import_watcher` can reuse the same file
+    processing logic as the directory importer.
+
+    Parameters
+    ----------
+    path:
+        Path to the data file.
+    sample:
+        :class:`Sample` instance the file belongs to.
+
+    Returns
+    -------
+    tuple
+        The ``(TestResult, was_update)`` tuple returned by
+        :func:`battery_analysis.utils.data_update.process_file_with_update`.
+    """
+
+    return data_update.process_file_with_update(path, sample)
+
+
 def import_directory(
     root: str,
     *,

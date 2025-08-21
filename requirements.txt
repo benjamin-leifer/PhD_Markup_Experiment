@@ -8,3 +8,4 @@ dash
 dash-bootstrap-components
 diskcache
 kaleido
+watchdog>=4.0.0
