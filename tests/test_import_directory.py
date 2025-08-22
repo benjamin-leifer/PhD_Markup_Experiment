@@ -35,7 +35,7 @@ from mongoengine import connect, disconnect  # noqa: E402
 disconnect()
 connect("import_test", mongo_client_class=mongomock.MongoClient, alias="default")
 from battery_analysis.models import Sample, ImportJob, TestResult  # noqa: E402
-from battery_analysis.utils import import_directory  # noqa: E402
+from battery_analysis.utils import import_directory, verify_import  # noqa: E402
 from battery_analysis import parsers  # noqa: E402
 from pandas.errors import ParserError  # noqa: E402
 
@@ -866,3 +866,63 @@ def test_report_option_writes_json(
             "detail": "boom",
         },
     }
+
+
+def test_verify_import_no_discrepancies(
+    import_dir: tuple[Path, Callable[..., Path]],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root, make = import_dir
+    sample = Sample(name="S1").save()
+    path = make("test.csv", "data")
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    tr = TestResult(sample=sample)
+    tr.file_hash = digest
+    tr.file_path = str(path)
+    sample.tests.append(tr)
+
+    code = verify_import.main([str(root), "--format", "json"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert json.loads(out) == []
+
+
+def test_verify_import_reports_discrepancies(
+    import_dir: tuple[Path, Callable[..., Path]],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root, make = import_dir
+    sample = Sample(name="S1").save()
+
+    match_path = make("match.csv", "one")
+    digest_match = hashlib.sha256(match_path.read_bytes()).hexdigest()
+    tr_match = TestResult(sample=sample)
+    tr_match.file_hash = digest_match
+    tr_match.file_path = str(match_path)
+    sample.tests.append(tr_match)
+
+    missing_path = make("missing.csv", "two")
+    digest_missing = hashlib.sha256(missing_path.read_bytes()).hexdigest()
+    tr_missing = TestResult(sample=sample)
+    tr_missing.file_hash = digest_missing
+    tr_missing.file_path = str(missing_path)
+    sample.tests.append(tr_missing)
+    missing_path.unlink()
+
+    mismatch_path = make("mismatch.csv", "three")
+    digest_mismatch = hashlib.sha256(mismatch_path.read_bytes()).hexdigest()
+    tr_mismatch = TestResult(sample=sample)
+    tr_mismatch.file_hash = digest_mismatch
+    tr_mismatch.file_path = str(mismatch_path)
+    sample.tests.append(tr_mismatch)
+    mismatch_path.write_text("changed")
+
+    extra_path = make("extra.csv", "four")
+    _ = extra_path  # silence lint
+
+    code = verify_import.main([str(root), "--format", "json"])
+    out = capsys.readouterr().out
+    assert code == 1
+    data = json.loads(out)
+    statuses = {d["status"] for d in data}
+    assert statuses == {"missing_file", "hash_mismatch", "missing_db"}
