@@ -37,6 +37,7 @@ connect("import_test", mongo_client_class=mongomock.MongoClient, alias="default"
 from battery_analysis.models import Sample, ImportJob, TestResult  # noqa: E402
 from battery_analysis.utils import import_directory  # noqa: E402
 from battery_analysis import parsers  # noqa: E402
+from pandas.errors import ParserError  # noqa: E402
 
 parsers.register_parser(".csv", lambda path: ([], {}))
 
@@ -64,7 +65,7 @@ def fresh_db() -> None:
 
 @pytest.mark.parallel
 def test_progress_logging_and_summary(
-    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    import_dir: tuple[Path, Callable[..., Path]],
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -88,7 +89,7 @@ def test_progress_logging_and_summary(
 
 
 def test_new_file_creates_testresult(
-    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    import_dir: tuple[Path, Callable[..., Path]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root, make = import_dir
@@ -194,7 +195,7 @@ def test_process_file_no_archive(
 
 
 def test_renamed_duplicate_skipped(
-    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    import_dir: tuple[Path, Callable[..., Path]],
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -233,7 +234,7 @@ def test_renamed_duplicate_skipped(
 
 
 def test_incomplete_metadata_skips_file(
-    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    import_dir: tuple[Path, Callable[..., Path]],
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -259,7 +260,7 @@ def test_incomplete_metadata_skips_file(
 
 @pytest.mark.slow
 def test_sequential_files_append_cycles(
-    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    import_dir: tuple[Path, Callable[..., Path]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root, make = import_dir
@@ -327,7 +328,7 @@ def test_sequential_files_append_cycles(
 
 
 def test_state_skips_and_reset_reimports(
-    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    import_dir: tuple[Path, Callable[..., Path]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root, make = import_dir
@@ -364,7 +365,7 @@ def test_state_skips_and_reset_reimports(
 
 
 def test_hash_change_triggers_processing(
-    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    import_dir: tuple[Path, Callable[..., Path]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root, make = import_dir
@@ -395,7 +396,7 @@ def test_hash_change_triggers_processing(
 
 
 def test_missing_hash_migrates_state(
-    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    import_dir: tuple[Path, Callable[..., Path]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root, make = import_dir
@@ -424,7 +425,7 @@ def test_missing_hash_migrates_state(
 
 
 def test_deleted_files_pruned_from_state(
-    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    import_dir: tuple[Path, Callable[..., Path]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root, make = import_dir
@@ -450,7 +451,7 @@ def test_deleted_files_pruned_from_state(
 
 
 def test_dry_run_skips_processing(
-    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    import_dir: tuple[Path, Callable[..., Path]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root, make = import_dir
@@ -472,7 +473,7 @@ def test_dry_run_skips_processing(
 
 @pytest.mark.parallel
 def test_include_exclude_patterns(
-    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    import_dir: tuple[Path, Callable[..., Path]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root, _make = import_dir
@@ -503,6 +504,69 @@ def test_include_exclude_patterns(
     )
 
     assert calls == ["keep.csv"]
+
+
+def test_retries_on_transient_failure(
+    import_dir: tuple[Path, Callable[..., Path]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Transient errors are retried with exponential backoff."""
+    root, make = import_dir
+    make("flaky.csv")
+
+    attempts = {"n": 0}
+
+    def flaky(path: str, sample: Sample, archive: bool = True) -> tuple[object, bool]:
+        attempts["n"] += 1
+        if attempts["n"] < 3:
+            raise ParserError("temp")
+        return object(), False
+
+    sleeps: list[float] = []
+
+    monkeypatch.setattr(import_directory, "RETRY_BASE_DELAY", 0.01)
+    monkeypatch.setattr(import_directory.time, "sleep", lambda s: sleeps.append(s))
+    monkeypatch.setattr(import_directory.data_update, "process_file_with_update", flaky)
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
+    import_directory.import_directory(root, workers=1, retries=2)
+
+    assert attempts["n"] == 3
+    assert sleeps == [0.01, 0.02]
+    job = ImportJob.objects().first()
+    assert job is not None
+    assert job.errors == []
+
+
+def test_retry_exhausted_records_error(
+    import_dir: tuple[Path, Callable[..., Path]],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Failures after retries are recorded on ImportJob and in reports."""
+    root, make = import_dir
+    make("fail.csv")
+
+    def fail(path: str, sample: Sample, archive: bool = True) -> tuple[object, bool]:
+        raise ConnectionError("boom")
+
+    sleeps: list[float] = []
+    monkeypatch.setattr(import_directory, "RETRY_BASE_DELAY", 0.01)
+    monkeypatch.setattr(import_directory.time, "sleep", lambda s: sleeps.append(s))
+    monkeypatch.setattr(import_directory.data_update, "process_file_with_update", fail)
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
+    report = tmp_path / "report.json"
+    import_directory.import_directory(root, workers=1, retries=2, report=str(report))
+
+    assert len(sleeps) == 2
+    job = ImportJob.objects().first()
+    assert job is not None
+    assert job.errors
+    assert "boom" in job.errors[0]
+    rows = json.loads(report.read_text())
+    assert rows[0]["status"] == "skipped"
+    assert "boom" in str(rows[0]["detail"])
 
 
 def test_config_file_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -553,7 +617,7 @@ def test_config_file_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_import_job_and_rollback(
-    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    import_dir: tuple[Path, Callable[..., Path]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root, make = import_dir
@@ -585,7 +649,7 @@ def test_import_job_and_rollback(
 
 
 def test_resume_skips_processed_files(
-    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    import_dir: tuple[Path, Callable[..., Path]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root, make = import_dir
@@ -630,7 +694,7 @@ def test_status_outputs_jobs(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_preview_samples_skips_processing(
-    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    import_dir: tuple[Path, Callable[..., Path]],
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -657,7 +721,7 @@ def test_preview_samples_skips_processing(
 
 
 def test_sample_map_overrides_names(
-    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    import_dir: tuple[Path, Callable[..., Path]],
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -693,7 +757,7 @@ def test_sample_map_overrides_names(
 
 
 def test_import_cancel(
-    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    import_dir: tuple[Path, Callable[..., Path]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root, make = import_dir
@@ -722,7 +786,7 @@ def test_import_cancel(
 
 
 def test_import_pause_and_resume(
-    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    import_dir: tuple[Path, Callable[..., Path]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root, make = import_dir
@@ -766,7 +830,7 @@ def test_import_pause_and_resume(
 
 
 def test_report_option_writes_json(
-    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    import_dir: tuple[Path, Callable[..., Path]],
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
