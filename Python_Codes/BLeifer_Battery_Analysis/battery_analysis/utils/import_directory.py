@@ -36,6 +36,8 @@ import json
 import hashlib
 import os
 import datetime
+import csv
+import tomllib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import BinaryIO, Dict, List, Set, Tuple, cast
 import fnmatch
@@ -58,6 +60,54 @@ logger = get_logger(__name__)
 
 # Load configuration at module import so CLI defaults can reference it
 CONFIG = load_config()
+
+
+def _load_sample_map(path: str) -> Dict[str, str]:
+    """Load a mapping of file paths to sample names from ``path``.
+
+    The file may be CSV with ``file_path,sample`` columns or a TOML file
+    containing a ``[samples]`` table mapping paths to names.
+    """
+
+    mapping: Dict[str, str] = {}
+    if path.lower().endswith(".csv"):
+        with open(path, newline="", encoding="utf-8") as fh:
+            reader = csv.DictReader(fh)
+            for row in reader:
+                if not row:
+                    continue
+                fp = row.get("file_path") or next(iter(row.values()))
+                sample = row.get("sample") or list(row.values())[1]
+                mapping[str(fp)] = str(sample)
+    elif path.lower().endswith(".toml"):
+        with open(path, "rb") as fh:
+            data = tomllib.load(fh)
+        table = data.get("samples", data)
+        for fp, sample in table.items():
+            mapping[str(fp)] = str(sample)
+    else:  # pragma: no cover - defensive
+        raise ValueError("Unsupported mapping format; use CSV or TOML")
+    return mapping
+
+
+def _write_sample_map(path: str, pairs: List[Tuple[str, str]]) -> None:
+    """Write ``pairs`` to ``path`` in CSV or TOML format."""
+
+    if path.lower().endswith(".csv"):
+        with open(path, "w", newline="", encoding="utf-8") as fh:
+            writer = csv.writer(fh)
+            writer.writerow(["file_path", "sample"])
+            for fp, sample in pairs:
+                writer.writerow([fp, sample])
+    elif path.lower().endswith(".toml"):
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("[samples]\n")
+            for fp, sample in pairs:
+                fp_esc = fp.replace("\\", "\\\\").replace('"', '\\"')
+                sample_esc = sample.replace("\\", "\\\\").replace('"', '\\"')
+                fh.write(f'"{fp_esc}" = "{sample_esc}"\n')
+    else:  # pragma: no cover - defensive
+        raise ValueError("Unsupported mapping format; use CSV or TOML")
 
 
 def process_file_with_update(
@@ -125,6 +175,9 @@ def import_directory(
     exclude: list[str] | None = None,
     notify: bool = False,
     archive: bool = True,
+    preview_samples: bool = False,
+    confirm: bool = False,
+    sample_map: str | None = None,
 ) -> int:
     """Import all supported files within ``root``.
 
@@ -158,6 +211,17 @@ def import_directory(
     archive:
         When ``True`` (default) archive raw files to GridFS. Disable with
         ``--no-archive``.
+    preview_samples:
+        When ``True`` display inferred sample names for each file before
+        processing. Import stops after preview unless ``confirm`` is also
+        supplied.
+    confirm:
+        Continue with the import after previewing samples. Has no effect unless
+        ``preview_samples`` is ``True``.
+    sample_map:
+        Optional path to a CSV or TOML file mapping file paths to final sample
+        names. When used with ``preview_samples`` a mapping file is created if it
+        does not exist so users may edit the names before confirming the import.
 
     Returns
     -------
@@ -165,6 +229,9 @@ def import_directory(
         ``0`` if processing completed, ``1`` if the database connection was not
         available.
     """
+
+    if preview_samples and not confirm:
+        dry_run = True
 
     if not dry_run:
         db_kwargs: Dict[str, object] = {}
@@ -193,7 +260,7 @@ def import_directory(
 
     supported = {ext.lower() for ext in parsers.get_supported_formats()}
     processed: Set[str] = set()
-    eligible: List[Tuple[str, float, str]] = []
+    entries: List[Dict[str, object]] = []
     skipped = 0
 
     state_path = os.path.join(root, ".import_state.json")
@@ -252,9 +319,31 @@ def import_directory(
                     skipped += 1
                     continue
 
-            eligible.append((abs_path, mtime, file_hash))
+            metadata = None
+            if sample_lookup or dry_run or preview_samples:
+                try:
+                    _, metadata = parsers.parse_file(abs_path)
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.error("Failed to parse %s: %s", abs_path, exc)
 
-    total = len(eligible)
+            name = metadata.get("sample_code") if metadata and sample_lookup else None
+            if not name:
+                name = os.path.basename(os.path.dirname(abs_path)) or "unknown"
+            attrs: Dict[str, object] = {}
+            if metadata and sample_lookup:
+                attrs = {k: v for k, v in metadata.items() if k not in {"sample_code", "name"}}
+
+            entries.append(
+                {
+                    "path": abs_path,
+                    "mtime": mtime,
+                    "hash": file_hash,
+                    "sample": name,
+                    "attrs": attrs,
+                }
+            )
+
+    total = len(entries)
     created = 0
     updated = 0
 
@@ -281,10 +370,34 @@ def import_directory(
             except Exception:
                 pass
 
+    pairs = [(e["path"], e["sample"]) for e in entries]
+
+    if sample_map:
+        if os.path.exists(sample_map):
+            mapping = _load_sample_map(sample_map)
+            for e in entries:
+                if e["path"] in mapping:
+                    e["sample"] = mapping[e["path"]]
+        elif preview_samples:
+            _write_sample_map(sample_map, pairs)
+        pairs = [(e["path"], e["sample"]) for e in entries]
+
+    if preview_samples:
+        max_len = max((len(p) for p, _ in pairs), default=10)
+        header = "File Path".ljust(max_len) + " | Sample"
+        print(header)
+        print("-" * len(header))
+        for fp, sample in pairs:
+            print(fp.ljust(max_len) + " | " + sample)
+        if sample_map and not os.path.exists(sample_map):
+            print(f"Sample map written to {sample_map}")
+        if not confirm:
+            return 0
+
     workers = workers or (os.cpu_count() or 1)
 
     def _process(
-        abs_path: str, mtime: float, file_hash: str
+        abs_path: str, mtime: float, file_hash: str, name: str, attrs: Dict[str, object]
     ) -> tuple[str, str, str, float, str, object | None, str | None]:
         """Worker function processing a single file."""
         if not ensure_connection():
@@ -298,22 +411,6 @@ def import_directory(
                 None,
                 "Database connection not available",
             )
-
-        metadata = None
-        if sample_lookup or dry_run:
-            try:
-                _, metadata = parsers.parse_file(abs_path)
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.error("Failed to parse %s: %s", abs_path, exc)
-                return "", "skipped", abs_path, mtime, file_hash, None, str(exc)
-
-        name = metadata.get("sample_code") if metadata else None
-        if not name:
-            name = os.path.basename(os.path.dirname(abs_path)) or "unknown"
-
-        attrs: Dict[str, object] = {}
-        if metadata:
-            attrs = {k: v for k, v in metadata.items() if k != "sample_code"}
 
         if dry_run:
             logger.info("Would process %s for sample %s", abs_path, name)
@@ -338,7 +435,12 @@ def import_directory(
         return name, action, abs_path, mtime, file_hash, getattr(test, "id", None), None
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = [executor.submit(_process, p, m, h) for p, m, h in eligible]
+        futures = [
+            executor.submit(
+                _process, e["path"], e["mtime"], e["hash"], e["sample"], e["attrs"]
+            )
+            for e in entries
+        ]
         for idx, fut in enumerate(as_completed(futures), 1):
             name, action, abs_path, mtime, file_hash, test_id, error = fut.result()
             if name:
@@ -523,6 +625,21 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Do not store raw files in GridFS",
     )
+    parser.add_argument(
+        "--preview-samples",
+        action="store_true",
+        help="Preview inferred sample names and exit unless --confirm is supplied",
+    )
+    parser.add_argument(
+        "--confirm",
+        action="store_true",
+        help="Continue with import after previewing samples",
+    )
+    parser.add_argument(
+        "--sample-map",
+        metavar="PATH",
+        help="CSV or TOML mapping file to override sample names",
+    )
     args = parser.parse_args(argv)
 
     from battery_analysis.utils.logging import get_logger
@@ -546,6 +663,9 @@ def main(argv: list[str] | None = None) -> int:
         exclude=exclude,
         notify=args.notify,
         archive=not args.no_archive,
+        preview_samples=args.preview_samples,
+        confirm=args.confirm,
+        sample_map=args.sample_map,
     )
 
 

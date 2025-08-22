@@ -514,3 +514,65 @@ def test_import_job_and_rollback(
 
     import_directory.rollback_job(job.id)
     assert Sample.get_by_name("S1").tests == []
+
+
+def test_preview_samples_skips_processing(
+    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root, make = import_dir
+    path = make("a.mpt")
+
+    called = False
+
+    def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
+        nonlocal called
+        called = True
+        return object(), False
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+
+    import_directory.import_directory(root, preview_samples=True, workers=1)
+
+    assert not called
+    out = capsys.readouterr().out
+    assert str(path.resolve()) in out
+    assert "S1" in out
+
+
+def test_sample_map_overrides_names(
+    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, make = import_dir
+    f1 = make("a.mpt", sample="d1")
+
+    map_path = tmp_path / "map.csv"
+    map_path.write_text(f"file_path,sample\n{f1.resolve()},Custom\n")
+
+    names: list[str] = []
+
+    def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
+        names.append(sample.name)
+        return object(), False
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
+    import_directory.import_directory(
+        root,
+        workers=1,
+        sample_map=str(map_path),
+        preview_samples=True,
+        confirm=True,
+    )
+
+    assert names == ["Custom"]
+    assert Sample.get_by_name("Custom") is not None
+    assert Sample.get_by_name("d1") is None
