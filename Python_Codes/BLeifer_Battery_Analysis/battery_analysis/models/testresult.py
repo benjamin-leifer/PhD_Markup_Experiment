@@ -49,6 +49,8 @@ class TestResult(Document):
     test_id = fields.StringField(required=False, help_text="Tester-provided ID")
     file_hash = fields.StringField(
         required=False,
+        unique=True,
+        sparse=True,
         help_text="Hash of the raw data file for deduplication",
     )
     file_id = fields.StringField(
@@ -104,7 +106,7 @@ class TestResult(Document):
             "base_test_name",
             "base_file_name",
             "test_id",
-            "file_hash",
+            {"fields": ["file_hash"], "unique": True},
             "cell_code",
             "date",
             "sample.anode",
