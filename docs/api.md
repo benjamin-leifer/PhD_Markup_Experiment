@@ -52,6 +52,9 @@ Request body:
 The import runs in dry‑run mode for safety and returns the utility's exit
 code.
 
+The underlying command-line tool also tracks import jobs. Use ``--status`` to
+list existing jobs and ``--resume <JOB_ID>`` to continue an interrupted run.
+
 ### `POST /doe-plans`
 
 Create a simple design‑of‑experiments plan by calling

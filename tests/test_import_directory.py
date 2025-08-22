@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import json
 import os
+import hashlib
 import pytest
 import types
 from typing import Callable
@@ -34,6 +35,8 @@ connect("import_test", mongo_client_class=mongomock.MongoClient, alias="default"
 from battery_analysis.models import Sample, ImportJob, TestResult  # noqa: E402
 from battery_analysis.utils import import_directory  # noqa: E402
 from battery_analysis import parsers  # noqa: E402
+
+parsers.register_parser(".csv", lambda path: ([], {}))
 
 
 @pytest.fixture
@@ -514,6 +517,51 @@ def test_import_job_and_rollback(
 
     import_directory.rollback_job(job.id)
     assert Sample.get_by_name("S1").tests == []
+
+
+def test_resume_skips_processed_files(
+    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, make = import_dir
+    f1 = make("first.csv")
+    f2 = make("second.csv")
+
+    processed: list[str] = []
+
+    def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
+        processed.append(Path(path).name)
+        return object(), False
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
+    job = ImportJob(processed_count=1, total_count=2, files=[{"path": str(f1)}])
+    job.save()
+
+    mtime = os.path.getmtime(f1)
+    h = hashlib.md5(f1.read_bytes()).hexdigest()
+    state = {str(f1.resolve()): {"mtime": mtime, "hash": h}}
+    (root / ".import_state.json").write_text(json.dumps(state))
+
+    import_directory.import_directory(root, workers=1, resume=str(job.id))
+
+    assert processed == ["second.csv"]
+    job = ImportJob.objects(id=job.id).first()
+    assert job is not None
+    assert job.processed_count == 2
+    assert any(e["path"] == str(f2) for e in job.files)
+
+
+def test_status_outputs_jobs(capsys: pytest.CaptureFixture[str]) -> None:
+    job = ImportJob(processed_count=1, total_count=2, errors=["err"]).save()
+    import_directory.show_status()
+    out = capsys.readouterr().out
+    assert str(job.id) in out
+    assert "1/2" in out
+    assert "err" in out
 
 
 def test_preview_samples_skips_processing(
