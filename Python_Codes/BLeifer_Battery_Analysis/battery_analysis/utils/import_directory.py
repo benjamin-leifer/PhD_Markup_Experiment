@@ -178,6 +178,7 @@ def import_directory(
     preview_samples: bool = False,
     confirm: bool = False,
     sample_map: str | None = None,
+    resume: str | None = None,
 ) -> int:
     """Import all supported files within ``root``.
 
@@ -222,6 +223,10 @@ def import_directory(
         Optional path to a CSV or TOML file mapping file paths to final sample
         names. When used with ``preview_samples`` a mapping file is created if it
         does not exist so users may edit the names before confirming the import.
+    resume:
+        Identifier of an :class:`ImportJob` to continue. Files already recorded
+        for the job are skipped and new imports are appended to the existing
+        job record.
 
     Returns
     -------
@@ -246,11 +251,21 @@ def import_directory(
             return 1
 
     job: ImportJob | None = None
+    start_idx = 0
+    processed_paths: Set[str] = set()
     if not dry_run:
-        try:
-            job = ImportJob().save()
-        except Exception:  # pragma: no cover - best effort
-            job = None
+        if resume:
+            job = ImportJob.objects(id=resume).first()
+            if not job:
+                logger.error("ImportJob %s not found", resume)
+                return 1
+            start_idx = job.processed_count or 0
+            processed_paths = {e.get("path") for e in job.files if e.get("path")}
+        else:
+            try:
+                job = ImportJob().save()
+            except Exception:  # pragma: no cover - best effort
+                job = None
 
     include = include or []
     exclude = exclude or []
@@ -343,7 +358,10 @@ def import_directory(
                 }
             )
 
-    total = len(entries)
+    if resume and processed_paths:
+        entries = [e for e in entries if e["path"] not in processed_paths]
+
+    total = start_idx + len(entries)
     created = 0
     updated = 0
 
@@ -356,8 +374,8 @@ def import_directory(
             pub = None
 
     if job is not None:
-        job.total_count = total
-        job.processed_count = 0
+        job.total_count = max(job.total_count, total)
+        job.processed_count = start_idx
         try:
             job.save()
         except Exception:
@@ -365,7 +383,7 @@ def import_directory(
         if pub:
             try:
                 pub.publish(
-                    channel, json.dumps({"job_id": str(job.id), "total": total})
+                    channel, json.dumps({"job_id": str(job.id), "total": job.total_count})
                 )
             except Exception:
                 pass
@@ -467,8 +485,8 @@ def import_directory(
                     job.errors.append(error)
                 job.files.append(entry)
                 job.current_file = abs_path
-                job.processed_count = idx
-                if idx % 5 == 0 or idx == total:
+                job.processed_count = start_idx + idx
+                if (start_idx + idx) % 5 == 0 or (start_idx + idx) == total:
                     try:
                         job.save()
                     except Exception:
@@ -481,15 +499,15 @@ def import_directory(
                                     {
                                         "job_id": str(job.id),
                                         "current_file": abs_path,
-                                        "processed": idx,
+                                        "processed": start_idx + idx,
                                         "total": total,
                                     }
                                 ),
                             )
                         except Exception:
                             pass
-            if idx % 10 == 0 or idx == total:
-                logger.info("Processed %s/%s", idx, total)
+            if (start_idx + idx) % 10 == 0 or (start_idx + idx) == total:
+                logger.info("Processed %s/%s", start_idx + idx, total)
 
     if dry_run:
         for name in processed:
@@ -537,6 +555,42 @@ def import_directory(
             msg += f" with {len(job.errors)} errors"
         notifications.send(msg)
 
+    return 0
+
+
+def show_status(job_id: str | None = None) -> int:
+    """Print status information about import jobs."""
+
+    if not ensure_connection():
+        logger.error("Database connection not available")
+        return 1
+
+    jobs: list[ImportJob]
+    if callable(getattr(ImportJob, "objects", None)):
+        qs = ImportJob.objects(id=job_id) if job_id else ImportJob.objects()
+        if job_id:
+            job = qs.first() if hasattr(qs, "first") else next(iter(qs), None)
+            if not job:
+                logger.error("ImportJob %s not found", job_id)
+                return 1
+            jobs = [job]
+        else:
+            jobs = list(qs)
+            jobs.sort(key=lambda j: getattr(j, "start_time", None), reverse=True)
+    else:  # pragma: no cover - defensive
+        jobs = []
+    if not jobs:
+        print("No import jobs found")
+        return 0
+
+    for job in jobs:
+        start = job.start_time.isoformat() if job.start_time else "N/A"
+        end = job.end_time.isoformat() if job.end_time else "N/A"
+        processed = f"{job.processed_count}/{job.total_count}"
+        errs = "; ".join(job.errors) if job.errors else "None"
+        print(
+            f"{job.id} | start: {start} | end: {end} | processed: {processed} | errors: {errs}"
+        )
     return 0
 
 
@@ -640,15 +694,29 @@ def main(argv: list[str] | None = None) -> int:
         metavar="PATH",
         help="CSV or TOML mapping file to override sample names",
     )
+    parser.add_argument(
+        "--status",
+        nargs="?",
+        const="",
+        metavar="JOB_ID",
+        help="Show status of import jobs; optionally provide JOB_ID",
+    )
+    parser.add_argument(
+        "--resume",
+        metavar="JOB_ID",
+        help="Resume a previously interrupted import job",
+    )
     args = parser.parse_args(argv)
 
     from battery_analysis.utils.logging import get_logger
 
     logger = get_logger(__name__)
+    if args.status is not None:
+        return show_status(args.status or None)
     if args.rollback:
         return rollback_job(args.rollback)
     if not args.root:
-        parser.error("root is required unless --rollback is specified")
+        parser.error("root is required unless --rollback or --status is specified")
 
     include = args.include if args.include is not None else CONFIG.get("include")
     exclude = args.exclude if args.exclude is not None else CONFIG.get("exclude")
@@ -666,6 +734,7 @@ def main(argv: list[str] | None = None) -> int:
         preview_samples=args.preview_samples,
         confirm=args.confirm,
         sample_map=args.sample_map,
+        resume=args.resume,
     )
 
 

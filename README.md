@@ -122,6 +122,16 @@ Each file processed by ``import_directory`` is archived to MongoDB's GridFS so
 the original data can be retrieved later. Specify ``--no-archive`` to disable
 this behaviour when storing the raw files is unnecessary.
 
+Previous import runs are stored in ``ImportJob`` records. Use ``--status`` to
+list recent jobs and their completion state::
+
+    python -m battery_analysis.utils.import_directory --status
+
+Provide a job identifier to show a single record. Interrupted jobs can be
+resumed by passing the identifier with ``--resume``::
+
+    python -m battery_analysis.utils.import_directory data --resume <JOB_ID>
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
