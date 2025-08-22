@@ -302,12 +302,18 @@ def import_directory(
     state_path = os.path.join(root, ".import_state.json")
     state: Dict[str, object] = {}
     state_dirty = False
+    original_state: Dict[str, object] = {}
     if not reset and os.path.exists(state_path):
         try:
             with open(state_path, "r", encoding="utf-8") as fh:
                 state = json.load(fh)
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("Failed to load state from %s: %s", state_path, exc)
+        original_state = dict(state)
+    else:
+        original_state = {}
+
+    current_paths: Set[str] = set()
 
     for dirpath, _, filenames in os.walk(root):
         if exclude and _match(dirpath, exclude):
@@ -323,6 +329,7 @@ def import_directory(
                 continue
             file_path = os.path.join(dirpath, filename)
             abs_path = os.path.abspath(file_path)
+            current_paths.add(abs_path)
             mtime = os.path.getmtime(abs_path)
 
             # compute hash of file contents
@@ -382,6 +389,13 @@ def import_directory(
                     "attrs": attrs,
                 }
             )
+
+    if not reset:
+        missing_paths = set(state.keys()) - current_paths
+        if missing_paths:
+            for path in missing_paths:
+                state.pop(path, None)
+            state_dirty = True
 
     if resume and processed_paths:
         entries = [e for e in entries if e["path"] not in processed_paths]
@@ -572,7 +586,7 @@ def import_directory(
             except Exception as exc:  # pragma: no cover - defensive
                 logger.error("Failed to refresh dataset for %s: %s", name, exc)
 
-    if state_dirty and not dry_run:
+    if (state_dirty or (not reset and state != original_state)) and not dry_run:
         try:
             with open(state_path, "w", encoding="utf-8") as fh:
                 json.dump(state, fh, indent=2, sort_keys=True)
