@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from typing import List, Dict
+from pathlib import Path
 
 import dash
 from dash import html, Input, Output, ALL, ctx, dcc
 import dash_bootstrap_components as dbc
-import json
 
 from . import layout as layout_components
 
@@ -19,7 +19,9 @@ try:  # pragma: no cover - database may not be available
 except Exception:  # pragma: no cover - fallback when package missing
     models = None  # type: ignore
     import_directory = None  # type: ignore
-    load_config = lambda: {}  # type: ignore
+    def load_config() -> dict:  # type: ignore
+        return {}
+
     redis = None  # type: ignore
 
 cfg = load_config()
@@ -35,6 +37,7 @@ if redis and cfg.get("redis_url"):
 TABLE_CONTAINER = "import-jobs-table-container"
 STATUS_MESSAGE = "import-jobs-status"
 PROGRESS_INTERVAL = "import-jobs-progress"
+CONTROL_FILE = Path(__file__).resolve().parents[1] / ".import_control"
 
 
 def _get_jobs() -> List[Dict[str, str]]:
@@ -48,8 +51,14 @@ def _get_jobs() -> List[Dict[str, str]]:
             records.append(
                 {
                     "id": str(job.id),
-                    "start_time": job.start_time.strftime("%Y-%m-%d %H:%M") if job.start_time else "",
-                    "end_time": job.end_time.strftime("%Y-%m-%d %H:%M") if job.end_time else "",
+                    "start_time": (
+                        job.start_time.strftime("%Y-%m-%d %H:%M")
+                        if job.start_time
+                        else ""
+                    ),
+                    "end_time": (
+                        job.end_time.strftime("%Y-%m-%d %H:%M") if job.end_time else ""
+                    ),
                     "file_count": str(len(getattr(job, "files", []))),
                     "errors": "; ".join(getattr(job, "errors", [])),
                 }
@@ -65,6 +74,22 @@ def layout() -> html.Div:
     table = layout_components.import_jobs_table(jobs)
     components = [
         html.H4("Import Jobs"),
+        html.Div(
+            [
+                dbc.Button(
+                    "Pause Imports",
+                    id="pause-imports",
+                    color="warning",
+                    className="me-2",
+                ),
+                dbc.Button(
+                    "Cancel Imports",
+                    id="cancel-imports",
+                    color="danger",
+                ),
+            ],
+            className="mb-2",
+        ),
         html.Div(table, id=TABLE_CONTAINER),
         html.Div(id=STATUS_MESSAGE),
     ]
@@ -77,12 +102,31 @@ def register_callbacks(app: dash.Dash) -> None:
     """Register callbacks for the Import Jobs tab."""
 
     @app.callback(
+        Output(STATUS_MESSAGE, "children", allow_duplicate=True),
+        Input("pause-imports", "n_clicks"),
+        Input("cancel-imports", "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def _control_imports(_: int, __: int) -> str:  # pragma: no cover - callback
+        trigger = ctx.triggered_id
+        if not trigger:
+            raise dash.exceptions.PreventUpdate
+        cmd = "pause" if trigger == "pause-imports" else "cancel"
+        try:
+            CONTROL_FILE.write_text(cmd)
+        except Exception:  # pragma: no cover - best effort
+            return "Failed to write control command"
+        return f"Sent {cmd} command"
+
+    @app.callback(
         Output(TABLE_CONTAINER, "children"),
         Output(STATUS_MESSAGE, "children"),
         Input({"type": "rollback-job", "index": ALL}, "n_clicks"),
         prevent_initial_call=True,
     )
-    def _rollback_job(_: List[int]) -> tuple[dbc.Table, str]:  # pragma: no cover - callback
+    def _rollback_job(
+        _: List[int],
+    ) -> tuple[dbc.Table, str]:  # pragma: no cover - callback
         trigger = ctx.triggered_id
         if not trigger:
             raise dash.exceptions.PreventUpdate
@@ -94,6 +138,7 @@ def register_callbacks(app: dash.Dash) -> None:
         return refreshed, message
 
     if _pubsub:
+
         @app.callback(
             Output(TABLE_CONTAINER, "children", allow_duplicate=True),
             Input(PROGRESS_INTERVAL, "n_intervals"),

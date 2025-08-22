@@ -4,3 +4,4 @@ __pycache__/
 *.egg-info/
 *.zip
 *.log
+.import_control

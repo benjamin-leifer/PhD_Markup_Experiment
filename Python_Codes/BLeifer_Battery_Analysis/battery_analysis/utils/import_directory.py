@@ -38,9 +38,11 @@ import os
 import datetime
 import csv
 import tomllib
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import BinaryIO, Dict, List, Set, Tuple, cast
+from typing import BinaryIO, Dict, List, Set, Tuple, Iterator, cast
 import fnmatch
+from pathlib import Path
 
 try:
     import redis
@@ -60,6 +62,25 @@ logger = get_logger(__name__)
 
 # Load configuration at module import so CLI defaults can reference it
 CONFIG = load_config()
+
+CONTROL_FILE = Path(__file__).resolve().parents[4] / ".import_control"
+
+
+def _read_control_command() -> str | None:
+    """Return the current command from the control file if it exists."""
+    try:
+        cmd = CONTROL_FILE.read_text(encoding="utf-8").strip().lower()
+        return cmd or None
+    except FileNotFoundError:
+        return None
+
+
+def _chunked(
+    seq: List[Dict[str, object]], size: int
+) -> Iterator[List[Dict[str, object]]]:
+    """Yield lists of up to ``size`` items from ``seq``."""
+    for i in range(0, len(seq), size):
+        yield seq[i : i + size]
 
 
 def _load_sample_map(path: str) -> Dict[str, str]:
@@ -346,7 +367,11 @@ def import_directory(
                 name = os.path.basename(os.path.dirname(abs_path)) or "unknown"
             attrs: Dict[str, object] = {}
             if metadata and sample_lookup:
-                attrs = {k: v for k, v in metadata.items() if k not in {"sample_code", "name"}}
+                attrs = {
+                    k: v
+                    for k, v in metadata.items()
+                    if k not in {"sample_code", "name"}
+                }
 
             entries.append(
                 {
@@ -383,7 +408,8 @@ def import_directory(
         if pub:
             try:
                 pub.publish(
-                    channel, json.dumps({"job_id": str(job.id), "total": job.total_count})
+                    channel,
+                    json.dumps({"job_id": str(job.id), "total": job.total_count}),
                 )
             except Exception:
                 pass
@@ -452,62 +478,89 @@ def import_directory(
         )
         return name, action, abs_path, mtime, file_hash, getattr(test, "id", None), None
 
+    idx = 0
+    cancelled = False
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = [
-            executor.submit(
-                _process, e["path"], e["mtime"], e["hash"], e["sample"], e["attrs"]
-            )
-            for e in entries
-        ]
-        for idx, fut in enumerate(as_completed(futures), 1):
-            name, action, abs_path, mtime, file_hash, test_id, error = fut.result()
-            if name:
-                processed.add(name)
-            if action == "updated":
-                updated += 1
-            elif action == "created":
-                created += 1
-            elif action == "skipped":
-                skipped += 1
-            if action in {"updated", "created"} and not dry_run:
-                state[abs_path] = {"mtime": mtime, "hash": file_hash}
-                try:
-                    with open(state_path, "w", encoding="utf-8") as fh:
-                        json.dump(state, fh, indent=2, sort_keys=True)
-                except Exception as exc:  # pragma: no cover - defensive
-                    logger.error("Failed to write state to %s: %s", state_path, exc)
-            if job is not None:
-                entry = {"path": abs_path, "action": action}
-                if test_id is not None:
-                    entry["test_id"] = str(test_id)
-                if error is not None:
-                    entry["error"] = error
-                    job.errors.append(error)
-                job.files.append(entry)
-                job.current_file = abs_path
-                job.processed_count = start_idx + idx
-                if (start_idx + idx) % 5 == 0 or (start_idx + idx) == total:
+        for batch in _chunked(entries, max(1, workers)):
+            futures = [
+                executor.submit(
+                    _process, e["path"], e["mtime"], e["hash"], e["sample"], e["attrs"]
+                )
+                for e in batch
+            ]
+            for fut in as_completed(futures):
+                idx += 1
+                name, action, abs_path, mtime, file_hash, test_id, error = fut.result()
+                if name:
+                    processed.add(name)
+                if action == "updated":
+                    updated += 1
+                elif action == "created":
+                    created += 1
+                elif action == "skipped":
+                    skipped += 1
+                if action in {"updated", "created"} and not dry_run:
+                    state[abs_path] = {"mtime": mtime, "hash": file_hash}
                     try:
-                        job.save()
-                    except Exception:
-                        pass
-                    if pub:
+                        with open(state_path, "w", encoding="utf-8") as fh:
+                            json.dump(state, fh, indent=2, sort_keys=True)
+                    except Exception as exc:  # pragma: no cover - defensive
+                        logger.error("Failed to write state to %s: %s", state_path, exc)
+                if job is not None:
+                    entry = {"path": abs_path, "action": action}
+                    if test_id is not None:
+                        entry["test_id"] = str(test_id)
+                    if error is not None:
+                        entry["error"] = error
+                        job.errors.append(error)
+                    job.files.append(entry)
+                    job.current_file = abs_path
+                    job.processed_count = start_idx + idx
+                    if (start_idx + idx) % 5 == 0 or (start_idx + idx) == total:
                         try:
-                            pub.publish(
-                                channel,
-                                json.dumps(
-                                    {
-                                        "job_id": str(job.id),
-                                        "current_file": abs_path,
-                                        "processed": start_idx + idx,
-                                        "total": total,
-                                    }
-                                ),
-                            )
+                            job.save()
                         except Exception:
                             pass
-            if (start_idx + idx) % 10 == 0 or (start_idx + idx) == total:
-                logger.info("Processed %s/%s", start_idx + idx, total)
+                        if pub:
+                            try:
+                                pub.publish(
+                                    channel,
+                                    json.dumps(
+                                        {
+                                            "job_id": str(job.id),
+                                            "current_file": abs_path,
+                                            "processed": start_idx + idx,
+                                            "total": total,
+                                        }
+                                    ),
+                                )
+                            except Exception:
+                                pass
+                if (start_idx + idx) % 10 == 0 or (start_idx + idx) == total:
+                    logger.info("Processed %s/%s", start_idx + idx, total)
+
+            cmd = _read_control_command()
+            if cmd == "cancel":
+                logger.info("Import cancelled via control file")
+                cancelled = True
+                break
+            if cmd == "pause":
+                logger.info("Import paused via control file")
+                while True:
+                    time.sleep(0.2)
+                    cmd = _read_control_command()
+                    if cmd == "cancel":
+                        logger.info("Import cancelled via control file")
+                        cancelled = True
+                        break
+                    if cmd != "pause":
+                        logger.info("Import resumed")
+                        break
+                if cancelled:
+                    break
+
+    if cancelled:
+        return 0
 
     if dry_run:
         for name in processed:
@@ -710,7 +763,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from battery_analysis.utils.logging import get_logger
 
-    logger = get_logger(__name__)
+    _logger = get_logger(__name__)
     if args.status is not None:
         return show_status(args.status or None)
     if args.rollback:
