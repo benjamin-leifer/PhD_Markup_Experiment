@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, TypedDict
 
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
@@ -9,10 +10,14 @@ from pydantic import BaseModel
 from dashboard.auth import load_users
 from battery_analysis.utils.import_directory import import_directory
 from battery_analysis.utils.doe_builder import save_plan
+from battery_analysis.models import ImportJob
 
 app = FastAPI()
 
 security = HTTPBearer()
+
+# Simple thread pool for background import tasks
+executor = ThreadPoolExecutor(max_workers=2)
 
 
 class _UserRecord(TypedDict, total=False):
@@ -80,3 +85,53 @@ def doe_plans(
 ) -> Dict[str, Any]:
     plan = save_plan(req.name, req.factors)
     return {"status": "ok", "plan": {"name": plan.name, "matrix": plan.matrix}}
+
+
+class ImportJobRequest(BaseModel):  # type: ignore[misc]
+    path: str
+
+
+@app.post("/import-jobs")  # type: ignore[misc]
+def create_import_job(
+    req: ImportJobRequest, role: str = Depends(require_role("admin"))
+) -> Dict[str, str]:
+    job = ImportJob().save()
+    # Run the import asynchronously, resuming the created job
+    executor.submit(import_directory, req.path, resume=str(job.id))
+    return {"status": "queued", "job_id": str(job.id)}
+
+
+@app.get("/import-jobs")  # type: ignore[misc]
+def list_import_jobs(role: str = Depends(require_role("admin", "viewer"))) -> Dict[str, Any]:
+    jobs: List[Dict[str, Any]] = []
+    try:
+        for job in ImportJob.objects.order_by("-start_time"):
+            jobs.append(
+                {
+                    "id": str(job.id),
+                    "start_time": getattr(job.start_time, "isoformat", lambda: None)(),
+                    "end_time": getattr(job.end_time, "isoformat", lambda: None)(),
+                    "processed_count": getattr(job, "processed_count", 0),
+                    "errors": list(getattr(job, "errors", [])),
+                }
+            )
+    except Exception:
+        pass
+    return {"status": "ok", "jobs": jobs}
+
+
+@app.get("/import-jobs/{job_id}")  # type: ignore[misc]
+def get_import_job(
+    job_id: str, role: str = Depends(require_role("admin", "viewer"))
+) -> Dict[str, Any]:
+    job = ImportJob.objects(id=job_id).first()
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+    return {
+        "status": "ok",
+        "job": {
+            "start_time": getattr(job.start_time, "isoformat", lambda: None)(),
+            "processed_count": getattr(job, "processed_count", 0),
+            "errors": list(getattr(job, "errors", [])),
+        },
+    }
