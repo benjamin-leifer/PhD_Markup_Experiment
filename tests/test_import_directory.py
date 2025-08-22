@@ -7,6 +7,8 @@ import os
 import hashlib
 import pytest
 import types
+import threading
+import time
 from typing import Callable
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,7 +42,7 @@ parsers.register_parser(".csv", lambda path: ([], {}))
 
 
 @pytest.fixture
-def import_dir(tmp_path: Path) -> tuple[Path, Callable[[str, str, str], Path]]:
+def import_dir(tmp_path: Path) -> tuple[Path, Callable[..., Path]]:
     def make(name: str, content: str = "dummy", sample: str = "S1") -> Path:
         path = tmp_path / sample / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -624,3 +626,76 @@ def test_sample_map_overrides_names(
     assert names == ["Custom"]
     assert Sample.get_by_name("Custom") is not None
     assert Sample.get_by_name("d1") is None
+
+
+def test_import_cancel(
+    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, make = import_dir
+    make("a.csv")
+    make("b.csv")
+
+    control = root / ".import_control"
+    monkeypatch.setattr(import_directory, "CONTROL_FILE", control)
+
+    processed: list[str] = []
+
+    def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
+        processed.append(path)
+        if len(processed) == 1:
+            control.write_text("cancel")
+        return object(), False
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
+    import_directory.import_directory(root, workers=1)
+
+    assert len(processed) == 1
+
+
+def test_import_pause_and_resume(
+    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, make = import_dir
+    make("a.csv")
+    make("b.csv")
+
+    control = root / ".import_control"
+    monkeypatch.setattr(import_directory, "CONTROL_FILE", control)
+
+    processed: list[str] = []
+
+    def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
+        processed.append(path)
+        if len(processed) == 1:
+            control.write_text("pause")
+        return object(), False
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
+    thread = threading.Thread(
+        target=import_directory.import_directory,
+        args=(root,),
+        kwargs={"workers": 1},
+        daemon=True,
+    )
+    thread.start()
+
+    for _ in range(20):
+        if control.exists() and control.read_text() == "pause":
+            break
+        time.sleep(0.05)
+
+    assert thread.is_alive()
+    control.write_text("resume")
+    thread.join(timeout=5)
+
+    assert len(processed) == 2
