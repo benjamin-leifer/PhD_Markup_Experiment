@@ -30,6 +30,7 @@ ROLE_PERMISSIONS: Dict[str, Set[str]] = {
         "document-status",
         "missing-data",
         "doe-heatmap",
+        "raw-files",
         "flags",
     },
     "admin": {
@@ -47,6 +48,7 @@ ROLE_PERMISSIONS: Dict[str, Set[str]] = {
         "missing-data",
         "doe-heatmap",
         "trait-filter",
+        "raw-files",
         "flags",
     },
 }

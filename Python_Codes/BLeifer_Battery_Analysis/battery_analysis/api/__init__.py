@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, TypedDict
+from typing import Any, Callable, Dict, List, TypedDict, cast
 
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -11,6 +11,8 @@ from dashboard.auth import load_users
 from battery_analysis.utils.import_directory import import_directory
 from battery_analysis.utils.doe_builder import save_plan
 from battery_analysis.models import ImportJob
+from battery_analysis.utils import file_storage
+from fastapi.responses import StreamingResponse
 
 app = FastAPI()
 
@@ -30,7 +32,7 @@ def _get_role(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> str:
     token = credentials.credentials
-    users: Dict[str, _UserRecord] = load_users()
+    users: Dict[str, _UserRecord] = cast(Dict[str, _UserRecord], load_users())
     for user in users.values():
         if user.get("api_token") == token:
             return user["role"]
@@ -74,6 +76,16 @@ def list_tests(role: str = Depends(require_role("admin", "viewer"))) -> Dict[str
     return {"status": "ok", "tests": tests}
 
 
+@app.get("/raw/{file_id}")  # type: ignore[misc]
+def get_raw_file(
+    file_id: str, role: str = Depends(require_role("admin", "operator"))
+) -> StreamingResponse:
+    """Stream the raw file bytes for ``file_id``."""
+
+    data = file_storage.retrieve_raw(file_id)
+    return StreamingResponse(iter([data]), media_type="application/octet-stream")
+
+
 class DoeRequest(BaseModel):  # type: ignore[misc]
     name: str
     factors: Dict[str, List[Any]]
@@ -102,7 +114,9 @@ def create_import_job(
 
 
 @app.get("/import-jobs")  # type: ignore[misc]
-def list_import_jobs(role: str = Depends(require_role("admin", "viewer"))) -> Dict[str, Any]:
+def list_import_jobs(
+    role: str = Depends(require_role("admin", "viewer"))
+) -> Dict[str, Any]:
     jobs: List[Dict[str, Any]] = []
     try:
         for job in ImportJob.objects.order_by("-start_time"):
@@ -126,7 +140,9 @@ def get_import_job(
 ) -> Dict[str, Any]:
     job = ImportJob.objects(id=job_id).first()
     if not job:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
+        )
     return {
         "status": "ok",
         "job": {

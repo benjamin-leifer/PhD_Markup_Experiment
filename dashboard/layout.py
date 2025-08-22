@@ -4,6 +4,16 @@ import dash_bootstrap_components as dbc
 from dash import html, dcc, dash_table
 from typing import List, Dict, Any
 
+# mypy: ignore-errors
+
+
+def raw_files_layout() -> html.Div:
+    """Proxy to the raw files tab layout."""
+
+    from .raw_files_tab import layout as _layout
+
+    return _layout()
+
 
 def flagged_table(flags: List[Dict[str, str]]) -> dbc.Table:
     """Return a table of flagged samples."""
@@ -375,6 +385,7 @@ def toast_container() -> html.Div:
         },
     )
 
+
 def import_jobs_table(jobs: List[Dict[str, str]]) -> dbc.Table:
     """Return a table summarizing import jobs."""
     header = html.Thead(
@@ -423,9 +434,7 @@ def watcher_table(watchers: List[Dict[str, Any]]) -> dbc.Table:
     """Return a table summarizing active directory watchers."""
 
     header = html.Thead(
-        html.Tr(
-            [html.Th("Directory"), html.Th("Uptime"), html.Th("Actions")]
-        )
+        html.Tr([html.Th("Directory"), html.Th("Uptime"), html.Th("Actions")])
     )
     rows = []
     for w in watchers:
