@@ -67,6 +67,13 @@ def _by_test(test_id: str, out: str | None) -> None:
     _download(test.file_id, out)
 
 
+def _cleanup() -> None:
+    """Garbage collect orphaned GridFS files."""
+
+    removed = file_storage.cleanup_orphaned()
+    print(f"Removed {removed} orphaned files.")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -81,6 +88,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_bt.add_argument("test_id", help="TestResult identifier")
     p_bt.add_argument("--out", "-o", help="output path; defaults to stdout")
 
+    sub.add_parser("cleanup", help="remove unreferenced GridFS files")
+
     return parser
 
 
@@ -93,6 +102,8 @@ def main(argv: list[str] | None = None) -> None:
         _download(args.file_id, args.out)
     elif args.cmd == "by-test":
         _by_test(args.test_id, args.out)
+    elif args.cmd == "cleanup":
+        _cleanup()
     else:  # pragma: no cover - argparse enforces choices
         parser.print_help()
 
