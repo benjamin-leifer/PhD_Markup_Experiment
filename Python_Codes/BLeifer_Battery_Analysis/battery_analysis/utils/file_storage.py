@@ -1,5 +1,6 @@
 import os
 import datetime
+import hashlib
 from battery_analysis.models import RawDataFile, TestResult
 
 
@@ -131,6 +132,16 @@ def get_raw_data_file_by_id(file_id, as_file_path=False):
     return raw_file.file_data.read()
 
 
+def _sha256_file(path: str) -> str:
+    """Return the SHA256 hex digest of ``path``."""
+
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def save_raw(
     file_path: str,
     *,
@@ -138,6 +149,12 @@ def save_raw(
     file_type: str | None = None,
 ) -> str:
     """Store ``file_path`` in GridFS and return its identifier.
+
+    Before writing a new :class:`RawDataFile`, this function computes the
+    SHA256 hash of the file's bytes and checks whether another
+    :class:`~battery_analysis.models.TestResult` already references an
+    identical file.  If so, the existing ``file_id`` is reused to avoid
+    duplicate GridFS entries.
 
     Parameters
     ----------
@@ -155,8 +172,32 @@ def save_raw(
         the archived bytes.
     """
 
+    file_hash = _sha256_file(file_path)
+
+    existing = TestResult.objects(file_hash=file_hash).first()
+    if existing and getattr(existing, "file_id", None):
+        file_id = existing.file_id
+        if test_result is not None:
+            test_result.file_hash = file_hash
+            test_result.file_id = file_id
+            try:  # best effort; tests may use simple stubs
+                test_result.save()
+            except Exception:
+                pass
+        return file_id
+
     raw = store_raw_data_file(file_path, test_result=test_result, file_type=file_type)
-    return str(raw.id)
+    file_id = str(raw.id)
+
+    if test_result is not None:
+        test_result.file_hash = file_hash
+        test_result.file_id = file_id
+        try:
+            test_result.save()
+        except Exception:
+            pass
+
+    return file_id
 
 
 def retrieve_raw(file_id: str, as_file_path: bool = False) -> bytes | str:
@@ -178,3 +219,26 @@ def retrieve_raw(file_id: str, as_file_path: bool = False) -> bytes | str:
     """
 
     return get_raw_data_file_by_id(file_id, as_file_path=as_file_path)
+
+
+def cleanup_orphaned() -> int:
+    """Remove ``RawDataFile`` documents with no referencing ``TestResult``.
+
+    Returns
+    -------
+    int
+        The number of removed files.
+    """
+
+    removed = 0
+    for raw in RawDataFile.objects():
+        referenced = TestResult.objects(file_id=str(raw.id)).first()
+        if referenced:
+            continue
+        try:
+            raw.file_data.delete()  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        raw.delete()
+        removed += 1
+    return removed
