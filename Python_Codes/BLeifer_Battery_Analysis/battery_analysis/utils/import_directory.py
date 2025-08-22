@@ -139,7 +139,7 @@ def _write_sample_map(path: str, pairs: List[Tuple[str, str]]) -> None:
 
 
 def process_file_with_update(
-    path: str, sample: Sample, *, archive: bool = True
+    path: str, sample: Sample, *, archive: bool = True, job: ImportJob | None = None
 ) -> tuple[TestResult, bool]:
     """Process ``path`` for ``sample`` and optionally archive the raw file.
 
@@ -158,6 +158,9 @@ def process_file_with_update(
         When ``True`` (default) the raw file is saved to GridFS via
         :func:`battery_analysis.utils.file_storage.save_raw` and the resulting
         ``file_id`` recorded on the :class:`~battery_analysis.models.TestResult`.
+    job:
+        Optional :class:`~battery_analysis.models.ImportJob` to record on the
+        archived raw file.
 
     Returns
     -------
@@ -166,10 +169,11 @@ def process_file_with_update(
         :func:`battery_analysis.utils.data_update.process_file_with_update`.
     """
 
-    test, was_update = data_update.process_file_with_update(path, sample)
+    abs_path = os.path.abspath(path)
+    test, was_update = data_update.process_file_with_update(abs_path, sample)
 
     h = hashlib.sha256()
-    with open(path, "rb") as fh:
+    with open(abs_path, "rb") as fh:
         for chunk in iter(lambda: fh.read(8192), b""):
             h.update(chunk)
     digest = h.hexdigest()
@@ -179,7 +183,12 @@ def process_file_with_update(
 
         if archive:
             try:
-                file_id = file_storage.save_raw(path, test_result=test)
+                file_id = file_storage.save_raw(
+                    path,
+                    test_result=test,
+                    source_path=abs_path,
+                    import_job=job,
+                )
                 test.file_id = file_id
             except Exception as exc:  # pragma: no cover - best effort
                 logger.warning("Failed to archive %s: %s", path, exc)
@@ -495,7 +504,7 @@ def import_directory(
         while True:
             try:
                 test, was_update = process_file_with_update(
-                    abs_path, sample, archive=archive
+                    abs_path, sample, archive=archive, job=job
                 )
                 break
             except RETRY_EXCEPTIONS as exc:

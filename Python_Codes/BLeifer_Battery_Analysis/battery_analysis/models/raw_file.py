@@ -10,6 +10,8 @@ class RawDataFile(Document):  # type: ignore[misc]
     upload_date = fields.DateTimeField()
     test_result = fields.ReferenceField("TestResult")
     sample = fields.ReferenceField("Sample")
+    source_path = fields.StringField()
+    import_job_id = fields.ObjectIdField()
     operator = fields.StringField()
     acquisition_device = fields.StringField()
     tags = fields.ListField(fields.StringField())
@@ -17,5 +19,12 @@ class RawDataFile(Document):  # type: ignore[misc]
 
     meta = {
         "collection": "raw_data_files",
-        "indexes": ["filename", "test_result", "sample", "tags", "operator"],
+        "indexes": [
+            "filename",
+            "test_result",
+            "sample",
+            "tags",
+            "operator",
+            "import_job_id",
+        ],
     }

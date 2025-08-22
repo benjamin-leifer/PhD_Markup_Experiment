@@ -1,10 +1,17 @@
 import os
 import datetime
 import hashlib
-from battery_analysis.models import RawDataFile, TestResult
+from battery_analysis.models import ImportJob, RawDataFile, TestResult
 
 
-def store_raw_data_file(file_path, test_result=None, file_type=None):
+def store_raw_data_file(
+    file_path,
+    test_result=None,
+    file_type=None,
+    *,
+    source_path: str | None = None,
+    import_job: ImportJob | str | None = None,
+):
     """
     Store a raw data file in GridFS.
 
@@ -12,6 +19,8 @@ def store_raw_data_file(file_path, test_result=None, file_type=None):
         file_path: Path to the file to store
         test_result: TestResult document or ID to associate with the file
         file_type: Type of file (e.g., 'arbin_excel')
+        source_path: Original absolute path of the file on disk
+        import_job: ImportJob document or id that created this file
 
     Returns:
         RawDataFile: The stored file document
@@ -45,12 +54,20 @@ def store_raw_data_file(file_path, test_result=None, file_type=None):
             existing.filename = filename
             existing.file_type = file_type
             existing.upload_date = datetime.datetime.now()
+            if source_path is not None:
+                existing.source_path = source_path
+            if import_job is not None:
+                existing.import_job_id = getattr(import_job, "id", import_job)
             existing.save()
             return existing
 
     # Create new file document
     raw_file = RawDataFile(
-        filename=filename, file_type=file_type, upload_date=datetime.datetime.now()
+        filename=filename,
+        file_type=file_type,
+        upload_date=datetime.datetime.now(),
+        source_path=source_path,
+        import_job_id=getattr(import_job, "id", import_job),
     )
 
     # Store the file
@@ -147,6 +164,8 @@ def save_raw(
     *,
     test_result: TestResult | None = None,
     file_type: str | None = None,
+    source_path: str | None = None,
+    import_job: ImportJob | None = None,
 ) -> str:
     """Store ``file_path`` in GridFS and return its identifier.
 
@@ -164,6 +183,11 @@ def save_raw(
         Optional :class:`~battery_analysis.models.TestResult` the file belongs to.
     file_type:
         Optional file type hint passed through to :func:`store_raw_data_file`.
+    source_path:
+        Optional absolute path stored for provenance.
+    import_job:
+        Optional :class:`~battery_analysis.models.ImportJob` associated with the
+        file's creation.
 
     Returns
     -------
@@ -186,7 +210,13 @@ def save_raw(
                 pass
         return file_id
 
-    raw = store_raw_data_file(file_path, test_result=test_result, file_type=file_type)
+    raw = store_raw_data_file(
+        file_path,
+        test_result=test_result,
+        file_type=file_type,
+        source_path=source_path,
+        import_job=import_job,
+    )
     file_id = str(raw.id)
 
     if test_result is not None:
