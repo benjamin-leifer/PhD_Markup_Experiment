@@ -105,6 +105,17 @@ After new data are added for a cell, run ``update_cell_dataset_cli.py --cell
 <CODE>`` to rebuild its dataset. This command can also be scheduled in a CI job
 or a cron task to ensure datasets remain current.
 
+## Normalizing capacity and impedance
+
+Use the ``normalize_cli.py`` script to report capacity normalized by area and
+impedance normalized by thickness for one or more cell codes::
+
+    python normalize_cli.py CN123
+
+The script prints a line for each supplied code with the available metrics.
+These values are also displayed in the dashboard on the **Advanced Analysis**
+tab when a sample is selected.
+
 ## Importing data from directories
 
 Use the ``battery_analysis.utils.import_directory`` module to scan a directory
