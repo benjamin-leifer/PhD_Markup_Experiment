@@ -763,3 +763,42 @@ def test_import_pause_and_resume(
     thread.join(timeout=5)
 
     assert len(processed) == 2
+
+
+def test_report_option_writes_json(
+    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    root, make = import_dir
+    good = make("good.csv")
+    bad = make("bad.csv")
+
+    def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
+        if Path(path).name == "bad.csv":
+            raise ValueError("boom")
+        return types.SimpleNamespace(id="T1"), False
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
+    report = tmp_path / "report.json"
+    import_directory.main([str(root), "--workers", "1", "--report", str(report)])
+
+    data = json.loads(report.read_text())
+    # Map by filename for stable comparison
+    mapped = {Path(d["file_path"]).name: d for d in data}
+    assert mapped == {
+        "good.csv": {
+            "file_path": str(good.resolve()),
+            "status": "created",
+            "detail": "T1",
+        },
+        "bad.csv": {
+            "file_path": str(bad.resolve()),
+            "status": "skipped",
+            "detail": "boom",
+        },
+    }

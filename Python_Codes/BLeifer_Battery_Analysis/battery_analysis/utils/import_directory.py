@@ -200,6 +200,7 @@ def import_directory(
     confirm: bool = False,
     sample_map: str | None = None,
     resume: str | None = None,
+    report: str | None = None,
 ) -> int:
     """Import all supported files within ``root``.
 
@@ -298,6 +299,7 @@ def import_directory(
     processed: Set[str] = set()
     entries: List[Dict[str, object]] = []
     skipped = 0
+    report_entries: List[Tuple[str, str, object | None]] = []
 
     state_path = os.path.join(root, ".import_state.json")
     state: Dict[str, object] = {}
@@ -520,6 +522,8 @@ def import_directory(
                             json.dump(state, fh, indent=2, sort_keys=True)
                     except Exception as exc:  # pragma: no cover - defensive
                         logger.error("Failed to write state to %s: %s", state_path, exc)
+                detail = str(test_id) if test_id is not None else error
+                report_entries.append((abs_path, action, detail))
                 if job is not None:
                     entry = {"path": abs_path, "action": action}
                     if test_id is not None:
@@ -621,6 +625,25 @@ def import_directory(
         if job is not None and job.errors:
             msg += f" with {len(job.errors)} errors"
         notifications.send(msg)
+
+    if report:
+        try:
+            Path(report).parent.mkdir(parents=True, exist_ok=True)
+            if report.lower().endswith(".json"):
+                rows = [
+                    {"file_path": fp, "status": status, "detail": detail}
+                    for fp, status, detail in report_entries
+                ]
+                with open(report, "w", encoding="utf-8") as fh:
+                    json.dump(rows, fh, indent=2)
+            else:
+                with open(report, "w", newline="", encoding="utf-8") as fh:
+                    writer = csv.writer(fh)
+                    writer.writerow(["file_path", "status", "detail"])
+                    for fp, status, detail in report_entries:
+                        writer.writerow([fp, status, detail or ""])
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error("Failed to write report to %s: %s", report, exc)
 
     return 0
 
@@ -773,6 +796,11 @@ def main(argv: list[str] | None = None) -> int:
         metavar="JOB_ID",
         help="Resume a previously interrupted import job",
     )
+    parser.add_argument(
+        "--report",
+        metavar="PATH",
+        help="Write processing report to PATH (CSV or JSON)",
+    )
     args = parser.parse_args(argv)
 
     from battery_analysis.utils.logging import get_logger
@@ -802,6 +830,7 @@ def main(argv: list[str] | None = None) -> int:
         confirm=args.confirm,
         sample_map=args.sample_map,
         resume=args.resume,
+        report=args.report,
     )
 
 
