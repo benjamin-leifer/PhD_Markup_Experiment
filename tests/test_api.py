@@ -37,6 +37,13 @@ def _auth(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+@pytest.fixture(autouse=True)
+def _clear_jobs() -> None:
+    api.ImportJob._registry.clear()
+    yield
+    api.ImportJob._registry.clear()
+
+
 def test_requires_token() -> None:
     resp = client.get("/tests")
     assert resp.status_code == 403
@@ -79,3 +86,40 @@ def test_import_and_doe(monkeypatch: pytest.MonkeyPatch) -> None:
 
     resp = client.post("/import", json={"path": "data"}, headers=_auth(VIEWER))
     assert resp.status_code == 403
+
+
+def test_import_job_submission_and_status(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Exec:
+        def submit(self, fn, *a, **kw):
+            fn(*a, **kw)
+            class _Fut:
+                def result(self) -> None:
+                    return None
+
+            return _Fut()
+
+    monkeypatch.setattr(api, "executor", _Exec())
+
+    def fake_import_directory(path: str, resume: str) -> int:
+        job = api.ImportJob._registry[resume]
+        job.processed_count = 5
+        job.errors = ["oops"]
+        job.save()
+        return 0
+
+    monkeypatch.setattr(api, "import_directory", fake_import_directory)
+
+    resp = client.post("/import-jobs", json={"path": "data"}, headers=_auth(ADMIN))
+    assert resp.status_code == 200
+    job_id = resp.json()["job_id"]
+
+    resp_forbidden = client.post(
+        "/import-jobs", json={"path": "data"}, headers=_auth(VIEWER)
+    )
+    assert resp_forbidden.status_code == 403
+
+    resp2 = client.get(f"/import-jobs/{job_id}", headers=_auth(VIEWER))
+    assert resp2.status_code == 200
+    data = resp2.json()["job"]
+    assert data["processed_count"] == 5
+    assert data["errors"] == ["oops"]
