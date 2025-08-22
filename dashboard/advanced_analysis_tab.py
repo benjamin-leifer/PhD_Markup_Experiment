@@ -15,6 +15,7 @@ import base64
 import tempfile
 import io
 from bson import ObjectId
+import normalization_utils
 
 try:  # pragma: no cover - optional dependency
     from scipy.signal import savgol_filter
@@ -66,6 +67,7 @@ EXPORT_DOWNLOAD = "aa-export-download"
 MPL_POPOUT_BUTTON = "aa-mpl-popout-btn"
 RESULT_GRAPH = "aa-graph"
 RESULT_TEXT = "aa-results"
+NORMALIZATION_OUTPUT = "aa-normalization"
 
 
 def compute_dqdv_pitt(
@@ -221,6 +223,7 @@ def layout() -> html.Div:
             ],
             className="mb-2",
         ),
+        dbc.Row(dbc.Col(html.Div(id=NORMALIZATION_OUTPUT))),
         html.Div(
             [
                 # dQ/dV options
@@ -413,6 +416,27 @@ def register_callbacks(app: dash.Dash) -> None:
         if not sample_id:
             return []
         return _get_test_options(sample_id)
+
+    @app.callback(Output(NORMALIZATION_OUTPUT, "children"), Input(SAMPLE_DROPDOWN, "value"))
+    def _show_normalization(sample_id):
+        if not sample_id:
+            return ""
+        try:  # pragma: no cover - depends on MongoDB
+            from battery_analysis import models
+
+            sample = models.Sample.objects(id=sample_id).first()
+        except Exception:  # pragma: no cover - fallback when DB unavailable
+            sample = None
+        if not sample:
+            return ""
+        cap = normalization_utils.normalize_capacity(sample)
+        imp = normalization_utils.normalize_impedance(sample)
+        parts = []
+        if cap is not None:
+            parts.append(f"Normalized Capacity: {cap:.3f}")
+        if imp is not None:
+            parts.append(f"Normalized Impedance: {imp:.3f}")
+        return " | ".join(parts) if parts else ""
 
     @app.callback(
         Output("dqdv-options", "style"),
