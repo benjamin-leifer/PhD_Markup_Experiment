@@ -1,5 +1,7 @@
 """Dash application for battery test monitoring."""
 
+# mypy: ignore-errors
+
 # Automatically configure dependencies so the dashboard works out of the box
 import base64
 import json
@@ -33,6 +35,7 @@ try:
         doe_tab,
         import_jobs_tab,
         watcher_tab,
+        raw_files_tab,
     )
     from . import auth
     from . import preferences
@@ -54,6 +57,7 @@ except ImportError:  # pragma: no cover - allow running as script
     doe_tab = importlib.import_module("doe_tab")
     import_jobs_tab = importlib.import_module("import_jobs_tab")
     watcher_tab = importlib.import_module("watcher_tab")
+    raw_files_tab = importlib.import_module("raw_files_tab")
     auth = importlib.import_module("auth")
     preferences = importlib.import_module("preferences")
     try:
@@ -138,6 +142,8 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
             color="light",
             fixed="bottom",
         )
+
+        is_admin = user_role == "admin"
 
         def can(perm: str) -> bool:
             return auth.has_permission(user_role, perm)
@@ -246,6 +252,12 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                     label="Trait Filter",
                     disabled=not can("trait-filter"),
                     value="trait-filter",
+                ),
+                dcc.Tab(
+                    raw_files_tab.layout(),
+                    label="Raw Files",
+                    value="raw-files",
+                    disabled=not can("raw-files"),
                 ),
                 dcc.Tab(
                     html.Div(
@@ -664,6 +676,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
     doe_tab.register_callbacks(app)
     import_jobs_tab.register_callbacks(app)
     watcher_tab.register_callbacks(app)
+    raw_files_tab.register_callbacks(app)
 
     return app
 

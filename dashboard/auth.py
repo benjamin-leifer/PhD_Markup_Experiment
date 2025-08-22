@@ -14,7 +14,7 @@ import bcrypt
 try:  # pragma: no cover - allow running as script
     from .permissions import ROLE_PERMISSIONS
 except ImportError:  # pragma: no cover - allow running as script
-    from permissions import ROLE_PERMISSIONS
+    from permissions import ROLE_PERMISSIONS  # type: ignore[no-redef]
 
 
 Role = str
@@ -73,6 +73,12 @@ def has_permission(role: Role, permission: str) -> bool:
 
     perms: Set[str] = ROLE_PERMISSIONS.get(role, set())
     return permission in perms
+
+
+def can_download_raw(role: Role) -> bool:
+    """Return ``True`` if ``role`` may download raw files."""
+
+    return has_permission(role, "raw-files")
 
 
 def layout() -> html.Div:
