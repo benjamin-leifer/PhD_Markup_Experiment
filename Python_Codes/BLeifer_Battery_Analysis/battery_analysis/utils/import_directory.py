@@ -44,6 +44,8 @@ from typing import BinaryIO, Dict, List, Set, Tuple, Iterator, cast
 import fnmatch
 from pathlib import Path
 
+from pandas.errors import ParserError
+
 try:
     import redis
 except Exception:  # pragma: no cover - optional dependency
@@ -62,6 +64,11 @@ logger = get_logger(__name__)
 
 # Load configuration at module import so CLI defaults can reference it
 CONFIG = load_config()
+
+# Exceptions that trigger a retry when processing files
+RETRY_EXCEPTIONS: tuple[type[Exception], ...] = (ParserError, ConnectionError)
+# Base delay used for exponential backoff between retries
+RETRY_BASE_DELAY = 0.5
 
 CONTROL_FILE = Path(__file__).resolve().parents[4] / ".import_control"
 
@@ -201,6 +208,7 @@ def import_directory(
     sample_map: str | None = None,
     resume: str | None = None,
     report: str | None = None,
+    retries: int = 0,
 ) -> int:
     """Import all supported files within ``root``.
 
@@ -249,6 +257,12 @@ def import_directory(
         Identifier of an :class:`ImportJob` to continue. Files already recorded
         for the job are skipped and new imports are appended to the existing
         job record.
+    report:
+        Optional path to write a per-file processing report in CSV or JSON
+        format.
+    retries:
+        Number of times to retry processing a file when certain transient
+        exceptions occur.
 
     Returns
     -------
@@ -477,13 +491,28 @@ def import_directory(
             return name, "dry_run", abs_path, mtime, file_hash, None, None
 
         sample = Sample.get_or_create(name, **attrs)
-        try:
-            test, was_update = process_file_with_update(
-                abs_path, sample, archive=archive
-            )
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.error("Failed to process %s: %s", abs_path, exc)
-            return name, "skipped", abs_path, mtime, file_hash, None, str(exc)
+        attempt = 0
+        while True:
+            try:
+                test, was_update = process_file_with_update(
+                    abs_path, sample, archive=archive
+                )
+                break
+            except RETRY_EXCEPTIONS as exc:
+                if attempt >= retries:
+                    msg = f"{exc} after {attempt} retries"
+                    logger.error(
+                        "Failed to process %s after %s retries: %s",
+                        abs_path,
+                        attempt,
+                        exc,
+                    )
+                    return name, "skipped", abs_path, mtime, file_hash, None, msg
+                time.sleep(2**attempt * RETRY_BASE_DELAY)
+                attempt += 1
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.error("Failed to process %s: %s", abs_path, exc)
+                return name, "skipped", abs_path, mtime, file_hash, None, str(exc)
 
         action = "updated" if was_update else "created"
         logger.info(
@@ -801,6 +830,12 @@ def main(argv: list[str] | None = None) -> int:
         metavar="PATH",
         help="Write processing report to PATH (CSV or JSON)",
     )
+    parser.add_argument(
+        "--retries",
+        type=int,
+        default=CONFIG.get("retries") or 0,
+        help="Number of times to retry failed file processing",
+    )
     args = parser.parse_args(argv)
 
     from battery_analysis.utils.logging import get_logger
@@ -831,6 +866,7 @@ def main(argv: list[str] | None = None) -> int:
         sample_map=args.sample_map,
         resume=args.resume,
         report=args.report,
+        retries=args.retries,
     )
 
 

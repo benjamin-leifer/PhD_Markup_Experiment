@@ -47,6 +47,7 @@ DEFAULTS: Dict[str, Any] = {
     "include": [],
     "exclude": [],
     "workers": None,
+    "retries": 0,
     "debounce": 1.0,
     "depth": None,
     "slack_webhook": None,
@@ -129,6 +130,7 @@ def load_config(path: str | None = None) -> Dict[str, Any]:
     for key in (
         "db_uri",
         "workers",
+        "retries",
         "include",
         "exclude",
         "debounce",
@@ -145,7 +147,7 @@ def load_config(path: str | None = None) -> Dict[str, Any]:
         value = data[key]
         if key in {"include", "exclude", "email_recipients"}:
             cfg[key] = _to_list(value)
-        elif key in {"workers", "depth"}:
+        elif key in {"workers", "depth", "retries"}:
             try:
                 cfg[key] = int(value) if value is not None else None
             except (TypeError, ValueError):
