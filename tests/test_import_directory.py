@@ -423,6 +423,32 @@ def test_missing_hash_migrates_state(
     assert {"mtime", "hash"} <= set(entry)
 
 
+def test_deleted_files_pruned_from_state(
+    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, make = import_dir
+    file_path = make("test.csv")
+
+    def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
+        return object(), False
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
+    import_directory.import_directory(root, workers=1)
+    state_path = root / ".import_state.json"
+    data = json.loads(state_path.read_text())
+    assert str(file_path.resolve()) in data
+
+    file_path.unlink()
+    import_directory.import_directory(root, workers=1)
+    data = json.loads(state_path.read_text())
+    assert data == {}
+
+
 def test_dry_run_skips_processing(
     import_dir: tuple[Path, Callable[[str, str, str], Path]],
     monkeypatch: pytest.MonkeyPatch,
