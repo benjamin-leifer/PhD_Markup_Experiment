@@ -40,14 +40,34 @@ def _search_files(query: str) -> List[Dict[str, str]]:
             sample_name = getattr(sample, "name", "")
             ts = getattr(f, "upload_date", None)
             ts_str = getattr(ts, "isoformat", lambda: "")()
+            job_id = getattr(f, "import_job_id", "")
+            job_link = f"[Link](/import-jobs/{job_id})" if job_id else ""
             files.append(
-                {"file_id": str(f.id), "sample": sample_name, "timestamp": ts_str}
+                {
+                    "file_id": str(f.id),
+                    "sample": sample_name,
+                    "timestamp": ts_str,
+                    "source_path": getattr(f, "source_path", ""),
+                    "import_job": job_link,
+                }
             )
         return files
     except Exception:
         return [
-            {"file_id": "F1", "sample": "Sample_A", "timestamp": "2024-01-01"},
-            {"file_id": "F2", "sample": "Sample_B", "timestamp": "2024-01-02"},
+            {
+                "file_id": "F1",
+                "sample": "Sample_A",
+                "timestamp": "2024-01-01",
+                "source_path": "/abs/path/F1",
+                "import_job": "",
+            },
+            {
+                "file_id": "F2",
+                "sample": "Sample_B",
+                "timestamp": "2024-01-02",
+                "source_path": "/abs/path/F2",
+                "import_job": "",
+            },
         ]
 
 
@@ -78,6 +98,12 @@ def layout() -> html.Div:
                     {"name": "File ID", "id": "file_id"},
                     {"name": "Sample", "id": "sample"},
                     {"name": "Timestamp", "id": "timestamp"},
+                    {"name": "Source Path", "id": "source_path"},
+                    {
+                        "name": "Import Job",
+                        "id": "import_job",
+                        "presentation": "markdown",
+                    },
                     {
                         "name": "Download",
                         "id": "download",

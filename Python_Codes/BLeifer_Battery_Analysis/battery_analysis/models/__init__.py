@@ -249,6 +249,8 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         acquisition_device: str | None = None
         tags: list[str] = dc_field(default_factory=list)
         metadata: dict = dc_field(default_factory=dict)
+        source_path: str | None = None
+        import_job_id: str | None = None
 
     class CycleDetailData:  # type: ignore
         pass

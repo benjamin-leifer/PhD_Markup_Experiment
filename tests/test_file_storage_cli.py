@@ -88,6 +88,8 @@ class DummyTestResult:
 models_stub = types.ModuleType("battery_analysis.models")
 models_stub.TestResult = DummyTestResult
 models_stub.RawDataFile = DummyRawDataFile
+models_stub.ImportJob = type("ImportJob", (), {})
+_orig_models = sys.modules.get("battery_analysis.models")
 sys.modules["battery_analysis.models"] = models_stub
 
 # Stubbed file_storage module for CLI tests (real module imported separately)
@@ -115,6 +117,12 @@ spec_fs = importlib.util.spec_from_file_location(
 file_storage_real = importlib.util.module_from_spec(spec_fs)
 sys.modules["battery_analysis.utils.file_storage_real"] = file_storage_real
 spec_fs.loader.exec_module(file_storage_real)  # type: ignore
+
+# Restore original models module so other tests are unaffected
+if _orig_models is not None:
+    sys.modules["battery_analysis.models"] = _orig_models
+else:  # pragma: no cover - when module absent
+    del sys.modules["battery_analysis.models"]
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +205,7 @@ def test_save_raw_deduplicates(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
     ids = iter(["RID1", "RID2"])
 
-    def fake_store(path: str, test_result=None, file_type=None):
+    def fake_store(path: str, test_result=None, file_type=None, **kwargs):
         rid = next(ids)
         return types.SimpleNamespace(id=rid)
 
@@ -223,4 +231,41 @@ def test_cleanup_orphaned_removes_unlinked() -> None:
 
     assert removed == 1
     assert [f.id for f in DummyRawDataFile._store] == ["R1"]
+
+
+def test_save_raw_records_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    DummyRawDataFile._store.clear()
+    path = tmp_path / "data.bin"
+    path.write_bytes(b"abc")
+
+    import_job = types.SimpleNamespace(id="JOB1")
+
+    def fake_store(
+        file_path: str,
+        test_result=None,
+        file_type=None,
+        source_path=None,
+        import_job=None,
+    ):
+        doc = DummyRawDataFile("R1")
+        doc.source_path = source_path
+        doc.import_job_id = getattr(import_job, "id", import_job)
+        DummyRawDataFile._store.append(doc)
+        return doc
+
+    monkeypatch.setattr(file_storage_real, "store_raw_data_file", fake_store)
+
+    t = DummyTestResult("T1")
+    t.save()
+
+    fid = file_storage_real.save_raw(
+        str(path), test_result=t, source_path=str(path), import_job=import_job
+    )
+
+    doc = DummyRawDataFile.objects(id=fid).first()
+    assert doc is not None
+    assert doc.source_path == str(path)
+    assert doc.import_job_id == "JOB1"
 
