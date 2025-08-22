@@ -61,12 +61,23 @@ def extract_test_identifiers(file_path, parsed_data, metadata):
         dict: Dictionary of identifiers
     """
     file_name = os.path.basename(file_path)
+    digest = None
+    try:
+        h = hashlib.sha256()
+        with open(file_path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(8192), b""):
+                h.update(chunk)
+        digest = h.hexdigest()
+    except Exception:  # pragma: no cover - best effort
+        digest = None
+
     identifiers = {
         "file_name": file_name,
         "tester": metadata.get("tester", None),
         "test_name": metadata.get("name", None),
         # Normalized versions for matching sequential files
         "base_file_name": _normalize_identifier(file_name),
+        "file_hash": digest,
     }
 
     if identifiers["test_name"]:
@@ -78,9 +89,6 @@ def extract_test_identifiers(file_path, parsed_data, metadata):
 
     if "test_id" in metadata:
         identifiers["test_id"] = metadata["test_id"]
-
-    if "file_hash" in metadata:
-        identifiers["file_hash"] = metadata["file_hash"]
 
     return identifiers
 
@@ -101,9 +109,15 @@ def find_matching_tests(identifiers, sample_id):
         return []
 
     query = models.TestResult.objects(sample=sample_id)
-    conditions = []
 
-    for field in ["test_id", "file_hash", "base_test_name", "base_file_name"]:
+    file_hash = identifiers.get("file_hash")
+    if file_hash:
+        matches = list(query.filter(file_hash=file_hash))
+        if matches:
+            return matches
+
+    conditions = []
+    for field in ["test_id", "base_test_name", "base_file_name"]:
         value = identifiers.get(field)
         if value:
             conditions.append(Q(**{field: value}))

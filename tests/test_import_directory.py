@@ -65,7 +65,6 @@ def test_progress_logging_and_summary(
     import_dir: tuple[Path, Callable[[str, str, str], Path]],
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
     root, make = import_dir
     for i in range(3):
@@ -83,8 +82,7 @@ def test_progress_logging_and_summary(
         import_directory.import_directory(root, workers=2)
 
     assert "Processed 3/3" in caplog.text
-    captured = capsys.readouterr().out
-    assert "Summary: created=3, updated=0, skipped=0" in captured
+    assert "Summary: created=3, updated=0, skipped=0" in caplog.text
 
 
 def test_new_file_creates_testresult(
@@ -191,6 +189,45 @@ def test_process_file_no_archive(
     assert test.file_hash == hashlib.sha256(content).hexdigest()
     assert getattr(test, "file_id", None) is None
     assert not called
+
+
+def test_renamed_duplicate_skipped(
+    import_dir: tuple[Path, Callable[[str, str, str], Path]],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    root, make = import_dir
+    original = make("run1.csv")
+
+    def fake_process(path: str, sample: Sample) -> tuple[TestResult, bool]:
+        digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+        for t in sample.tests:
+            if getattr(t, "file_hash", None) == digest:
+                return t, True
+        test = TestResult(sample=sample)
+        test.file_hash = digest
+        sample.tests.append(test)
+        return test, False
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
+    import_directory.import_directory(root, workers=1, archive=False)
+    caplog.clear()
+
+    renamed = original.parent / "renamed.csv"
+    renamed.write_text(original.read_text())
+    original.unlink()
+
+    with caplog.at_level("INFO"):
+        import_directory.import_directory(root, workers=1, archive=False)
+    assert "Summary: created=0, updated=1, skipped=0" in caplog.text
+
+    sample = Sample.get_by_name("S1")
+    assert sample is not None
+    assert len(sample.tests) == 1
 
 
 def test_incomplete_metadata_skips_file(
@@ -605,7 +642,8 @@ def test_sample_map_overrides_names(
     names: list[str] = []
 
     def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
-        names.append(sample.name)
+        if not path.endswith("map.csv"):
+            names.append(sample.name)
         return object(), False
 
     monkeypatch.setattr(
