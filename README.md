@@ -132,6 +132,21 @@ resumed by passing the identifier with ``--resume``::
 
     python -m battery_analysis.utils.import_directory data --resume <JOB_ID>
 
+## Downloading raw data files
+
+Raw files saved to GridFS can be retrieved with the
+``battery_analysis.utils.raw_file_cli`` module.
+
+- Download directly by ``RawDataFile`` identifier::
+
+    python -m battery_analysis.utils.raw_file_cli download <FILE_ID> --out data.bin
+
+- Fetch the file associated with a ``TestResult``::
+
+    python -m battery_analysis.utils.raw_file_cli by-test <TEST_ID> --out data.bin
+
+Omit ``--out`` to stream the file contents to standard output.
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
