@@ -895,6 +895,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Verify imported files against database and GridFS after processing",
     )
+    parser.add_argument(
+        "--verify-report",
+        metavar="PATH",
+        help="Write verification report to PATH (CSV or JSON)",
+    )
     args = parser.parse_args(argv)
 
     from battery_analysis.utils.logging import get_logger
@@ -990,6 +995,8 @@ def main(argv: list[str] | None = None) -> int:
         from battery_analysis.utils import verify_import
 
         rows = verify_import.verify_directory(root_path)
+        if args.verify_report:
+            verify_import.write_report(rows, args.verify_report)
         summary = verify_import.summarize_discrepancies(rows)
         print(
             f"Added: {summary['added']} | Mismatched: {summary['mismatched']} | Missing: {summary['missing']}"
