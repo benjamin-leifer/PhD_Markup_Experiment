@@ -18,6 +18,12 @@ def raw_files_layout() -> html.Div:
     return _layout()
 
 
+
+def similar_samples_layout() -> html.Div:
+    """Proxy to the similar samples tab layout."""
+
+    from .similar_samples_tab import layout as _layout
+
 def import_stats_layout() -> html.Div:
     """Proxy to the import stats tab layout."""
 

@@ -30,6 +30,7 @@ try:
         auth,
         cell_flagger,
         comparison_tab,
+        similar_samples_tab,
         cycle_detail_tab,
         data_access,
         document_flow_tab,
@@ -58,6 +59,7 @@ except ImportError:  # pragma: no cover - allow running as script
     cycle_detail_tab = importlib.import_module("cycle_detail_tab")
     eis_tab = importlib.import_module("eis_tab")
     comparison_tab = importlib.import_module("comparison_tab")
+    similar_samples_tab = importlib.import_module("similar_samples_tab")
     document_flow_tab = importlib.import_module("document_flow_tab")
     missing_data_tab = importlib.import_module("missing_data_tab")
     doe_tab = importlib.import_module("doe_tab")
@@ -217,6 +219,11 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                     label="Comparison",
                     value="comparison",
                     disabled=not can("comparison"),
+                ),
+                dcc.Tab(
+                    similar_samples_tab.layout(),
+                    label="Similar Samples",
+                    value="similar-samples",
                 ),
                 dcc.Tab(
                     advanced_analysis_tab.layout(),
@@ -691,6 +698,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
     import_stats_tab.register_callbacks(app)
     watcher_tab.register_callbacks(app)
     raw_files_tab.register_callbacks(app)
+    similar_samples_tab.register_callbacks(app)
 
     return app
 
