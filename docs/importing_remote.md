@@ -9,15 +9,18 @@ It supports SFTP and Amazon S3 locations.
 ### SFTP
 
 Pass the remote location as `sftp://user@host/path`.  The helper connects using
-[`paramiko`](https://www.paramiko.org/).  Passwords may be supplied via the
-`SFTP_PASSWORD` environment variable or standard SSH key configuration.
+[`paramiko`](https://www.paramiko.org/).  If a username or password is omitted
+from the URI, `SFTP_USERNAME` and `SFTP_PASSWORD` environment variables are
+consulted.  Authentication also honours the user's normal SSH configuration for
+key-based logins.
 
 ### S3
 
 For S3 locations provide a URI like `s3://bucket/prefix`.  Authentication uses
 [`boto3`](https://boto3.amazonaws.com) which follows the usual AWS credential
-resolution (environment variables such as `AWS_ACCESS_KEY_ID` and
-`AWS_SECRET_ACCESS_KEY`, configuration files, or IAM roles).
+resolution chain.  Standard environment variables such as `AWS_ACCESS_KEY_ID`
+and `AWS_SECRET_ACCESS_KEY`, shared credential files and IAM roles are all
+respected.
 
 ## CLI Usage
 

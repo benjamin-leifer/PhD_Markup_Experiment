@@ -29,6 +29,10 @@ A manifest file (``.import_state.json``) in the root directory records the
 modification time and content hash of processed files so subsequent runs skip
 unchanged inputs. Use ``--reset`` to ignore this state and re-import
 everything.
+
+The command also understands remote locations.  Supplying ``--remote`` with an
+``sftp://`` or ``s3://`` URI will fetch the files to a temporary directory using
+:mod:`battery_analysis.utils.remote_import` before processing them locally.
 """
 
 from __future__ import annotations
