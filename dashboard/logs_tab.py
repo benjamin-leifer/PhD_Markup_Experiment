@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from dash import dcc, html, Input, Output, callback
 
 from battery_analysis.utils.logging import get_log_file
+from dash import Input, Output, callback, dcc, html
 
 LOG_FILE = get_log_file()
 
@@ -31,12 +31,20 @@ def layout() -> html.Div:
     return html.Div(
         [
             dcc.Interval(id="logs-interval", interval=2000, n_intervals=0),
-            html.Pre(id="logs-output", style={"height": "400px", "overflowY": "scroll"}),
+            html.Pre(
+                id="logs-output",
+                role="log",
+                **{"aria-live": "polite"},
+                style={"height": "400px", "overflowY": "scroll"},
+            ),
         ]
     )
 
 
-@callback(Output("logs-output", "children"), Input("logs-interval", "n_intervals"))
+@callback(
+    Output("logs-output", "children"),
+    Input("logs-interval", "n_intervals"),
+)  # type: ignore[misc]
 def update_logs(_: int) -> str:
     """Callback to refresh displayed logs."""
 
