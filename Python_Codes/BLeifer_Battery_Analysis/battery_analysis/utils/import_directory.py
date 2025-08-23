@@ -59,7 +59,6 @@ except Exception:  # pragma: no cover - optional dependency
 from battery_analysis import parsers
 from battery_analysis.models import ImportJob, ImportJobSummary, Sample, TestResult
 from battery_analysis.utils import data_update, file_storage, notifications
-from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
 from battery_analysis.utils.config import load_config
 from battery_analysis.utils.db import ensure_connection
 from battery_analysis.utils.logging import get_logger
@@ -679,6 +678,7 @@ def import_directory(
         for name in processed:
             logger.info("Would refresh dataset for %s", name)
     else:
+        from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
         for name in processed:
             try:
                 update_cell_dataset(name)
@@ -973,7 +973,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--verify",
         action="store_true",
-        help="Verify imported files against database and GridFS after processing",
+        help="Verify imported files against stored hashes after processing",
     )
     parser.add_argument(
         "--verify-report",
@@ -1073,7 +1073,7 @@ def main(argv: list[str] | None = None) -> int:
             retries=args.retries,
             tags=args.tags,
         )
-    if args.verify and result == 0 and not args.remote and not args.archive:
+    if args.verify and result == 0:
         from battery_analysis.utils import verify_import
 
         rows = verify_import.verify_directory(root_path)
