@@ -295,7 +295,16 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                 dbc.Row(
                     [
                         dbc.Col(sidebar, md=2, className="d-none d-md-block"),
-                        dbc.Col(html.Div(id="tab-content"), md=10),
+                        dbc.Col(
+                            html.Div(
+                                tab_layouts.get(
+                                    prefs.get("default_tab", "overview"),
+                                    _overview_layout,
+                                )(),
+                                id="tab-content",
+                            ),
+                            md=10,
+                        ),
                     ]
                 ),
                 sidebar_offcanvas,
@@ -343,6 +352,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         Output("active-tab", "data"),
         Output("tab-content", "children"),
         Input("url", "pathname"),
+        prevent_initial_call=True,
     )
     def render_tab(pathname):
         tab = pathname.lstrip("/") or "overview"
