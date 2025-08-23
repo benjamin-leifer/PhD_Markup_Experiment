@@ -38,7 +38,8 @@ def flagged_table(flags: List[Dict[str, str]]) -> dbc.Table:
     """Return a table of flagged samples."""
 
     header = html.Thead(
-        html.Tr([html.Th("Sample ID"), html.Th("Reason"), html.Th("Actions")])
+        html.Tr([html.Th("Sample ID"), html.Th("Reason"), html.Th("Actions")]),
+        className="heading-sm",
     )
     rows = []
     for f in flags:
@@ -62,6 +63,7 @@ def flagged_table(flags: List[Dict[str, str]]) -> dbc.Table:
     return dbc.Table(
         [header, body],
         id="flagged-table",
+        className="m-md",
         bordered=True,
         hover=True,
         responsive=True,
@@ -75,47 +77,53 @@ def summary_layout(stats: Dict) -> dbc.Row:
         dbc.Col(
             dbc.Card(
                 [
-                    dbc.CardHeader("Running"),
+                    dbc.CardHeader("Running", className="heading-sm p-md"),
                     dbc.CardBody(
                         html.H4(
                             str(stats.get("running", 0)),
-                            className="card-title",
-                        )
+                            className="heading-lg",
+                        ),
+                        className="p-md",
                     ),
-                ]
+                ],
+                className="m-sm",
             ),
             width=2,
         ),
         dbc.Col(
             dbc.Card(
                 [
-                    dbc.CardHeader("Completed Today"),
+                    dbc.CardHeader("Completed Today", className="heading-sm p-md"),
                     dbc.CardBody(
                         html.H4(
                             str(stats.get("completed_today", 0)),
-                            className="card-title",
-                        )
+                            className="heading-lg",
+                        ),
+                        className="p-md",
                     ),
-                ]
+                ],
+                className="m-sm",
             ),
             width=2,
         ),
         dbc.Col(
             dbc.Card(
                 [
-                    dbc.CardHeader("Failures"),
+                    dbc.CardHeader("Failures", className="heading-sm p-md"),
                     dbc.CardBody(
                         html.H4(
                             str(stats.get("failures", 0)),
-                            className="card-title",
-                        )
+                            className="heading-lg",
+                        ),
+                        className="p-md",
                     ),
-                ]
+                ],
+                className="m-sm",
             ),
             width=2,
         ),
     ]
-    return dbc.Row(cards, className="mb-4")
+    return dbc.Row(cards, className="mb-lg")
 
 
 def test_rows(tests: List[Dict]) -> List[Dict]:
@@ -145,6 +153,7 @@ def running_tests_table(tests: List[Dict]) -> dash_table.DataTable:
     """Table of running tests using a ``DataTable`` component."""
     return dash_table.DataTable(
         id="running-tests-table",
+        className="m-md",
         columns=[
             {"name": "Cell ID", "id": "cell_id"},
             {"name": "Test Type", "id": "test_type"},
@@ -156,7 +165,12 @@ def running_tests_table(tests: List[Dict]) -> dash_table.DataTable:
         filter_action="native",
         page_action="none",
         virtualization=True,
-        style_table={"overflowX": "auto", "overflowY": "auto", "height": "400px"},
+        style_table={
+            "overflowX": "auto",
+            "overflowY": "auto",
+            "height": "400px",
+        },
+        style_header={"fontSize": "var(--heading-sm)"},
         style_cell={"textAlign": "left"},
     )
 
@@ -170,6 +184,7 @@ def upcoming_tests_table(tests: List[Dict]) -> dash_table.DataTable:
     """Table of upcoming tests using a ``DataTable`` component."""
     return dash_table.DataTable(
         id="upcoming-tests-table",
+        className="m-md",
         columns=[
             {"name": "Cell ID", "id": "cell_id"},
             {"name": "Test Type", "id": "test_type"},
@@ -181,7 +196,12 @@ def upcoming_tests_table(tests: List[Dict]) -> dash_table.DataTable:
         filter_action="native",
         page_action="none",
         virtualization=True,
-        style_table={"overflowX": "auto", "overflowY": "auto", "height": "400px"},
+        style_table={
+            "overflowX": "auto",
+            "overflowY": "auto",
+            "height": "400px",
+        },
+        style_header={"fontSize": "var(--heading-sm)"},
         style_cell={"textAlign": "left"},
     )
 
