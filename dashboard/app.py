@@ -118,12 +118,53 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
     else:
         test_role = test_role or "admin"
 
-    def dashboard_layout(user_role: str) -> html.Div:
-        prefs = preferences.load_preferences()
+    def _overview_layout() -> html.Div:
+        stats = data_access.get_summary_stats()
         running = data_access.get_running_tests(limit=page_size)["rows"]
         upcoming = data_access.get_upcoming_tests(limit=page_size)["rows"]
-        stats = data_access.get_summary_stats()
-        flags = cell_flagger.get_flags()
+        return html.Div(
+            [
+                layout_components.summary_layout(stats),
+                html.H4("Running Tests"),
+                dcc.Loading(
+                    id="running-tests-loading",
+                    children=layout_components.running_tests_table(running),
+                ),
+                html.H4("Upcoming Tests"),
+                dcc.Loading(
+                    id="upcoming-tests-loading",
+                    children=layout_components.upcoming_tests_table(upcoming),
+                ),
+            ]
+        )
+
+    tab_layouts = {
+        "overview": _overview_layout,
+        "new-material": layout_components.new_material_form,
+        "data-import": layout_components.data_import_layout,
+        "export": layout_components.export_button,
+        "import-jobs": import_jobs_tab.layout,
+        "import-stats": import_stats_tab.layout,
+        "watchers": watcher_tab.layout,
+        "comparison": comparison_tab.layout,
+        "similar-samples": similar_samples_tab.layout,
+        "advanced-analysis": advanced_analysis_tab.layout,
+        "ad-hoc": ad_hoc_analysis_tab.layout,
+        "cycle-detail": cycle_detail_tab.layout,
+        "eis": eis_tab.layout,
+        "document-status": document_flow_tab.layout,
+        "missing-data": missing_data_tab.layout,
+        "doe-heatmap": doe_tab.layout,
+        "trait-filter": trait_filter_tab.layout,
+        "raw-files": raw_files_tab.layout,
+        "flags": lambda: html.Div(
+            layout_components.flagged_table(cell_flagger.get_flags()),
+            id="flagged-container",
+        ),
+    }
+
+    def dashboard_layout(user_role: str) -> html.Div:
+        prefs = preferences.load_preferences()
         navbar = dbc.NavbarSimple(
             dbc.Switch(
                 id="theme-toggle",
@@ -158,141 +199,52 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         def can(perm: str) -> bool:
             return auth.has_permission(user_role, perm)
 
-        tabs = dcc.Tabs(
-            [
-                # Order mirrors the original Tkinter GUI tabs
-                dcc.Tab(
-                    [
-                        layout_components.summary_layout(stats),
-                        html.H4("Running Tests"),
-                        dcc.Loading(
-                            id="running-tests-loading",
-                            children=layout_components.running_tests_table(running),
-                        ),
-                        html.H4("Upcoming Tests"),
-                        dcc.Loading(
-                            id="upcoming-tests-loading",
-                            children=layout_components.upcoming_tests_table(upcoming),
-                        ),
-                    ],
-                    label="Overview",
-                    value="overview",
-                    disabled=not can("overview"),
-                ),
-                dcc.Tab(
-                    layout_components.new_material_form(),
-                    label="New Material",
-                    value="new-material",
-                    disabled=not can("new-material"),
-                ),
-                dcc.Tab(
-                    layout_components.data_import_layout(),
-                    label="Data Import",
-                    disabled=not can("data-import"),
-                    value="data-import",
-                ),
-                dcc.Tab(
-                    layout_components.export_button(),
-                    label="Export",
-                    disabled=not can("export"),
-                    value="export",
-                ),
-                dcc.Tab(
-                    import_jobs_tab.layout(),
-                    label="Import Jobs",
-                    disabled=not can("import-jobs"),
-                    value="import-jobs",
-                ),
-                dcc.Tab(
-                    import_stats_tab.layout(),
-                    label="Import Stats",
-                    disabled=not can("import-stats"),
-                    value="import-stats",
-                ),
-                dcc.Tab(
-                    watcher_tab.layout(),
-                    label="Watchers",
-                    disabled=not is_admin,
-                    value="watchers",
-                ),
-                dcc.Tab(
-                    comparison_tab.layout(),
-                    label="Comparison",
-                    value="comparison",
-                    disabled=not can("comparison"),
-                ),
-                dcc.Tab(
-                    similar_samples_tab.layout(),
-                    label="Similar Samples",
-                    value="similar-samples",
-                ),
-                dcc.Tab(
-                    advanced_analysis_tab.layout(),
-                    label="Advanced Analysis",
-                    disabled=not can("advanced-analysis"),
-                    value="advanced-analysis",
-                ),
-                dcc.Tab(
-                    ad_hoc_analysis_tab.layout(),
-                    label="Ad Hoc Analysis",
-                    value="ad-hoc",
-                    disabled=not can("ad-hoc"),
-                ),
-                dcc.Tab(
-                    cycle_detail_tab.layout(),
-                    label="Cycle Detail",
-                    value="cycle-detail",
-                    disabled=not can("cycle-detail"),
-                ),
-                dcc.Tab(
-                    eis_tab.layout(),
-                    label="EIS",
-                    value="eis",
-                    disabled=not can("eis"),
-                ),
-                dcc.Tab(
-                    document_flow_tab.layout(),
-                    label="Document Status",
-                    value="document-status",
-                    disabled=not can("document-status"),
-                ),
-                dcc.Tab(
-                    missing_data_tab.layout(),
-                    label="Missing Data",
-                    value="missing-data",
-                    disabled=not can("missing-data"),
-                ),
-                dcc.Tab(
-                    doe_tab.layout(),
-                    label="DOE Heatmap",
-                    value="doe-heatmap",
-                    disabled=not can("doe-heatmap"),
-                ),
-                dcc.Tab(
-                    trait_filter_tab.layout(),
-                    label="Trait Filter",
-                    disabled=not can("trait-filter"),
-                    value="trait-filter",
-                ),
-                dcc.Tab(
-                    raw_files_tab.layout(),
-                    label="Raw Files",
-                    value="raw-files",
-                    disabled=not can("raw-files"),
-                ),
-                dcc.Tab(
-                    html.Div(
-                        layout_components.flagged_table(flags),
-                        id="flagged-container",
-                    ),
-                    label="Flags",
-                    value="flags",
-                    disabled=not can("flags"),
-                ),
+        def nav_link(label: str, value: str, disabled: bool = False) -> dbc.NavLink:
+            return dbc.NavLink(
+                label, href=f"/{value}", disabled=disabled, active="exact"
+            )
+
+        nav_sections = {
+            "Import": [
+                nav_link("Data Import", "data-import", not can("data-import")),
+                nav_link("Import Jobs", "import-jobs", not can("import-jobs")),
+                nav_link("Import Stats", "import-stats", not can("import-stats")),
+                nav_link("Watchers", "watchers", not is_admin),
+                nav_link("Raw Files", "raw-files", not can("raw-files")),
             ],
-            id="tabs",
-            value=prefs.get("default_tab", "overview"),
-        )
+            "Analysis": [
+                nav_link("Overview", "overview", not can("overview")),
+                nav_link("Comparison", "comparison", not can("comparison")),
+                nav_link("Similar Samples", "similar-samples"),
+                nav_link(
+                    "Advanced Analysis", "advanced-analysis", not can("advanced-analysis")
+                ),
+                nav_link("Ad Hoc Analysis", "ad-hoc", not can("ad-hoc")),
+                nav_link("Cycle Detail", "cycle-detail", not can("cycle-detail")),
+                nav_link("EIS", "eis", not can("eis")),
+                nav_link(
+                    "Document Status", "document-status", not can("document-status")
+                ),
+                nav_link("Missing Data", "missing-data", not can("missing-data")),
+                nav_link("DOE Heatmap", "doe-heatmap", not can("doe-heatmap")),
+                nav_link("Trait Filter", "trait-filter", not can("trait-filter")),
+            ],
+            "Utilities": [
+                nav_link("New Material", "new-material", not can("new-material")),
+                nav_link("Export", "export", not can("export")),
+                nav_link("Flags", "flags", not can("flags")),
+            ],
+        }
+
+        sidebar_children = []
+        for section, links in nav_sections.items():
+            sidebar_children.append(html.H4(section))
+            sidebar_children.append(
+                dbc.Nav(links, vertical=True, pills=True, className="mb-4")
+            )
+
+        sidebar = html.Div(sidebar_children)
+
         return dbc.Container(
             [
                 navbar,
@@ -315,7 +267,12 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                     className="mb-3",
                 ),
                 html.Div(id="user-set-out", style={"display": "none"}),
-                dbc.Row([dbc.Col(tabs, width=12)]),
+                dbc.Row(
+                    [
+                        dbc.Col(sidebar, md=2),
+                        dbc.Col(html.Div(id="tab-content"), md=10),
+                    ]
+                ),
                 layout_components.metadata_modal(),
                 layout_components.export_modal(),
                 dcc.Interval(id="refresh-interval", interval=60 * 1000, n_intervals=0),
@@ -332,8 +289,12 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         )
         return html.Div(
             [
+                dcc.Location(
+                    id="url", pathname=f"/{prefs.get('default_tab', 'overview')}"
+                ),
                 dcc.Store(id="user-role", data=test_role),
                 dcc.Store(id="preferences", storage_type="local", data=prefs),
+                dcc.Store(id="active-tab", data=prefs.get("default_tab", "overview")),
                 html.Link(rel="stylesheet", href=theme_href, id="theme"),
                 html.Div(id="page-content"),
             ]
@@ -347,6 +308,16 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
             return auth.layout()
         return dashboard_layout(role or "admin")
 
+    @app.callback(
+        Output("active-tab", "data"),
+        Output("tab-content", "children"),
+        Input("url", "pathname"),
+    )
+    def render_tab(pathname):
+        tab = pathname.lstrip("/") or "overview"
+        layout_fn = tab_layouts.get(tab, _overview_layout)
+        return tab, layout_fn()
+
     @app.callback(Output("theme", "href"), Input("preferences", "data"))
     def apply_theme(prefs):
         theme = (prefs or {}).get("theme", "light")
@@ -355,7 +326,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
     @app.callback(
         Output("preferences", "data"),
         Input("theme-toggle", "value"),
-        Input("tabs", "value"),
+        Input("active-tab", "data"),
         State("preferences", "data"),
     )
     def update_prefs(dark_mode, tab, data):

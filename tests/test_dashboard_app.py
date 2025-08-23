@@ -382,7 +382,7 @@ def test_missing_data_lazy_load(monkeypatch):
         k
         for k, v in cb.items()
         if "missing-data-store.data" in k
-        and any(i["id"] == "tabs" for i in v["inputs"])
+        and any(i["id"] == "active-tab" for i in v["inputs"])
     )
     load = cb[load_key]["callback"].__wrapped__
 

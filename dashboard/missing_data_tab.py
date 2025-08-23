@@ -196,7 +196,7 @@ def register_callbacks(app: dash.Dash) -> None:
 
     @app.callback(
         Output(DATA_STORE, "data", allow_duplicate=True),
-        Input("tabs", "value"),
+        Input("active-tab", "data"),
         State(DATA_STORE, "data"),
         prevent_initial_call=True,
     )
