@@ -6,15 +6,15 @@ import json
 from pathlib import Path
 from typing import Set, TypedDict, cast
 
-import dash
-from dash import Input, Output, State, dcc, html
-import dash_bootstrap_components as dbc
 import bcrypt
+import dash
+import dash_bootstrap_components as dbc
+from dash import Input, Output, State, dcc, html
 
 try:  # pragma: no cover - allow running as script
     from .permissions import ROLE_PERMISSIONS
 except ImportError:  # pragma: no cover - allow running as script
-    from permissions import ROLE_PERMISSIONS  # type: ignore[no-redef]
+    from permissions import ROLE_PERMISSIONS
 
 
 Role = str
@@ -32,8 +32,8 @@ USERS_FILE = Path(__file__).with_name("users.json")
 def load_users(path: str | Path = USERS_FILE) -> dict[str, UserRecord]:
     """Load user definitions from ``path``.
 
-    The JSON file must map usernames to objects containing ``password_hash`` and
-    ``role`` fields. Password hashes are stored using ``bcrypt".
+    The JSON file must map usernames to objects containing ``password_hash``
+    and ``role`` fields. Password hashes are stored using ``bcrypt".
     """
 
     with open(path, "r", encoding="utf-8") as fh:
@@ -42,7 +42,9 @@ def load_users(path: str | Path = USERS_FILE) -> dict[str, UserRecord]:
 
 
 def check_credentials(
-    username: str, password: str, users: dict[str, dict[str, str]] | None = None
+    username: str,
+    password: str,
+    users: dict[str, dict[str, str]] | None = None,
 ) -> str | None:
     """Validate ``username`` and ``password`` returning the user's role.
 
@@ -81,6 +83,12 @@ def can_download_raw(role: Role) -> bool:
     return has_permission(role, "raw-files")
 
 
+def can_manage_import_jobs(role: Role) -> bool:
+    """Return ``True`` if ``role`` may manage import jobs."""
+
+    return has_permission(role, "import-jobs")
+
+
 def layout() -> html.Div:
     """Return a basic login form."""
     return dbc.Container(
@@ -88,7 +96,11 @@ def layout() -> html.Div:
             dbc.Row(dbc.Col(html.H2("Login"), width=12)),
             dbc.Row(
                 dbc.Col(
-                    dcc.Input(id="login-username", placeholder="Username", type="text"),
+                    dcc.Input(
+                        id="login-username",
+                        placeholder="Username",
+                        type="text",
+                    ),
                     md=4,
                 ),
                 className="mt-3",
@@ -96,7 +108,9 @@ def layout() -> html.Div:
             dbc.Row(
                 dbc.Col(
                     dcc.Input(
-                        id="login-password", placeholder="Password", type="password"
+                        id="login-password",
+                        placeholder="Password",
+                        type="password",
                     ),
                     md=4,
                 ),
