@@ -19,15 +19,15 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 import hashlib
+import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Iterable
+from typing import Dict, Iterable, List
 
-from battery_analysis.models import TestResult, Sample
-from battery_analysis.utils.db import ensure_connection
+from battery_analysis.models import Sample, TestResult
 from battery_analysis.utils import file_storage
+from battery_analysis.utils.db import ensure_connection
 
 
 def _sha256(path: Path) -> str:
@@ -66,18 +66,24 @@ def verify_directory(root: str) -> List[Dict[str, str]]:
     discrepancies: List[Dict[str, str]] = []
 
     # Collect tests from database or in-memory registry
+    tests: Iterable[TestResult]
     if hasattr(TestResult, "objects"):
-        tests: Iterable = TestResult.objects(file_path__startswith=str(root_path))
+        tests = TestResult.objects(file_path__startswith=str(root_path))
     else:  # Fallback for lightweight dataclass models used in tests
-        tests = []
+        temp: List[TestResult] = []
         registry = getattr(Sample, "_registry", {})
-        for sample in registry.values():  # type: ignore[assignment]
+        for sample in registry.values():
             for t in getattr(sample, "tests", []) or []:
                 if str(getattr(t, "file_path", "")).startswith(str(root_path)):
-                    tests.append(t)
+                    temp.append(t)
+        tests = temp
 
     for test in tests:
-        stored_path = str(Path(test.file_path).resolve()) if getattr(test, "file_path", None) else None
+        stored_path = (
+            str(Path(test.file_path).resolve())
+            if getattr(test, "file_path", None)
+            else None
+        )
         expected = getattr(test, "file_hash", "") or ""
         test_id = str(getattr(test, "id", ""))
         file_id = getattr(test, "file_id", None)
@@ -153,10 +159,10 @@ def verify_directory(root: str) -> List[Dict[str, str]]:
             )
 
     # Files without DB entries
-    for path, actual in file_hashes.items():
+    for file_path, actual in file_hashes.items():
         discrepancies.append(
             {
-                "path": path,
+                "path": file_path,
                 "status": "missing_db",
                 "expected_hash": "",
                 "actual_hash": actual,
@@ -197,6 +203,33 @@ def _emit_csv(rows: Iterable[Dict[str, str]]) -> None:
         writer.writerow(row)
 
 
+def write_report(rows: Iterable[Dict[str, str]], path: str) -> None:
+    """Write ``rows`` to ``path`` in JSON or CSV format.
+
+    The format is inferred from the file extension.  ``.json`` files are
+    written with :func:`json.dump` while all other extensions default to CSV.
+    """
+
+    dst = Path(path)
+    data = list(rows)
+    if dst.suffix.lower() == ".json":
+        dst.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    else:
+        fieldnames = [
+            "path",
+            "status",
+            "expected_hash",
+            "actual_hash",
+            "gridfs_hash",
+            "test_id",
+        ]
+        with dst.open("w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=fieldnames)
+            writer.writeheader()
+            for row in data:
+                writer.writerow(row)
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -217,13 +250,13 @@ def main(argv: list[str] | None = None) -> int:
 
     summary = summarize_discrepancies(rows)
     print(
-        f"Added: {summary['added']} | Mismatched: {summary['mismatched']} | Missing: {summary['missing']}"
+        f"Added: {summary['added']} | "
+        f"Mismatched: {summary['mismatched']} | "
+        f"Missing: {summary['missing']}"
     )
 
     return 0 if not rows else 1
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry
-    import sys
-
     raise SystemExit(main())
