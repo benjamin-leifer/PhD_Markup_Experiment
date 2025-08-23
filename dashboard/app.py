@@ -187,12 +187,16 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
             dbc.Container(
                 [
                     html.Span(
-                        "Status: Ready", id="status-text", className="navbar-text"
+                        "Status: Ready",
+                        id="status-text",
+                        className="navbar-text",
+                        **{"aria-live": "polite"},
                     ),
                     html.Span(
                         "Database: Not Connected",
                         id="db-status",
                         className="ms-auto navbar-text",
+                        **{"aria-live": "polite"},
                     ),
                 ]
             ),
