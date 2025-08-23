@@ -388,6 +388,12 @@ def data_import_layout() -> html.Div:
                             "textAlign": "center",
                             "margin": "10px",
                         },
+                        accept=".csv,.xlsx",
+                        multiple=False,
+                    ),
+                    html.Small(
+                        "Upload a single CSV or XLSX file (max 25MB).",
+                        className="text-muted",
                     ),
                     dbc.Form(
                         [
