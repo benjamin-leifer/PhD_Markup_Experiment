@@ -175,7 +175,11 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                         label="Dark mode",
                         value=prefs.get("theme", "light") == "dark",
                         className="ms-auto",
-                        title="Toggle dark mode",
+                    ),
+                    dbc.Tooltip(
+                        "Toggle dark mode",
+                        target="theme-toggle",
+                        placement="bottom",
                     ),
                 ]
             ),
