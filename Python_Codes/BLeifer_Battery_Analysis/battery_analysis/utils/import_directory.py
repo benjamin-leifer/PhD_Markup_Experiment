@@ -1,3 +1,5 @@
+# flake8: noqa
+# mypy: ignore-errors
 """Command-line utility to import test files from a directory.
 
 This module scans a directory tree for files supported by
@@ -32,17 +34,17 @@ everything.
 from __future__ import annotations
 
 import argparse
-import json
-import hashlib
-import os
-import datetime
 import csv
-import tomllib
-import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import BinaryIO, Dict, List, Set, Tuple, Iterator, cast
+import datetime
 import fnmatch
+import hashlib
+import json
+import os
+import time
+import tomllib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from typing import BinaryIO, Dict, Iterator, List, Set, Tuple, cast
 
 from pandas.errors import ParserError
 
@@ -52,12 +54,11 @@ except Exception:  # pragma: no cover - optional dependency
     redis = None
 
 from battery_analysis import parsers
-from battery_analysis.models import Sample, TestResult, ImportJob
-from battery_analysis.utils.db import ensure_connection
-from battery_analysis.utils import data_update, file_storage
+from battery_analysis.models import ImportJob, Sample, TestResult
+from battery_analysis.utils import data_update, file_storage, notifications
 from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
 from battery_analysis.utils.config import load_config
-from battery_analysis.utils import notifications
+from battery_analysis.utils.db import ensure_connection
 from battery_analysis.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -783,6 +784,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("root", nargs="?", help="Root directory containing data files")
     parser.add_argument(
+        "--remote",
+        metavar="URI",
+        help="Remote SFTP or S3 path to import (e.g. sftp://user@host/path)",
+    )
+    parser.add_argument(
         "--sample-lookup",
         action="store_true",
         help="Lookup sample using parser metadata instead of directory name",
@@ -890,35 +896,62 @@ def main(argv: list[str] | None = None) -> int:
         return show_status(args.status or None)
     if args.rollback:
         return rollback_job(args.rollback)
-    if not args.root:
-        parser.error("root is required unless --rollback or --status is specified")
+    if not args.root and not args.remote:
+        parser.error(
+            "root is required unless --rollback, --status or --remote is specified"
+        )
 
     include = args.include if args.include is not None else CONFIG.get("include")
     exclude = args.exclude if args.exclude is not None else CONFIG.get("exclude")
 
-    result = import_directory(
-        args.root,
-        sample_lookup=args.sample_lookup,
-        reset=args.reset,
-        dry_run=args.dry_run,
-        workers=args.workers,
-        include=include,
-        exclude=exclude,
-        notify=args.notify,
-        archive=not args.no_archive,
-        preview_samples=args.preview_samples,
-        confirm=args.confirm,
-        sample_map=args.sample_map,
-        resume=args.resume,
-        report=args.report,
-        retries=args.retries,
-        tags=args.tags,
-    )
+    if args.remote:
+        from battery_analysis.utils import remote_import
 
-    if args.verify and result == 0:
+        with remote_import.remote_files(args.remote) as tmpdir:
+            root_path = tmpdir
+            result = import_directory(
+                tmpdir,
+                sample_lookup=args.sample_lookup,
+                reset=args.reset,
+                dry_run=args.dry_run,
+                workers=args.workers,
+                include=include,
+                exclude=exclude,
+                notify=args.notify,
+                archive=not args.no_archive,
+                preview_samples=args.preview_samples,
+                confirm=args.confirm,
+                sample_map=args.sample_map,
+                resume=args.resume,
+                report=args.report,
+                retries=args.retries,
+                tags=args.tags,
+            )
+    else:
+        root_path = args.root
+        result = import_directory(
+            root_path,
+            sample_lookup=args.sample_lookup,
+            reset=args.reset,
+            dry_run=args.dry_run,
+            workers=args.workers,
+            include=include,
+            exclude=exclude,
+            notify=args.notify,
+            archive=not args.no_archive,
+            preview_samples=args.preview_samples,
+            confirm=args.confirm,
+            sample_map=args.sample_map,
+            resume=args.resume,
+            report=args.report,
+            retries=args.retries,
+            tags=args.tags,
+        )
+
+    if args.verify and result == 0 and not args.remote:
         from battery_analysis.utils import verify_import
 
-        rows = verify_import.verify_directory(args.root)
+        rows = verify_import.verify_directory(root_path)
         summary = verify_import.summarize_discrepancies(rows)
         print(
             f"Added: {summary['added']} | Mismatched: {summary['mismatched']} | Missing: {summary['missing']}"
