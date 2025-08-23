@@ -96,32 +96,37 @@ def layout() -> html.Div:
             dbc.Row(dbc.Col(html.H2("Login"), width=12)),
             dbc.Row(
                 dbc.Col(
-                    dcc.Input(
-                        id="login-username",
-                        placeholder="Username",
-                        type="text",
+                    dbc.Form(
+                        [
+                            dcc.Input(
+                                id="login-username",
+                                placeholder="Username",
+                                type="text",
+                                required=True,
+                                autoComplete="username",
+                                autoFocus=True,
+                                className="mt-3",
+                            ),
+                            dcc.Input(
+                                id="login-password",
+                                placeholder="Password",
+                                type="password",
+                                required=True,
+                                autoComplete="current-password",
+                                className="mt-2",
+                            ),
+                            dbc.Button(
+                                "Login",
+                                id="login-button",
+                                color="primary",
+                                type="submit",
+                                className="mt-3",
+                            ),
+                        ]
                     ),
                     md=4,
                 ),
                 className="mt-3",
-            ),
-            dbc.Row(
-                dbc.Col(
-                    dcc.Input(
-                        id="login-password",
-                        placeholder="Password",
-                        type="password",
-                    ),
-                    md=4,
-                ),
-                className="mt-2",
-            ),
-            dbc.Row(
-                dbc.Col(
-                    dbc.Button("Login", id="login-button", color="primary"),
-                    md=2,
-                    className="mt-3",
-                )
             ),
             html.Div(id="login-message", className="mt-2"),
         ],
