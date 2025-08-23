@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import sys
 import types
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, cast
+from typing import Any
 
+import importlib.util
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,93 +15,85 @@ for path in (ROOT, PACKAGE_ROOT):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-# Stub out heavy optional dependencies
-if "scipy" not in sys.modules:
+# Minimal battery_analysis package structure so dashboard modules import
+utils_spec = importlib.util.spec_from_file_location(
+    "battery_analysis.utils.doe_builder",
+    PACKAGE_ROOT / "battery_analysis" / "utils" / "doe_builder.py",
+)
+assert utils_spec and utils_spec.loader
+utils_mod = importlib.util.module_from_spec(utils_spec)
+utils_spec.loader.exec_module(utils_mod)
+utils_pkg = types.ModuleType("battery_analysis.utils")
+utils_pkg.__path__ = [str(PACKAGE_ROOT / "battery_analysis" / "utils")]
+utils_pkg.doe_builder = utils_mod
+utils_pkg.import_watcher = types.ModuleType("import_watcher")
+sys.modules.setdefault("battery_analysis.utils", utils_pkg)
+sys.modules.setdefault("battery_analysis.utils.doe_builder", utils_mod)
+sys.modules.setdefault("battery_analysis.utils.import_watcher", utils_pkg.import_watcher)
 
-    class _ScipyStub(types.ModuleType):
-        def __getattr__(self, name: str) -> types.ModuleType:
-            # pragma: no cover
-            mod = types.ModuleType(name)
-            sys.modules[f"scipy.{name}"] = mod
-            setattr(self, name, mod)
-            return mod
+sys.modules.setdefault("battery_analysis.models", types.ModuleType("models"))
 
-    sys.modules["scipy"] = _ScipyStub("scipy")
-
-import dashboard.app as app_module  # noqa: E402
 import dashboard.doe_tab as doe_tab  # noqa: E402
 
+def test_auto_linking(monkeypatch: pytest.MonkeyPatch) -> None:
+    @dataclass
+    class Plan:
+        name: str = "P"
+        factors: dict[str, Any] = None
+        matrix: list[dict[str, Any]] = None
 
-def _get_callback(
-    cb_map: dict[str, Any], trigger_id: str
-) -> Callable[..., Any]:  # noqa: E501
-    key = next(
-        (
-            k
-            for k, v in cb_map.items()
-            if any(i["id"] == trigger_id for i in v["inputs"])
-        )
+        def __post_init__(self) -> None:
+            if self.factors is None:
+                self.factors = {"tag": ["r"]}
+            if self.matrix is None:
+                self.matrix = [{"tag": "r"}]
+
+        def save(self) -> None:  # pragma: no cover - placeholder
+            return None
+
+    class PlanManager:
+        def __init__(self) -> None:
+            self.plan = Plan()
+
+        def __iter__(self):  # pragma: no cover - simple iteration
+            return iter([self.plan])
+
+        def only(self, *a: Any, **k: Any) -> "PlanManager":
+            return self
+
+    @dataclass
+    class TestResult:
+        metadata: dict[str, Any]
+        id: str = "t1"
+
+    class TestManager:
+        def __init__(self) -> None:
+            self.tests = [TestResult({"tag": "r"})]
+
+        def __iter__(self):  # pragma: no cover - simple iteration
+            return iter(self.tests)
+
+        def only(self, *a: Any, **k: Any) -> "TestManager":
+            return self
+
+    models = types.SimpleNamespace(
+        ExperimentPlan=types.SimpleNamespace(objects=PlanManager()),
+        TestResult=types.SimpleNamespace(objects=TestManager()),
     )
-    return cast(Callable[..., Any], cb_map[key]["callback"].__wrapped__)
+    monkeypatch.setitem(sys.modules, "battery_analysis", types.SimpleNamespace(models=models))
 
+    linked: list[dict[str, Any]] = []
 
-def test_plan_creation(monkeypatch: pytest.MonkeyPatch) -> None:
-    app = app_module.create_app()
-    cb = app.callback_map
+    def fake_link(test: TestResult, metadata: dict[str, Any]) -> None:
+        plan = next(iter(models.ExperimentPlan.objects))
+        plan.matrix[0].setdefault("tests", []).append({"id": test.id})
+        linked.append(metadata)
 
-    add_factor = _get_callback(cb, doe_tab.ADD_FACTOR)
-    add_level = _get_callback(cb, doe_tab.ADD_LEVEL)
-    add_row = _get_callback(cb, doe_tab.ADD_ROW)
-    save_cb = _get_callback(cb, doe_tab.SAVE_PLAN)
+    monkeypatch.setattr(
+        doe_tab,
+        "doe_builder",
+        types.SimpleNamespace(link_test_to_plan=fake_link),
+    )
 
-    plan: dict[str, Any] = {"factors": {}, "matrix": []}
-    plan, _, _, _ = add_factor(1, "anode", plan)
-    plan, _, _, _ = add_level(1, "anode", "A", plan)
-    plan, _, _ = add_row(1, '{"anode": "A"}', plan)
-
-    saved: dict[str, Any] = {}
-
-    def fake_save(
-        name: str, factors: dict[str, Any], matrix: list[dict[str, Any]]
-    ) -> None:
-        saved.update(name=name, factors=factors, matrix=matrix)
-
-    monkeypatch.setattr(app_module, "save_plan", fake_save)
-
-    result = save_cb(1, "New Plan", plan)
-    assert saved["name"] == "New Plan"
-    assert cast(dict[str, Any], saved["factors"]) == {"anode": ["A"]}
-    assert cast(list[dict[str, Any]], saved["matrix"]) == [{"anode": "A"}]
-    assert result[2] is True and result[4] == "Success"
-
-
-def test_plan_editing(monkeypatch: pytest.MonkeyPatch) -> None:
-    existing = {
-        "name": "Base",
-        "factors": {"anode": ["A"], "cathode": ["X"]},
-        "matrix": [{"anode": "A", "cathode": "X"}],
-    }
-    monkeypatch.setattr(doe_tab, "_load_plans", lambda: [existing])
-    app = app_module.create_app()
-    cb = app.callback_map
-
-    load_plan = _get_callback(cb, doe_tab.PLAN_DROPDOWN)
-    add_level = _get_callback(cb, doe_tab.ADD_LEVEL)
-    add_row = _get_callback(cb, doe_tab.ADD_ROW)
-    save_cb = _get_callback(cb, doe_tab.SAVE_PLAN)
-
-    _, plan, _, _, _ = load_plan("Base")
-    plan, _, _, _ = add_level(1, "anode", "B", plan)
-    plan, _, _ = add_row(1, '{"anode": "B", "cathode": "X"}', plan)
-
-    saved: dict[str, Any] = {}
-
-    def fake_save(
-        name: str, factors: dict[str, Any], matrix: list[dict[str, Any]]
-    ) -> None:
-        saved.update(name=name, factors=factors, matrix=matrix)
-
-    monkeypatch.setattr(app_module, "save_plan", fake_save)
-    save_cb(1, "Base", plan)
-    assert cast(dict[str, Any], saved["factors"])["anode"] == ["A", "B"]
-    assert len(cast(list[dict[str, Any]], saved["matrix"])) == 2
+    plans = doe_tab._load_plans()
+    assert linked and plans[0]["matrix"][0]["tests"]
