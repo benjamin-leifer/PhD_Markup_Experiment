@@ -40,8 +40,11 @@ import fnmatch
 import hashlib
 import json
 import os
+import tarfile
+import tempfile
 import time
 import tomllib
+import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import BinaryIO, Dict, Iterator, List, Set, Tuple, cast
@@ -789,6 +792,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Remote SFTP or S3 path to import (e.g. sftp://user@host/path)",
     )
     parser.add_argument(
+        "--archive",
+        metavar="PATH",
+        help="ZIP or TAR.GZ archive to import",
+    )
+    parser.add_argument(
         "--sample-lookup",
         action="store_true",
         help="Lookup sample using parser metadata instead of directory name",
@@ -896,11 +904,13 @@ def main(argv: list[str] | None = None) -> int:
         return show_status(args.status or None)
     if args.rollback:
         return rollback_job(args.rollback)
-    if not args.root and not args.remote:
-        parser.error(
-            "root is required unless --rollback, --status or --remote is specified"
-        )
+    if args.remote and args.archive:
+        parser.error("--archive cannot be used with --remote")
 
+    if not args.root and not args.remote and not args.archive:
+        parser.error(
+            "root is required unless --rollback, --status, --remote or --archive is specified",
+        )
     include = args.include if args.include is not None else CONFIG.get("include")
     exclude = args.exclude if args.exclude is not None else CONFIG.get("exclude")
 
@@ -908,6 +918,35 @@ def main(argv: list[str] | None = None) -> int:
         from battery_analysis.utils import remote_import
 
         with remote_import.remote_files(args.remote) as tmpdir:
+            root_path = tmpdir
+            result = import_directory(
+                tmpdir,
+                sample_lookup=args.sample_lookup,
+                reset=args.reset,
+                dry_run=args.dry_run,
+                workers=args.workers,
+                include=include,
+                exclude=exclude,
+                notify=args.notify,
+                archive=not args.no_archive,
+                preview_samples=args.preview_samples,
+                confirm=args.confirm,
+                sample_map=args.sample_map,
+                resume=args.resume,
+                report=args.report,
+                retries=args.retries,
+                tags=args.tags,
+            )
+    elif args.archive:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            if args.archive.lower().endswith('.zip'):
+                with zipfile.ZipFile(args.archive) as zf:
+                    zf.extractall(tmpdir)
+            elif args.archive.lower().endswith(('.tar.gz', '.tgz')):
+                with tarfile.open(args.archive, 'r:gz') as tf:
+                    tf.extractall(tmpdir)
+            else:
+                parser.error('Unsupported archive format: use .zip or .tar.gz')
             root_path = tmpdir
             result = import_directory(
                 tmpdir,
@@ -947,8 +986,7 @@ def main(argv: list[str] | None = None) -> int:
             retries=args.retries,
             tags=args.tags,
         )
-
-    if args.verify and result == 0 and not args.remote:
+    if args.verify and result == 0 and not args.remote and not args.archive:
         from battery_analysis.utils import verify_import
 
         rows = verify_import.verify_directory(root_path)

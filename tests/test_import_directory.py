@@ -32,13 +32,21 @@ if "scipy" not in sys.modules:
 
     sys.modules["scipy"] = _ScipyStub("scipy")
 
+# Ensure dataclass models by stubbing mongoengine before importing models
+sys.modules["mongoengine"] = types.ModuleType("mongoengine")
+
 import mongomock  # noqa: E402
+from battery_analysis import parsers  # noqa: E402
+from battery_analysis.models import ImportJob, Sample, TestResult  # noqa: E402
+
+# Replace stub with real mongoengine for utilities requiring it
+import importlib
+sys.modules.pop("mongoengine", None)
+sys.modules["mongoengine"] = importlib.import_module("mongoengine")
 from mongoengine import connect, disconnect  # noqa: E402
 
 disconnect()
 connect("import_test", mongo_client_class=mongomock.MongoClient, alias="default")
-from battery_analysis import parsers  # noqa: E402
-from battery_analysis.models import ImportJob, Sample, TestResult  # noqa: E402
 from battery_analysis.utils import import_directory, verify_import  # noqa: E402
 from pandas.errors import ParserError  # noqa: E402
 
@@ -975,3 +983,41 @@ def test_verify_import_reports_discrepancies(
     data = json.loads(out)
     statuses = {d["status"] for d in data}
     assert statuses == {"missing_file", "hash_mismatch", "missing_db"}
+
+
+@pytest.mark.parallel
+@pytest.mark.parametrize("ext", [".zip", ".tar.gz"])
+def test_archive_option(import_dir: tuple[Path, Callable[..., Path]], monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, ext: str) -> None:
+    root, make = import_dir
+    make("run.csv")
+
+    archive_path = root.parent / f"archive{ext}"
+    if ext == ".zip":
+        import zipfile
+
+        with zipfile.ZipFile(archive_path, "w") as zf:
+            for path in root.rglob("*"):
+                zf.write(path, path.relative_to(root))
+    else:
+        import tarfile
+
+        with tarfile.open(archive_path, "w:gz") as tf:
+            for path in root.rglob("*"):
+                tf.add(path, arcname=path.relative_to(root))
+
+    tmp: dict[str, str] = {}
+    orig_tmpdir = import_directory.tempfile.TemporaryDirectory
+
+    def tracking_tmpdir(*args: object, **kwargs: object):
+        td = orig_tmpdir(*args, **kwargs)
+        tmp["path"] = td.name
+        return td
+
+    monkeypatch.setattr(import_directory.tempfile, "TemporaryDirectory", tracking_tmpdir)
+    monkeypatch.setattr(import_directory, "ensure_connection", lambda **_: True)
+
+    with caplog.at_level("INFO"):
+        rc = import_directory.main(["--archive", str(archive_path), "--dry-run"])
+    assert rc == 0
+    assert any("Would process" in r.message for r in caplog.records)
+    assert tmp.get("path") and not os.path.exists(tmp["path"])
