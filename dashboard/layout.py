@@ -440,10 +440,10 @@ def toast_container() -> html.Div:
             dismissable=True,
             duration=4000,
             icon="primary",
-            role="status",
-            **{"aria-live": "polite"},
         ),
         id="toast-container",
+        role="status",
+        **{"aria-live": "polite"},
         style={
             "position": "fixed",
             "top": 66,
