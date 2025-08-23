@@ -37,7 +37,7 @@ sys.modules["mongoengine"] = types.ModuleType("mongoengine")
 
 import mongomock  # noqa: E402
 from battery_analysis import parsers  # noqa: E402
-from battery_analysis.models import ImportJob, Sample, TestResult  # noqa: E402
+from battery_analysis.models import ImportJob, ImportJobSummary, Sample, TestResult  # noqa: E402
 
 # Replace stub with real mongoengine for utilities requiring it
 import importlib
@@ -68,6 +68,7 @@ def import_dir(tmp_path: Path) -> tuple[Path, Callable[..., Path]]:
 def fresh_db() -> None:
     Sample._registry.clear()
     ImportJob._registry.clear()
+    ImportJobSummary._registry.clear()
     disconnect()
     connect("import_test", mongo_client_class=mongomock.MongoClient, alias="default")
     yield
@@ -97,6 +98,36 @@ def test_progress_logging_and_summary(
 
     assert "Processed 3/3" in caplog.text
     assert "Summary: created=3, updated=0, skipped=0" in caplog.text
+    assert ImportJobSummary.objects().count() == 1
+    summary = ImportJobSummary.objects().first()
+    assert summary.created_count == 3
+    assert summary.updated_count == 0
+    assert summary.skipped_count == 0
+    assert summary.status == "completed"
+
+
+def test_history_cli_shows_summary(
+    import_dir: tuple[Path, Callable[..., Path]],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root, make = import_dir
+    make("run.csv")
+
+    def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
+        return object(), False
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
+    import_directory.import_directory(root, workers=1)
+
+    rc = import_directory.main(["--history"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "created=1" in out
 
 
 def test_new_file_creates_testresult(
