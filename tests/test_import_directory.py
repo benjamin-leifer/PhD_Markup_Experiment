@@ -1,15 +1,18 @@
+# mypy: ignore-errors
+# flake8: noqa
 from __future__ import annotations
 
-from pathlib import Path
-import sys
+import hashlib
 import json
 import os
-import hashlib
-import pytest
-import types
+import sys
 import threading
 import time
+import types
+from pathlib import Path
 from typing import Callable
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = ROOT / "Python_Codes" / "BLeifer_Battery_Analysis"
@@ -34,9 +37,9 @@ from mongoengine import connect, disconnect  # noqa: E402
 
 disconnect()
 connect("import_test", mongo_client_class=mongomock.MongoClient, alias="default")
-from battery_analysis.models import Sample, ImportJob, TestResult  # noqa: E402
-from battery_analysis.utils import import_directory, verify_import  # noqa: E402
 from battery_analysis import parsers  # noqa: E402
+from battery_analysis.models import ImportJob, Sample, TestResult  # noqa: E402
+from battery_analysis.utils import import_directory, verify_import  # noqa: E402
 from pandas.errors import ParserError  # noqa: E402
 
 parsers.register_parser(".csv", lambda path: ([], {}))
@@ -117,10 +120,54 @@ def test_new_file_creates_testresult(
     assert len(sample.tests) == 1
 
 
+def test_duplicate_across_samples_skipped(
+    import_dir: tuple[Path, Callable[..., Path]],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    root, make = import_dir
+    content = "same-content"
+    make("run.csv", content=content, sample="S1")
+    make("run.csv", content=content, sample="S2")
+
+    def fake_parse(path: str) -> tuple[list[dict[str, float]], dict[str, object]]:
+        import datetime
+
+        cycles = [
+            {
+                "cycle_index": 1,
+                "charge_capacity": 1.0,
+                "discharge_capacity": 1.0,
+                "coulombic_efficiency": 1.0,
+            }
+        ]
+        metadata = {
+            "tester": "Other",
+            "name": os.path.basename(path),
+            "date": datetime.datetime.utcnow(),
+        }
+        return cycles, metadata
+
+    monkeypatch.setattr(parsers, "parse_file", fake_parse)
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
+    with caplog.at_level("INFO"):
+        import_directory.import_directory(root, workers=1, archive=False)
+
+    assert TestResult.objects.count() == 1
+    s1 = Sample.get_by_name("S1")
+    s2 = Sample.get_by_name("S2")
+    assert s1 is not None and s2 is not None
+    assert len(s1.tests) == 1
+    assert len(s2.tests) == 0
+    assert "Duplicate file hash" in caplog.text
+
+
 def test_process_file_archives_and_hashes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import hashlib
+
     from battery_analysis.utils import file_storage
 
     data_path = tmp_path / "S1" / "test.csv"
@@ -161,6 +208,7 @@ def test_process_file_no_archive(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import hashlib
+
     from battery_analysis.utils import file_storage
 
     data_path = tmp_path / "S1" / "test.csv"
@@ -573,6 +621,7 @@ def test_config_file_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     """Config file values are used when CLI options are absent."""
 
     from importlib import reload
+
     from battery_analysis.utils import config as config_mod
     from battery_analysis.utils import import_directory as import_directory_mod
 
