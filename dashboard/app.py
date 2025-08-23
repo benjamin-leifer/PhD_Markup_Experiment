@@ -390,10 +390,10 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
     @app.callback(
         Output("metadata-modal", "is_open"),
         Output("metadata-content", "children"),
-        Input("running-tests-table", "active_cell"),
+        Input("running-tests-table", "active_cell", allow_missing=True),
         Input("close-metadata", "n_clicks"),
         State("metadata-modal", "is_open"),
-        State("running-tests-table", "data"),
+        State("running-tests-table", "data", allow_missing=True),
     )
     def display_metadata(active_cell, close_clicks, is_open, rows):
         # If a table cell is clicked, show metadata modal
@@ -449,11 +449,11 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         return is_open
 
     @app.callback(
-        Output("running-tests-table", "data", allow_duplicate=True),
-        Output("upcoming-tests-table", "data", allow_duplicate=True),
+        Output("running-tests-table", "data", allow_duplicate=True, allow_missing=True),
+        Output("upcoming-tests-table", "data", allow_duplicate=True, allow_missing=True),
         Input("refresh-interval", "n_intervals"),
-        State("running-tests-table", "data"),
-        State("upcoming-tests-table", "data"),
+        State("running-tests-table", "data", allow_missing=True),
+        State("upcoming-tests-table", "data", allow_missing=True),
         prevent_initial_call=True,
     )
     def refresh_test_tables(_, running_rows, upcoming_rows):
@@ -467,9 +467,9 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         )
 
     @app.callback(
-        Output("running-tests-table", "data", allow_duplicate=True),
-        Input("running-tests-table", "derived_viewport_indices"),
-        State("running-tests-table", "data"),
+        Output("running-tests-table", "data", allow_duplicate=True, allow_missing=True),
+        Input("running-tests-table", "derived_viewport_indices", allow_missing=True),
+        State("running-tests-table", "data", allow_missing=True),
         prevent_initial_call=True,
     )
     def paginate_running(viewport, current):
@@ -486,9 +486,9 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         return (current or []) + layout_components.running_tests_rows(new_rows)
 
     @app.callback(
-        Output("upcoming-tests-table", "data", allow_duplicate=True),
-        Input("upcoming-tests-table", "derived_viewport_indices"),
-        State("upcoming-tests-table", "data"),
+        Output("upcoming-tests-table", "data", allow_duplicate=True, allow_missing=True),
+        Input("upcoming-tests-table", "derived_viewport_indices", allow_missing=True),
+        State("upcoming-tests-table", "data", allow_missing=True),
         prevent_initial_call=True,
     )
     def paginate_upcoming(viewport, current):
