@@ -307,6 +307,11 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         )
         return html.Div(
             [
+                html.A(
+                    "Skip to main content",
+                    href="#main-content",
+                    className="visually-hidden-focusable",
+                ),
                 dcc.Location(
                     id="url", pathname=f"/{prefs.get('default_tab', 'overview')}"
                 ),
@@ -314,13 +319,13 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                 dcc.Store(id="preferences", storage_type="local", data=prefs),
                 dcc.Store(id="active-tab", data=prefs.get("default_tab", "overview")),
                 html.Link(rel="stylesheet", href=theme_href, id="theme"),
-                html.Div(id="page-content"),
+                html.Div(id="main-content"),
             ]
         )
 
     app.layout = serve_layout
 
-    @app.callback(Output("page-content", "children"), Input("user-role", "data"))
+    @app.callback(Output("main-content", "children"), Input("user-role", "data"))
     def display_page(role):
         if enable_login and not role:
             return auth.layout()
