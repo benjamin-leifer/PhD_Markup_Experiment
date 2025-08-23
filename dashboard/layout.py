@@ -15,6 +15,14 @@ def raw_files_layout() -> html.Div:
     return _layout()
 
 
+def similar_samples_layout() -> html.Div:
+    """Proxy to the similar samples tab layout."""
+
+    from .similar_samples_tab import layout as _layout
+
+    return _layout()
+
+
 def flagged_table(flags: List[Dict[str, str]]) -> dbc.Table:
     """Return a table of flagged samples."""
 
