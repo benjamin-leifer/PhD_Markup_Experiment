@@ -876,6 +876,11 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Tag to apply to imported samples and tests (repeatable)",
     )
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="Verify imported files against database and GridFS after processing",
+    )
     args = parser.parse_args(argv)
 
     from battery_analysis.utils.logging import get_logger
@@ -891,7 +896,7 @@ def main(argv: list[str] | None = None) -> int:
     include = args.include if args.include is not None else CONFIG.get("include")
     exclude = args.exclude if args.exclude is not None else CONFIG.get("exclude")
 
-    return import_directory(
+    result = import_directory(
         args.root,
         sample_lookup=args.sample_lookup,
         reset=args.reset,
@@ -909,6 +914,19 @@ def main(argv: list[str] | None = None) -> int:
         retries=args.retries,
         tags=args.tags,
     )
+
+    if args.verify and result == 0:
+        from battery_analysis.utils import verify_import
+
+        rows = verify_import.verify_directory(args.root)
+        summary = verify_import.summarize_discrepancies(rows)
+        print(
+            f"Added: {summary['added']} | Mismatched: {summary['mismatched']} | Missing: {summary['missing']}"
+        )
+        if rows:
+            return 1
+
+    return result
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry
