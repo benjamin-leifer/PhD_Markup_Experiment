@@ -10,6 +10,7 @@ import json
 
 import dash
 import dash_bootstrap_components as dbc
+from battery_analysis.utils.doe_builder import save_plan
 from dash import Input, Output, State, dcc, html
 
 try:  # pragma: no cover - runtime helper is simple
@@ -684,6 +685,155 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
             except Exception:
                 pass
         return ""
+
+    # ------------------------------------------------------------------
+    # DOE plan builder callbacks
+    # ------------------------------------------------------------------
+
+    def _factor_items(factors: dict[str, list[str]]) -> list[html.Li]:
+        return [
+            html.Li(f"{name}: {', '.join(levels)}") for name, levels in factors.items()
+        ]
+
+    def _matrix_items(matrix: list[dict[str, str]]) -> list[html.Li]:
+        return [
+            html.Li(", ".join(f"{k}={v}" for k, v in row.items())) for row in matrix
+        ]
+
+    @app.callback(
+        Output(doe_tab.PLAN_NAME, "value"),
+        Output(doe_tab.PLAN_STORE, "data"),
+        Output(doe_tab.FACTORS_DIV, "children"),
+        Output(doe_tab.MATRIX_DIV, "children"),
+        Output(doe_tab.FACTOR_SELECT, "options"),
+        Input(doe_tab.PLAN_DROPDOWN, "value"),
+    )
+    def load_plan(plan_name):
+        if not plan_name:
+            empty = {"factors": {}, "matrix": []}
+            return "", empty, [], [], []
+        plan = next((p for p in doe_tab._load_plans() if p["name"] == plan_name), None)
+        if not plan:
+            empty = {"factors": {}, "matrix": []}
+            return "", empty, [], [], []
+        factors = plan.get("factors", {})
+        matrix = plan.get("matrix", [])
+        return (
+            plan_name,
+            {"factors": factors, "matrix": matrix},
+            html.Ul(_factor_items(factors)),
+            html.Ul(_matrix_items(matrix)),
+            [{"label": f, "value": f} for f in factors.keys()],
+        )
+
+    @app.callback(
+        Output(doe_tab.PLAN_STORE, "data", allow_duplicate=True),
+        Output(doe_tab.FACTOR_INPUT, "value"),
+        Output(doe_tab.FACTORS_DIV, "children", allow_duplicate=True),
+        Output(doe_tab.FACTOR_SELECT, "options", allow_duplicate=True),
+        Input(doe_tab.ADD_FACTOR, "n_clicks"),
+        State(doe_tab.FACTOR_INPUT, "value"),
+        State(doe_tab.PLAN_STORE, "data"),
+        prevent_initial_call=True,
+    )
+    def add_factor(n_clicks, name, plan):
+        if not n_clicks or not name:
+            raise dash.exceptions.PreventUpdate
+        plan = plan or {"factors": {}, "matrix": []}
+        plan["factors"].setdefault(name, [])
+        factors_children = html.Ul(_factor_items(plan["factors"]))
+        options = [{"label": f, "value": f} for f in plan["factors"].keys()]
+        return plan, "", factors_children, options
+
+    @app.callback(
+        Output(doe_tab.PLAN_STORE, "data", allow_duplicate=True),
+        Output(doe_tab.LEVEL_INPUT, "value"),
+        Output(doe_tab.FACTORS_DIV, "children", allow_duplicate=True),
+        Output(doe_tab.FACTOR_SELECT, "options", allow_duplicate=True),
+        Input(doe_tab.ADD_LEVEL, "n_clicks"),
+        State(doe_tab.FACTOR_SELECT, "value"),
+        State(doe_tab.LEVEL_INPUT, "value"),
+        State(doe_tab.PLAN_STORE, "data"),
+        prevent_initial_call=True,
+    )
+    def add_level(n_clicks, factor, level, plan):
+        if not n_clicks or not factor or not level:
+            raise dash.exceptions.PreventUpdate
+        plan = plan or {"factors": {}, "matrix": []}
+        levels = plan["factors"].setdefault(factor, [])
+        if level not in levels:
+            levels.append(level)
+        factors_children = html.Ul(_factor_items(plan["factors"]))
+        options = [{"label": f, "value": f} for f in plan["factors"].keys()]
+        return plan, "", factors_children, options
+
+    @app.callback(
+        Output(doe_tab.PLAN_STORE, "data", allow_duplicate=True),
+        Output(doe_tab.MATRIX_INPUT, "value"),
+        Output(doe_tab.MATRIX_DIV, "children", allow_duplicate=True),
+        Input(doe_tab.ADD_ROW, "n_clicks"),
+        State(doe_tab.MATRIX_INPUT, "value"),
+        State(doe_tab.PLAN_STORE, "data"),
+        prevent_initial_call=True,
+    )
+    def add_row(n_clicks, row_text, plan):
+        if not n_clicks or not row_text:
+            raise dash.exceptions.PreventUpdate
+        plan = plan or {"factors": {}, "matrix": []}
+        try:
+            combo = json.loads(row_text)
+        except Exception:
+            return (
+                plan,
+                row_text,
+                html.Div("Invalid row format", className="text-danger"),
+            )
+        plan["matrix"].append(combo)
+        matrix_children = html.Ul(_matrix_items(plan["matrix"]))
+        return plan, "", matrix_children
+
+    @app.callback(
+        Output(doe_tab.PLAN_DROPDOWN, "options", allow_duplicate=True),
+        Output(doe_tab.FEEDBACK_DIV, "children"),
+        Output("notification-toast", "is_open", allow_duplicate=True),
+        Output("notification-toast", "children", allow_duplicate=True),
+        Output("notification-toast", "header", allow_duplicate=True),
+        Output("notification-toast", "icon", allow_duplicate=True),
+        Input(doe_tab.SAVE_PLAN, "n_clicks"),
+        State(doe_tab.PLAN_NAME, "value"),
+        State(doe_tab.PLAN_STORE, "data"),
+        prevent_initial_call=True,
+    )
+    def save_plan_callback(n_clicks, name, plan):
+        if not n_clicks:
+            raise dash.exceptions.PreventUpdate
+        errors: list[str] = []
+        if not name:
+            errors.append("Plan name is required.")
+        if not plan or not plan.get("factors"):
+            errors.append("At least one factor is required.")
+        if not plan or not plan.get("matrix"):
+            errors.append("At least one matrix row is required.")
+        if errors:
+            return (
+                dash.no_update,
+                html.Ul([html.Li(e) for e in errors]),
+                True,
+                "Invalid plan",
+                "Error",
+                "danger",
+            )
+        try:
+            save_plan(name, plan.get("factors", {}), plan.get("matrix", []))
+        except Exception as err:
+            msg = f"Failed to save plan: {err}"
+            return dash.no_update, html.Div(msg), True, msg, "Error", "danger"
+        options = [
+            {"label": p["name"], "value": p["name"]} for p in doe_tab._load_plans()
+        ]
+        if name not in [opt["value"] for opt in options]:
+            options.append({"label": name, "value": name})
+        return options, "", True, f"Saved plan {name}", "Success", "success"
 
     trait_filter_tab.register_callbacks(app)
     comparison_tab.register_callbacks(app)
