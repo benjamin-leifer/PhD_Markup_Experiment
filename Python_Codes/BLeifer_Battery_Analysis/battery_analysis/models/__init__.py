@@ -27,7 +27,7 @@ try:  # pragma: no cover - behaviour depends on environment
         from .test_protocol import TestProtocol  # type: ignore
         from .cell_dataset import CellDataset  # type: ignore
         from .experiment_plan import ExperimentPlan  # type: ignore
-        from .import_job import ImportJob  # type: ignore
+        from .import_job import ImportJob, ImportJobSummary  # type: ignore
         from .stages import (
             CathodeMaterial,
             Slurry,
@@ -47,7 +47,9 @@ try:  # pragma: no cover - behaviour depends on environment
         RawDataFile = importlib.import_module("raw_file").RawDataFile  # type: ignore
         TestProtocol = importlib.import_module("test_protocol").TestProtocol  # type: ignore
         CellDataset = importlib.import_module("cell_dataset").CellDataset  # type: ignore
-        ImportJob = importlib.import_module("import_job").ImportJob  # type: ignore
+        mod = importlib.import_module("import_job")
+        ImportJob = mod.ImportJob  # type: ignore
+        ImportJobSummary = mod.ImportJobSummary  # type: ignore
         stages_mod = importlib.import_module("stages")
         CathodeMaterial = stages_mod.CathodeMaterial  # type: ignore
         Slurry = stages_mod.Slurry  # type: ignore
@@ -66,6 +68,7 @@ try:  # pragma: no cover - behaviour depends on environment
         "CellDataset",
         "ExperimentPlan",
         "ImportJob",
+        "ImportJobSummary",
         "CathodeMaterial",
         "Slurry",
         "Electrode",
@@ -313,6 +316,41 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         def delete(self) -> None:
             self.__class__._registry.pop(self.id, None)
 
+    @dataclass
+    class ImportJobSummary:  # type: ignore
+        id: str = dc_field(default_factory=lambda: str(uuid.uuid4()))
+        start_time: datetime.datetime = dc_field(
+            default_factory=datetime.datetime.utcnow
+        )
+        end_time: datetime.datetime | None = None
+        total_count: int = 0
+        processed_count: int = 0
+        created_count: int = 0
+        updated_count: int = 0
+        skipped_count: int = 0
+        errors: list[str] = dc_field(default_factory=list)
+        status: str = "running"
+
+        _registry: ClassVar[dict[str, "ImportJobSummary"]] = {}
+
+        def save(self) -> "ImportJobSummary":
+            self.__class__._registry[self.id] = self
+            return self
+
+        @classmethod
+        def objects(cls, **query):
+            class _Q(list):
+                def first(self):
+                    return self[0] if self else None
+
+                def count(self):
+                    return len(self)
+
+            if "id" in query:
+                obj = cls._registry.get(str(query["id"]))
+                return _Q([obj] if obj else [])
+            return _Q(cls._registry.values())
+
     # Convenience export to create or fetch samples by name
     get_or_create_sample = Sample.get_or_create
 
@@ -327,6 +365,7 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         "CellDataset",
         "ExperimentPlan",
         "ImportJob",
+        "ImportJobSummary",
         "CathodeMaterial",
         "Slurry",
         "Electrode",
