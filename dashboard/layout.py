@@ -34,6 +34,14 @@ def import_stats_layout() -> html.Div:
     return _layout()
 
 
+def import_jobs_layout() -> html.Div:
+    """Proxy to the import jobs tab layout."""
+
+    from .import_jobs_tab import layout as _layout
+
+    return _layout()
+
+
 def flagged_table(flags: List[Dict[str, str]]) -> dbc.Table:
     """Return a table of flagged samples."""
 
@@ -440,16 +448,14 @@ def toast_container() -> html.Div:
 
 def import_jobs_table(jobs: List[Dict[str, str]]) -> dbc.Table:
     """Return a table summarizing import jobs."""
+
     header = html.Thead(
         html.Tr(
             [
-                html.Th("Start Time"),
-                html.Th("End Time"),
-                html.Th("Created"),
-                html.Th("Updated"),
-                html.Th("Skipped"),
+                html.Th("Start"),
+                html.Th("End"),
+                html.Th("Progress"),
                 html.Th("Errors"),
-                html.Th("Status"),
             ]
         )
     )
@@ -458,21 +464,10 @@ def import_jobs_table(jobs: List[Dict[str, str]]) -> dbc.Table:
         rows.append(
             html.Tr(
                 [
-                    html.Td(job.get("start_time", "")),
-                    html.Td(job.get("end_time", "")),
-                    html.Td(job.get("created", "")),
-                    html.Td(job.get("updated", "")),
-                    html.Td(job.get("skipped", "")),
+                    html.Td(job.get("start", "")),
+                    html.Td(job.get("end", "")),
+                    html.Td(job.get("progress", "")),
                     html.Td(job.get("errors", "")),
-                    html.Td(
-                        dbc.Button(
-                            "Rollback",
-                            id={"type": "rollback-job", "index": job.get("id")},
-                            color="danger",
-                            size="sm",
-                            title="Rollback import job",
-                        )
-                    ),
                 ]
             )
         )
