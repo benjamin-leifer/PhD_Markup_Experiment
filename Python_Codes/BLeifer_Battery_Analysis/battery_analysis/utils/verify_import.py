@@ -1,9 +1,9 @@
-"""Audit raw test files against stored hashes in MongoDB.
+"""Audit raw test files against stored hashes in MongoDB and GridFS.
 
 This utility walks a directory tree, computes the SHA256 hash for each file
-and compares it with :class:`battery_analysis.models.TestResult` entries in the
-connected MongoDB instance.  Discrepancies are reported in a summary table
-that can be emitted as JSON or CSV.
+and compares it with :class:`battery_analysis.models.TestResult` entries and
+archived raw files stored in GridFS.  Discrepancies are reported in a summary
+table that can be emitted as JSON or CSV.
 
 Example
 -------
@@ -27,6 +27,7 @@ from typing import Dict, List, Iterable
 
 from battery_analysis.models import TestResult, Sample
 from battery_analysis.utils.db import ensure_connection
+from battery_analysis.utils import file_storage
 
 
 def _sha256(path: Path) -> str:
@@ -39,7 +40,7 @@ def _sha256(path: Path) -> str:
 
 
 def verify_directory(root: str) -> List[Dict[str, str]]:
-    """Verify ``root`` against ``TestResult`` records.
+    """Verify ``root`` against ``TestResult`` records and GridFS archives.
 
     Parameters
     ----------
@@ -50,8 +51,8 @@ def verify_directory(root: str) -> List[Dict[str, str]]:
     -------
     list of dict
         Each dict describes a discrepancy with keys ``path``, ``status``,
-        ``expected_hash``, ``actual_hash`` and ``test_id`` (if applicable).
-        The list is empty when no discrepancies are found.
+        ``expected_hash``, ``actual_hash``, ``gridfs_hash`` and ``test_id``
+        (if applicable).  The list is empty when no discrepancies are found.
     """
 
     ensure_connection()
@@ -79,16 +80,19 @@ def verify_directory(root: str) -> List[Dict[str, str]]:
         stored_path = str(Path(test.file_path).resolve()) if getattr(test, "file_path", None) else None
         expected = getattr(test, "file_hash", "") or ""
         test_id = str(getattr(test, "id", ""))
+        file_id = getattr(test, "file_id", None)
 
+        actual = ""
         if stored_path and stored_path in file_hashes:
             actual = file_hashes.pop(stored_path)
-            if expected != actual:
+            if expected and expected != actual:
                 discrepancies.append(
                     {
                         "path": stored_path,
                         "status": "hash_mismatch",
                         "expected_hash": expected,
                         "actual_hash": actual,
+                        "gridfs_hash": "",
                         "test_id": test_id,
                     }
                 )
@@ -99,6 +103,51 @@ def verify_directory(root: str) -> List[Dict[str, str]]:
                     "status": "missing_file",
                     "expected_hash": expected,
                     "actual_hash": "",
+                    "gridfs_hash": "",
+                    "test_id": test_id,
+                }
+            )
+
+        if file_id:
+            try:
+                raw = file_storage.get_raw_data_file_by_id(file_id)
+            except Exception:
+                discrepancies.append(
+                    {
+                        "path": stored_path or "",
+                        "status": "missing_gridfs",
+                        "expected_hash": expected,
+                        "actual_hash": actual,
+                        "gridfs_hash": "",
+                        "test_id": test_id,
+                    }
+                )
+            else:
+                if isinstance(raw, str):
+                    with open(raw, "rb") as fh:
+                        raw_bytes = fh.read()
+                else:
+                    raw_bytes = raw
+                gridfs_hash = hashlib.sha256(raw_bytes).hexdigest()
+                if expected and gridfs_hash != expected:
+                    discrepancies.append(
+                        {
+                            "path": stored_path or "",
+                            "status": "gridfs_mismatch",
+                            "expected_hash": expected,
+                            "actual_hash": actual,
+                            "gridfs_hash": gridfs_hash,
+                            "test_id": test_id,
+                        }
+                    )
+        else:
+            discrepancies.append(
+                {
+                    "path": stored_path or "",
+                    "status": "missing_gridfs",
+                    "expected_hash": expected,
+                    "actual_hash": actual,
+                    "gridfs_hash": "",
                     "test_id": test_id,
                 }
             )
@@ -111,6 +160,7 @@ def verify_directory(root: str) -> List[Dict[str, str]]:
                 "status": "missing_db",
                 "expected_hash": "",
                 "actual_hash": actual,
+                "gridfs_hash": "",
                 "test_id": "",
             }
         )
@@ -118,8 +168,29 @@ def verify_directory(root: str) -> List[Dict[str, str]]:
     return discrepancies
 
 
+def summarize_discrepancies(rows: Iterable[Dict[str, str]]) -> Dict[str, int]:
+    """Return counts of added, mismatched and missing items."""
+    counts = {"added": 0, "mismatched": 0, "missing": 0}
+    for row in rows:
+        status = row.get("status")
+        if status == "missing_db":
+            counts["added"] += 1
+        elif status in {"hash_mismatch", "gridfs_mismatch"}:
+            counts["mismatched"] += 1
+        elif status in {"missing_file", "missing_gridfs"}:
+            counts["missing"] += 1
+    return counts
+
+
 def _emit_csv(rows: Iterable[Dict[str, str]]) -> None:
-    fieldnames = ["path", "status", "expected_hash", "actual_hash", "test_id"]
+    fieldnames = [
+        "path",
+        "status",
+        "expected_hash",
+        "actual_hash",
+        "gridfs_hash",
+        "test_id",
+    ]
     writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
     writer.writeheader()
     for row in rows:
@@ -143,6 +214,11 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(rows, indent=2))
     else:
         _emit_csv(rows)
+
+    summary = summarize_discrepancies(rows)
+    print(
+        f"Added: {summary['added']} | Mismatched: {summary['mismatched']} | Missing: {summary['missing']}"
+    )
 
     return 0 if not rows else 1
 
