@@ -1,8 +1,11 @@
 """Dash layout components for the battery dashboard."""
 
+# flake8: noqa
+
+from typing import Any, Dict, List
+
 import dash_bootstrap_components as dbc
-from dash import html, dcc, dash_table
-from typing import List, Dict, Any
+from dash import dash_table, dcc, html
 
 # mypy: ignore-errors
 
@@ -11,6 +14,14 @@ def raw_files_layout() -> html.Div:
     """Proxy to the raw files tab layout."""
 
     from .raw_files_tab import layout as _layout
+
+    return _layout()
+
+
+def import_stats_layout() -> html.Div:
+    """Proxy to the import stats tab layout."""
+
+    from .import_stats_tab import layout as _layout
 
     return _layout()
 

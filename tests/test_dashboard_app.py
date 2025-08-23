@@ -1,10 +1,15 @@
 """Integration tests for the dashboard Dash app."""
 
-from pathlib import Path
-import sys
-import pytest
-import dash
+# flake8: noqa
+
+# mypy: ignore-errors
+
 import base64
+import sys
+from pathlib import Path
+
+import dash
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = ROOT / "Python_Codes" / "BLeifer_Battery_Analysis"
@@ -17,6 +22,7 @@ TAB_LABELS = [
     "New Material",
     "Data Import",
     "Export",
+    "Import Stats",
     "Comparison",
     "Advanced Analysis",
     "Cycle Detail",
@@ -55,8 +61,8 @@ def test_basic_callbacks(monkeypatch):
 
     update_tests = cb["cd-test.options"]["callback"].__wrapped__
 
-    from battery_analysis.models import Sample, TestResult
     import mongomock
+    from battery_analysis.models import Sample, TestResult
     from mongoengine import connect, disconnect
 
     disconnect()
@@ -134,8 +140,8 @@ def test_handle_upload_clears_status(monkeypatch, tmp_path):
 def test_missing_data_resolve_flow(monkeypatch):
     """Resolving a row removes it from the missing data dataset."""
     import importlib.util
-    import types
     import sys
+    import types
     from pathlib import Path
 
     # Load module directly to avoid importing the full dashboard package
@@ -233,8 +239,8 @@ def test_missing_data_resolve_flow(monkeypatch):
 def test_missing_data_suggestions(monkeypatch):
     """Suggested values pre-populate fields and confirming them resolves the row."""
     import importlib.util
-    import types
     import sys
+    import types
     from pathlib import Path
 
     spec = importlib.util.spec_from_file_location(
@@ -343,6 +349,7 @@ def test_missing_data_lazy_load(monkeypatch):
     """_get_missing_data executes only when the tab is opened and filters results."""
     import importlib.util
     from pathlib import Path
+
     import dash
 
     spec = importlib.util.spec_from_file_location(
@@ -390,8 +397,8 @@ def test_missing_data_lazy_load(monkeypatch):
 def test_missing_data_falls_back_to_test_name(monkeypatch):
     """Records lacking a cell code use the test's filename instead."""
     import importlib.util
-    import types
     import sys
+    import types
     from pathlib import Path
 
     spec = importlib.util.spec_from_file_location(
@@ -438,10 +445,11 @@ def test_missing_data_falls_back_to_test_name(monkeypatch):
 
 def test_export_plot_prompts_kaleido(monkeypatch):
     """Missing kaleido triggers a toast notification when exporting plots."""
-    import types
     import importlib.util
     import sys
+    import types
     from pathlib import Path
+
     import dash
     import plotly.graph_objs as go
 
@@ -478,8 +486,8 @@ def test_export_plot_prompts_kaleido(monkeypatch):
 def test_missing_data_tab_shows_filename_for_empty_cell_code(monkeypatch):
     """A test without a cell code displays its filename in the table."""
     import importlib.util
-    import types
     import sys
+    import types
     from pathlib import Path
 
     spec = importlib.util.spec_from_file_location(
@@ -536,3 +544,28 @@ def test_missing_data_tab_shows_filename_for_empty_cell_code(monkeypatch):
             "resolve": "[Resolve](#)",
         }
     ]
+
+
+def test_import_stats_aggregation():
+    """Aggregating import records by week and month works."""
+    import pandas as pd
+
+    from dashboard import import_stats_tab
+
+    df = pd.DataFrame(
+        {
+            "date": pd.to_datetime(
+                [
+                    "2024-01-01",
+                    "2024-01-02",
+                    "2024-01-10",
+                ]
+            ),
+            "type": ["TestResult", "Sample", "RawFile"],
+        }
+    )
+    weekly = import_stats_tab.aggregate_counts(df, "W")
+    assert int(weekly.iloc[0]["TestResult"]) == 1
+    assert int(weekly.iloc[0]["Sample"]) == 1
+    monthly = import_stats_tab.aggregate_counts(df, "M")
+    assert int(monthly.iloc[0].sum()) == 3

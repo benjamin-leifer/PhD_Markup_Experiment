@@ -1,5 +1,7 @@
 """Dash application for battery test monitoring."""
 
+# flake8: noqa
+
 # mypy: ignore-errors
 
 # Automatically configure dependencies so the dashboard works out of the box
@@ -20,26 +22,30 @@ _configure_runtime()
 from battery_analysis.parsers import parse_file  # noqa: E402
 
 try:
-    from . import cell_flagger
-    from . import data_access
+    from battery_analysis.utils import import_watcher
+
+    from . import (
+        ad_hoc_analysis_tab,
+        advanced_analysis_tab,
+        auth,
+        cell_flagger,
+        comparison_tab,
+        cycle_detail_tab,
+        data_access,
+        document_flow_tab,
+        doe_tab,
+        eis_tab,
+        import_jobs_tab,
+        import_stats_tab,
+    )
     from . import layout as layout_components
     from . import (
-        trait_filter_tab,
-        advanced_analysis_tab,
-        ad_hoc_analysis_tab,
-        cycle_detail_tab,
-        eis_tab,
-        comparison_tab,
-        document_flow_tab,
         missing_data_tab,
-        doe_tab,
-        import_jobs_tab,
-        watcher_tab,
+        preferences,
         raw_files_tab,
+        trait_filter_tab,
+        watcher_tab,
     )
-    from . import auth
-    from . import preferences
-    from battery_analysis.utils import import_watcher
 except ImportError:  # pragma: no cover - allow running as script
     import importlib
 
@@ -56,6 +62,7 @@ except ImportError:  # pragma: no cover - allow running as script
     missing_data_tab = importlib.import_module("missing_data_tab")
     doe_tab = importlib.import_module("doe_tab")
     import_jobs_tab = importlib.import_module("import_jobs_tab")
+    import_stats_tab = importlib.import_module("import_stats_tab")
     watcher_tab = importlib.import_module("watcher_tab")
     raw_files_tab = importlib.import_module("raw_files_tab")
     auth = importlib.import_module("auth")
@@ -192,6 +199,12 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                     label="Import Jobs",
                     disabled=not can("import-jobs"),
                     value="import-jobs",
+                ),
+                dcc.Tab(
+                    import_stats_tab.layout(),
+                    label="Import Stats",
+                    disabled=not can("import-stats"),
+                    value="import-stats",
                 ),
                 dcc.Tab(
                     watcher_tab.layout(),
@@ -675,6 +688,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
     missing_data_tab.register_callbacks(app)
     doe_tab.register_callbacks(app)
     import_jobs_tab.register_callbacks(app)
+    import_stats_tab.register_callbacks(app)
     watcher_tab.register_callbacks(app)
     raw_files_tab.register_callbacks(app)
 
