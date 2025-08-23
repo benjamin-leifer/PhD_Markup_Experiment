@@ -31,7 +31,6 @@ try:
         auth,
         cell_flagger,
         comparison_tab,
-        similar_samples_tab,
         cycle_detail_tab,
         data_access,
         document_flow_tab,
@@ -45,6 +44,7 @@ try:
         missing_data_tab,
         preferences,
         raw_files_tab,
+        similar_samples_tab,
         trait_filter_tab,
         watcher_tab,
     )
@@ -171,6 +171,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                 label="Dark mode",
                 value=prefs.get("theme", "light") == "dark",
                 className="ms-2",
+                title="Toggle dark mode",
             ),
             brand="Battery Test Dashboard",
             color="primary",
@@ -217,7 +218,9 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                 nav_link("Comparison", "comparison", not can("comparison")),
                 nav_link("Similar Samples", "similar-samples"),
                 nav_link(
-                    "Advanced Analysis", "advanced-analysis", not can("advanced-analysis")
+                    "Advanced Analysis",
+                    "advanced-analysis",
+                    not can("advanced-analysis"),
                 ),
                 nav_link("Ad Hoc Analysis", "ad-hoc", not can("ad-hoc")),
                 nav_link("Cycle Detail", "cycle-detail", not can("cycle-detail")),
