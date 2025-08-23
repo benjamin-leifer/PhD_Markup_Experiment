@@ -159,6 +159,21 @@ Raw files saved to GridFS can be retrieved with the
 
 Omit ``--out`` to stream the file contents to standard output.
 
+## Searching test results
+
+Use the ``battery_analysis.utils.search_tests`` module to look up
+``TestResult`` documents using basic filters. Provide a sample name,
+chemistry, or a date range (``YYYY-MM-DD:YYYY-MM-DD``)::
+
+    # all tests for a particular sample
+    python -m battery_analysis.utils.search_tests --sample S1
+
+    # all NMC tests from the first half of 2024
+    python -m battery_analysis.utils.search_tests --chemistry NMC --date-range 2024-01-01:2024-06-30
+
+The command prints a table containing the matching test identifiers and a
+few key metrics.
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
