@@ -46,11 +46,14 @@ CONFIG = load_config()
 class _ImportEventHandler(FileSystemEventHandler):  # type: ignore[misc]
     """Handle filesystem events and trigger imports."""
 
-    def __init__(self, root: str, debounce: float, max_depth: int | None) -> None:
+    def __init__(
+        self, root: str, debounce: float, max_depth: int | None, tags: list[str] | None
+    ) -> None:
         super().__init__()
         self.root = os.path.abspath(root)
         self.debounce = debounce
         self.max_depth = max_depth
+        self.tags = tags or []
         self.supported = {ext.lower() for ext in parsers.get_supported_formats()}
         self._timers: dict[str, threading.Timer] = {}
 
@@ -89,12 +92,18 @@ class _ImportEventHandler(FileSystemEventHandler):  # type: ignore[misc]
         sample_name = os.path.basename(os.path.dirname(src_path)) or "unknown"
         sample = Sample.get_or_create(sample_name)
         try:
-            import_directory.process_file_with_update(src_path, sample)
+            import_directory.process_file_with_update(src_path, sample, tags=self.tags)
         except Exception:  # pragma: no cover - best effort logging
             logger.exception("Failed to process %s", src_path)
 
 
-def watch(root: str, *, debounce: float = 1.0, depth: int | None = None) -> Observer:
+def watch(
+    root: str,
+    *,
+    debounce: float = 1.0,
+    depth: int | None = None,
+    tags: list[str] | None = None,
+) -> Observer:
     """Start watching ``root`` and return the active :class:`Observer`.
 
     Parameters
@@ -110,7 +119,7 @@ def watch(root: str, *, debounce: float = 1.0, depth: int | None = None) -> Obse
     if not ensure_connection(host=CONFIG.get("db_uri")):
         raise RuntimeError("Database connection not available")
 
-    handler = _ImportEventHandler(root, debounce, depth)
+    handler = _ImportEventHandler(root, debounce, depth, tags)
     observer = Observer()
     observer.schedule(handler, root, recursive=True)
     observer.start()
@@ -125,7 +134,9 @@ _WATCHERS: dict[str, tuple[Observer, float]] = {}
 _WATCHERS_LOCK = threading.Lock()
 
 
-def start_watcher(root: str, *, debounce: float = 1.0, depth: int | None = None) -> None:
+def start_watcher(
+    root: str, *, debounce: float = 1.0, depth: int | None = None, tags: list[str] | None = None
+) -> None:
     """Start watching ``root`` and remember the observer.
 
     This is a thin wrapper around :func:`watch` that keeps track of active
@@ -136,7 +147,7 @@ def start_watcher(root: str, *, debounce: float = 1.0, depth: int | None = None)
     with _WATCHERS_LOCK:
         if root in _WATCHERS:
             return
-        observer = watch(root, debounce=debounce, depth=depth)
+        observer = watch(root, debounce=debounce, depth=depth, tags=tags)
         _WATCHERS[root] = (observer, time.time())
 
 
@@ -191,9 +202,15 @@ def main(argv: list[str] | None = None) -> int:
         default=CONFIG.get("depth"),
         help="Maximum recursion depth to monitor (default: unlimited)",
     )
+    parser.add_argument(
+        "--tags",
+        action="append",
+        default=None,
+        help="Tag to apply to imported samples and tests (repeatable)",
+    )
     args = parser.parse_args(argv)
 
-    observer = watch(args.path, debounce=args.debounce, depth=args.depth)
+    observer = watch(args.path, debounce=args.debounce, depth=args.depth, tags=args.tags)
     try:
         while True:
             time.sleep(1)

@@ -139,7 +139,12 @@ def _write_sample_map(path: str, pairs: List[Tuple[str, str]]) -> None:
 
 
 def process_file_with_update(
-    path: str, sample: Sample, *, archive: bool = True, job: ImportJob | None = None
+    path: str,
+    sample: Sample,
+    *,
+    archive: bool = True,
+    job: ImportJob | None = None,
+    tags: list[str] | None = None,
 ) -> tuple[TestResult, bool]:
     """Process ``path`` for ``sample`` and optionally archive the raw file.
 
@@ -180,6 +185,15 @@ def process_file_with_update(
 
     if isinstance(test, TestResult):
         test.file_hash = digest
+        if tags:
+            existing = getattr(test, "tags", []) or []
+            test.tags = list({*existing, *tags})
+            sample_tags = list({*(getattr(sample, "tags", []) or []), *tags})
+            try:
+                sample.tags = sample_tags
+                sample.save()
+            except Exception:  # pragma: no cover - best effort
+                pass
 
         if archive:
             try:
@@ -218,6 +232,7 @@ def import_directory(
     resume: str | None = None,
     report: str | None = None,
     retries: int = 0,
+    tags: list[str] | None = None,
 ) -> int:
     """Import all supported files within ``root``.
 
@@ -480,7 +495,11 @@ def import_directory(
     workers = workers or (os.cpu_count() or 1)
 
     def _process(
-        abs_path: str, mtime: float, file_hash: str, name: str, attrs: Dict[str, object]
+        abs_path: str,
+        mtime: float,
+        file_hash: str,
+        name: str,
+        attrs: Dict[str, object],
     ) -> tuple[str, str, str, float, str, object | None, str | None]:
         """Worker function processing a single file."""
         if not ensure_connection():
@@ -500,11 +519,17 @@ def import_directory(
             return name, "dry_run", abs_path, mtime, file_hash, None, None
 
         sample = Sample.get_or_create(name, **attrs)
+        if tags:
+            try:
+                sample.tags = list({*(getattr(sample, "tags", []) or []), *tags})
+                sample.save()
+            except Exception:
+                pass
         attempt = 0
         while True:
             try:
                 test, was_update = process_file_with_update(
-                    abs_path, sample, archive=archive, job=job
+                    abs_path, sample, archive=archive, job=job, tags=tags
                 )
                 break
             except RETRY_EXCEPTIONS as exc:
@@ -845,6 +870,12 @@ def main(argv: list[str] | None = None) -> int:
         default=CONFIG.get("retries") or 0,
         help="Number of times to retry failed file processing",
     )
+    parser.add_argument(
+        "--tags",
+        action="append",
+        default=None,
+        help="Tag to apply to imported samples and tests (repeatable)",
+    )
     args = parser.parse_args(argv)
 
     from battery_analysis.utils.logging import get_logger
@@ -876,6 +907,7 @@ def main(argv: list[str] | None = None) -> int:
         resume=args.resume,
         report=args.report,
         retries=args.retries,
+        tags=args.tags,
     )
 
 

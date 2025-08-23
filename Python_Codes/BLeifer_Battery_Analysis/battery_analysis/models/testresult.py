@@ -88,6 +88,7 @@ class TestResult(Document):
     notes = fields.StringField(required=False)
     custom_data = fields.DictField(required=False)
     metadata = fields.DictField(default=dict)
+    tags = fields.ListField(fields.StringField(), required=False)
     created_by = fields.StringField(required=False)
     last_modified_by = fields.StringField(required=False)
     notes_log = fields.ListField(
@@ -113,6 +114,7 @@ class TestResult(Document):
             "sample.cathode",
             "sample.separator",
             "sample.electrolyte",
+            "tags",
         ],
     }
 

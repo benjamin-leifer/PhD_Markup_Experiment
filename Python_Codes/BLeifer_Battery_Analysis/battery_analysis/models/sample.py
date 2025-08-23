@@ -60,7 +60,7 @@ class Sample(Document):
     avg_energy_efficiency = fields.FloatField(required=False)
     median_internal_resistance = fields.FloatField(required=False)
 
-    meta = {"collection": "samples", "indexes": ["name"]}
+    meta = {"collection": "samples", "indexes": ["name", "tags"]}
 
     def add_note(self, text: str, author: str | None = None) -> None:
         """Append a note entry to :attr:`notes_log` and persist the change."""

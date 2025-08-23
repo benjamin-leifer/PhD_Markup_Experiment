@@ -10,12 +10,17 @@ def _sample_to_record(sample: Any, include_metadata: bool) -> dict:
     if isinstance(sample, dict):
         obj = sample.get("sample_obj")
         name = sample.get("name") or getattr(obj, "name", None)
-        date = sample.get("date") or sample.get("created_at") or getattr(obj, "created_at", None)
+        date = (
+            sample.get("date")
+            or sample.get("created_at")
+            or getattr(obj, "created_at", None)
+        )
         chemistry = sample.get("chemistry") or getattr(obj, "chemistry", None)
         manufacturer = sample.get("manufacturer") or getattr(obj, "manufacturer", None)
         capacity = sample.get("capacity") or getattr(obj, "avg_final_capacity", None)
         resistance = sample.get("resistance") or getattr(obj, "median_internal_resistance", None)
         ce = sample.get("ce") or getattr(obj, "avg_coulombic_eff", None)
+        tags = sample.get("tags") or getattr(obj, "tags", None)
     else:
         obj = sample
         name = getattr(obj, "name", None)
@@ -25,6 +30,7 @@ def _sample_to_record(sample: Any, include_metadata: bool) -> dict:
         capacity = getattr(obj, "avg_final_capacity", None)
         resistance = getattr(obj, "median_internal_resistance", None)
         ce = getattr(obj, "avg_coulombic_eff", None)
+        tags = getattr(obj, "tags", None)
 
     record = {"test_id": name}
     if date is not None:
@@ -35,6 +41,8 @@ def _sample_to_record(sample: Any, include_metadata: bool) -> dict:
     if include_metadata:
         record.update({"chemistry": chemistry, "manufacturer": manufacturer})
     record.update({"capacity": capacity, "resistance": resistance, "ce": ce})
+    if tags:
+        record["tags"] = ", ".join(tags)
     return record
 
 
