@@ -31,6 +31,8 @@ CYCLE_MIN_INPUT = "trait-cycle-min"
 CYCLE_MAX_INPUT = "trait-cycle-max"
 CE_MIN_INPUT = "trait-ce-min"
 CE_MAX_INPUT = "trait-ce-max"
+TAG_DROPDOWN = "trait-tags"
+TAG_MODE_DROPDOWN = "trait-tag-mode"
 FILTER_BUTTON = "trait-filter-btn"
 RESULTS_DIV = "trait-results"
 PLOT_DIV = "trait-plot-area"
@@ -83,12 +85,15 @@ def get_sample_names(prefix: str = "") -> List[str]:
 def filter_samples(
     chemistry: Optional[str],
     manufacturer: Optional[str],
+    *,
     sample: Optional[str] = None,
     date_range: Optional[tuple[str, str]] = None,
     cycle_min: Optional[float] = None,
     cycle_max: Optional[float] = None,
     ce_min: Optional[float] = None,
     ce_max: Optional[float] = None,
+    tags: Optional[List[str]] = None,
+    tag_mode: str = "any",
 ) -> List[Dict[str, Any]]:
     """Return sample dictionaries matching the given traits.
 
@@ -109,6 +114,13 @@ def filter_samples(
             qs = qs.filter(manufacturer=manufacturer)
         if sample:
             qs = qs.filter(name=sample)
+        if tags:
+            if tag_mode == "all":
+                qs = qs.filter(tags__all=tags)
+            elif tag_mode == "exclude":
+                qs = qs.filter(tags__nin=tags)
+            else:
+                qs = qs.filter(tags__in=tags)
 
         samples = list(qs)
         for s in samples:
@@ -123,6 +135,7 @@ def filter_samples(
                     "ce": getattr(s, "avg_coulombic_eff", None),
                     "date": getattr(s, "created_at", None),
                     "cycle_count": getattr(s, "cycle_count", None),
+                    "tags": getattr(s, "tags", []),
                 }
             )
     except Exception:
@@ -138,6 +151,7 @@ def filter_samples(
                 "ce": 0.98,
                 "date": "2024-01-01",
                 "cycle_count": 50,
+                "tags": tags or [],
             }
         ]
 
@@ -165,6 +179,14 @@ def filter_samples(
             continue
         if not _in_range(r.get("ce"), ce_min, ce_max):
             continue
+        if tags:
+            s_tags = r.get("tags") or []
+            if tag_mode == "all" and not set(tags).issubset(s_tags):
+                continue
+            if tag_mode == "exclude" and set(tags).intersection(s_tags):
+                continue
+            if tag_mode == "any" and not set(tags).intersection(s_tags):
+                continue
         filtered.append(r)
 
     return filtered
@@ -307,6 +329,7 @@ def layout() -> html.Div:
     chem_opts = [{"label": c, "value": c} for c in get_distinct_values("chemistry")]
     manu_opts = [{"label": m, "value": m} for m in get_distinct_values("manufacturer")]
     sample_opts = [{"label": s, "value": s} for s in get_sample_names()]
+    tag_opts = [{"label": t, "value": t} for t in get_distinct_values("tags")]
     saved_opts = [
         {"label": f["name"], "value": f["name"]} for f in saved_filters.list_filters()
     ]
@@ -369,6 +392,29 @@ def layout() -> html.Div:
                             searchable=True,
                         ),
                         width=3,
+                    ),
+                    dbc.Col(
+                        dcc.Dropdown(
+                            options=tag_opts,
+                            id=TAG_DROPDOWN,
+                            placeholder="Tags",
+                            multi=True,
+                            clearable=True,
+                        ),
+                        width=3,
+                    ),
+                    dbc.Col(
+                        dcc.Dropdown(
+                            options=[
+                                {"label": "Any", "value": "any"},
+                                {"label": "All", "value": "all"},
+                                {"label": "Exclude", "value": "exclude"},
+                            ],
+                            value="any",
+                            clearable=False,
+                            id=TAG_MODE_DROPDOWN,
+                        ),
+                        width="auto",
                     ),
                     dbc.Col(
                         dcc.DatePickerRange(id=DATE_RANGE),
@@ -448,6 +494,8 @@ def register_callbacks(app: dash.Dash) -> None:
         State(CHEMISTRY_DROPDOWN, "value"),
         State(MANUFACTURER_DROPDOWN, "value"),
         State(SAMPLE_DROPDOWN, "value"),
+        State(TAG_DROPDOWN, "value"),
+        State(TAG_MODE_DROPDOWN, "value"),
         State(DATE_RANGE, "start_date"),
         State(DATE_RANGE, "end_date"),
         State(CYCLE_MIN_INPUT, "value"),
@@ -462,6 +510,8 @@ def register_callbacks(app: dash.Dash) -> None:
         chemistry,
         manufacturer,
         sample,
+        tags,
+        tag_mode,
         start_date,
         end_date,
         cycle_min,
@@ -475,6 +525,8 @@ def register_callbacks(app: dash.Dash) -> None:
             chemistry,
             manufacturer,
             sample=sample,
+            tags=tags,
+            tag_mode=tag_mode,
             date_range=(start_date, end_date),
             cycle_min=cycle_min,
             cycle_max=cycle_max,
@@ -494,6 +546,8 @@ def register_callbacks(app: dash.Dash) -> None:
         State(CHEMISTRY_DROPDOWN, "value"),
         State(MANUFACTURER_DROPDOWN, "value"),
         State(SAMPLE_DROPDOWN, "value"),
+        State(TAG_DROPDOWN, "value"),
+        State(TAG_MODE_DROPDOWN, "value"),
         State(DATE_RANGE, "start_date"),
         State(DATE_RANGE, "end_date"),
         State(CYCLE_MIN_INPUT, "value"),
@@ -508,6 +562,8 @@ def register_callbacks(app: dash.Dash) -> None:
         chemistry,
         manufacturer,
         sample,
+        tags,
+        tag_mode,
         start_date,
         end_date,
         cycle_min,
@@ -521,6 +577,8 @@ def register_callbacks(app: dash.Dash) -> None:
             chemistry,
             manufacturer,
             sample=sample,
+            tags=tags,
+            tag_mode=tag_mode,
             date_range=(start_date, end_date),
             cycle_min=cycle_min,
             cycle_max=cycle_max,
@@ -545,6 +603,8 @@ def register_callbacks(app: dash.Dash) -> None:
         State(CHEMISTRY_DROPDOWN, "value"),
         State(MANUFACTURER_DROPDOWN, "value"),
         State(SAMPLE_DROPDOWN, "value"),
+        State(TAG_DROPDOWN, "value"),
+        State(TAG_MODE_DROPDOWN, "value"),
         State(DATE_RANGE, "start_date"),
         State(DATE_RANGE, "end_date"),
         State(CYCLE_MIN_INPUT, "value"),
@@ -559,6 +619,8 @@ def register_callbacks(app: dash.Dash) -> None:
         chemistry,
         manufacturer,
         sample,
+        tags,
+        tag_mode,
         start_date,
         end_date,
         cycle_min,
@@ -572,6 +634,8 @@ def register_callbacks(app: dash.Dash) -> None:
             "chemistry": chemistry,
             "manufacturer": manufacturer,
             "sample": sample,
+            "tags": tags,
+            "tag_mode": tag_mode,
             "start_date": start_date,
             "end_date": end_date,
             "cycle_min": cycle_min,
@@ -605,6 +669,8 @@ def register_callbacks(app: dash.Dash) -> None:
         Output(CHEMISTRY_DROPDOWN, "value"),
         Output(MANUFACTURER_DROPDOWN, "value"),
         Output(SAMPLE_DROPDOWN, "value"),
+        Output(TAG_DROPDOWN, "value"),
+        Output(TAG_MODE_DROPDOWN, "value"),
         Output(DATE_RANGE, "start_date"),
         Output(DATE_RANGE, "end_date"),
         Output(CYCLE_MIN_INPUT, "value"),
@@ -626,12 +692,16 @@ def register_callbacks(app: dash.Dash) -> None:
                 dash.no_update,
                 dash.no_update,
                 dash.no_update,
+                dash.no_update,
+                dash.no_update,
             )
         filt = saved_filters.load_filter(name)
         return (
             filt.get("chemistry"),
             filt.get("manufacturer"),
             filt.get("sample"),
+            filt.get("tags"),
+            filt.get("tag_mode"),
             filt.get("start_date"),
             filt.get("end_date"),
             filt.get("cycle_min"),

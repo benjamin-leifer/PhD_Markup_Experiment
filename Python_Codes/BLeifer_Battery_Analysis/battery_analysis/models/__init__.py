@@ -160,6 +160,7 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         last_cycle_complete: bool | None = None
         c_rates: list = dc_field(default_factory=list)
         protocol: "TestProtocol | None" = None
+        tags: list[str] = dc_field(default_factory=list)
         created_by: str | None = None
         last_modified_by: str | None = None
         notes_log: list = dc_field(default_factory=list)
@@ -186,6 +187,7 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         cathode: "Sample | None" = None
         separator: "Sample | None" = None
         electrolyte: "Sample | None" = None
+        tags: list[str] = dc_field(default_factory=list)
         created_by: str | None = None
         last_modified_by: str | None = None
         notes_log: list = dc_field(default_factory=list)
