@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 import dash
 import plotly.graph_objs as go
-from dash import Input, Output, dcc, html
+from dash import Input, Output, State, dcc, html
 import pandas as pd
 import tempfile
 from pathlib import Path
