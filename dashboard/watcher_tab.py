@@ -2,14 +2,18 @@ from __future__ import annotations
 
 """Dash tab for managing directory import watchers."""
 
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 import dash
-from dash import html, Input, Output, State, ctx
 import dash_bootstrap_components as dbc
+from dash import Input, Output, State, ctx, html
 
-from . import layout as layout_components
-from . import preferences
+try:
+    from . import layout as layout_components
+    from . import preferences
+except ImportError:  # running as a script
+    import layout as layout_components  # type: ignore
+    import preferences  # type: ignore
 
 try:  # pragma: no cover - battery_analysis may be optional in tests
     from battery_analysis.utils import import_watcher
@@ -56,7 +60,13 @@ def layout() -> html.Div:
     return html.Div(
         [
             html.H4("Directory Watchers"),
-            dbc.Button("Add Watcher", id=ADD_WATCHER, color="secondary", size="sm", className="mb-2"),
+            dbc.Button(
+                "Add Watcher",
+                id=ADD_WATCHER,
+                color="secondary",
+                size="sm",
+                className="mb-2",
+            ),
             html.Div(layout_components.watcher_table(watchers), id=TABLE_CONTAINER),
             html.Div(id=STATUS_MESSAGE, className="mt-2"),
         ]
@@ -95,7 +105,9 @@ def register_callbacks(app: dash.Dash) -> None:
         State({"type": "watcher-path", "index": dash.ALL}, "value"),
         prevent_initial_call=True,
     )
-    def _toggle_watcher(btns: List[int], paths: List[str]) -> tuple[dbc.Table, str]:  # pragma: no cover - callback
+    def _toggle_watcher(
+        btns: List[int], paths: List[str]
+    ) -> tuple[dbc.Table, str]:  # pragma: no cover - callback
         trigger = ctx.triggered_id
         if trigger is None:
             raise dash.exceptions.PreventUpdate

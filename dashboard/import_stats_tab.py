@@ -9,7 +9,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 from dash import Input, Output, dcc, html
 
-from . import data_access
+try:
+    from . import data_access
+except ImportError:  # running as a script
+    import data_access  # type: ignore
 
 try:  # pragma: no cover - optional dependency
     from battery_analysis.models import RawDataFile, Sample, TestResult
