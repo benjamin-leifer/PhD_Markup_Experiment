@@ -5,10 +5,13 @@ from __future__ import annotations
 from typing import Dict, List
 
 import dash
-from dash import Input, Output, State, dcc, html, dash_table
 import dash_bootstrap_components as dbc
+from dash import Input, Output, State, dash_table, dcc, html
 
-from . import auth
+try:
+    from . import auth
+except ImportError:  # running as a script
+    import auth  # type: ignore
 
 TABLE_ID = "raw-files-table"
 SEARCH_INPUT = "raw-search-input"

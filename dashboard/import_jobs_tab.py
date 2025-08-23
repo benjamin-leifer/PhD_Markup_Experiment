@@ -9,8 +9,12 @@ import dash
 import dash_bootstrap_components as dbc
 from dash import Input, Output, State, ctx, dcc, html
 
-from . import auth
-from . import layout as layout_components
+try:
+    from . import auth
+    from . import layout as layout_components
+except ImportError:  # running as a script
+    import auth  # type: ignore
+    import layout as layout_components  # type: ignore
 
 try:  # pragma: no cover - optional dependency
     from battery_analysis.models import ImportJob
