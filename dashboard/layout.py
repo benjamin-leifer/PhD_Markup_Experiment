@@ -118,8 +118,8 @@ def summary_layout(stats: Dict) -> dbc.Row:
     return dbc.Row(cards, className="mb-4")
 
 
-def running_tests_rows(tests: List[Dict]) -> List[Dict]:
-    """Return formatted row dictionaries for running tests."""
+def test_rows(tests: List[Dict]) -> List[Dict]:
+    """Return formatted row dictionaries for tests."""
     data: List[Dict] = []
     for t in tests:
         data.append(
@@ -134,6 +134,11 @@ def running_tests_rows(tests: List[Dict]) -> List[Dict]:
             }
         )
     return data
+
+
+def running_tests_rows(tests: List[Dict]) -> List[Dict]:
+    """Return formatted row dictionaries for running tests."""
+    return test_rows(tests)
 
 
 def running_tests_table(tests: List[Dict]) -> dash_table.DataTable:
@@ -146,7 +151,7 @@ def running_tests_table(tests: List[Dict]) -> dash_table.DataTable:
             {"name": "Timestamp", "id": "timestamp"},
             {"name": "Actions", "id": "actions", "presentation": "markdown"},
         ],
-        data=running_tests_rows(tests),
+        data=test_rows(tests),
         sort_action="native",
         filter_action="native",
         page_action="none",
@@ -158,20 +163,7 @@ def running_tests_table(tests: List[Dict]) -> dash_table.DataTable:
 
 def upcoming_tests_rows(tests: List[Dict]) -> List[Dict]:
     """Return formatted row dictionaries for upcoming tests."""
-    data: List[Dict] = []
-    for t in tests:
-        data.append(
-            {
-                "cell_id": t["cell_id"],
-                "test_type": t["test_type"],
-                "timestamp": t["timestamp"].strftime("%Y-%m-%d %H:%M"),
-                "actions": (
-                    f"[Flag for Review](#/flag-review/{t['cell_id']}) | "
-                    f"[Flag for Retest](#/flag-retest/{t['cell_id']})"
-                ),
-            }
-        )
-    return data
+    return test_rows(tests)
 
 
 def upcoming_tests_table(tests: List[Dict]) -> dash_table.DataTable:
@@ -184,7 +176,7 @@ def upcoming_tests_table(tests: List[Dict]) -> dash_table.DataTable:
             {"name": "Timestamp", "id": "timestamp"},
             {"name": "Actions", "id": "actions", "presentation": "markdown"},
         ],
-        data=upcoming_tests_rows(tests),
+        data=test_rows(tests),
         sort_action="native",
         filter_action="native",
         page_action="none",
