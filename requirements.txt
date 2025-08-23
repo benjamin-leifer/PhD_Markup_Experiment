@@ -10,3 +10,5 @@ diskcache
 kaleido
 watchdog>=4.0.0
 pydantic>=1.10.0
+boto3
+paramiko
