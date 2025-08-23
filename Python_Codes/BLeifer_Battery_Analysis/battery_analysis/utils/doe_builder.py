@@ -196,6 +196,61 @@ $(document).ready(function() {{
     return path
 
 
+def _annotated_matrix(plan: ExperimentPlan) -> List[Dict[str, Any]]:
+    """Return plan matrix with each row annotated by completion status."""
+
+    return [
+        {**row, "completed": bool(row.get("tests"))}
+        for row in (plan.matrix or [])
+    ]
+
+
+def export_progress_csv(plan: ExperimentPlan, file_path: str | Path) -> Path:
+    """Write ``plan`` with completion status to ``file_path`` as CSV."""
+
+    path = Path(file_path)
+    matrix = _annotated_matrix(plan)
+    if not matrix:
+        path.write_text("")
+        return path
+    fieldnames = sorted(matrix[0].keys())
+    with path.open("w", newline="") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in matrix:
+            writer.writerow({k: row.get(k, "") for k in fieldnames})
+    return path
+
+
+def export_progress_html(plan: ExperimentPlan, file_path: str | Path) -> Path:
+    """Write ``plan`` with completion status to ``file_path`` as HTML."""
+
+    path = Path(file_path)
+    df = pd.DataFrame(_annotated_matrix(plan))
+    table_html = df.to_html(
+        index=False, table_id="doe-progress-table", classes="display"
+    )
+    html = f"""<!DOCTYPE html>
+<html lang=\"en\">
+<head>
+<meta charset=\"utf-8\" />
+<link rel=\"stylesheet\" href=\"https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css\" />
+<script src=\"https://code.jquery.com/jquery-3.6.0.min.js\"></script>
+<script src=\"https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js\"></script>
+</head>
+<body>
+{table_html}
+<script>
+$(document).ready(function() {{
+    $('#doe-progress-table').DataTable();
+}});
+</script>
+</body>
+</html>"""
+    path.write_text(html, encoding="utf-8")
+    return path
+
+
 def remaining_combinations(plan: ExperimentPlan) -> List[Dict[str, Any]]:
     """Return matrix rows that do not yet have associated tests."""
 
@@ -276,6 +331,14 @@ def main(argv: list[str] | None = None) -> List[Dict[str, Any]]:
         const="",
         help="Write an interactive HTML summary (default docs/doe_plans/<name>.html)",
     )
+    parser.add_argument(
+        "--progress-csv",
+        help="Path to write a CSV progress summary of the plan",
+    )
+    parser.add_argument(
+        "--progress-html",
+        help="Path to write an HTML progress summary of the plan",
+    )
     parser.add_argument("--status", help="Show status for an existing plan")
 
     args = parser.parse_args(argv)
@@ -307,7 +370,14 @@ def main(argv: list[str] | None = None) -> List[Dict[str, Any]]:
             logger.info("%s", combo)
 
     plan = None
-    if args.save or args.csv or args.pdf or args.html is not None:
+    if (
+        args.save
+        or args.csv
+        or args.pdf
+        or args.html is not None
+        or args.progress_csv
+        or args.progress_html
+    ):
         plan = save_plan(args.name, factors, matrix, sample_ids=args.samples)
     if args.csv and plan is not None:
         export_csv(plan, args.csv)
@@ -321,6 +391,10 @@ def main(argv: list[str] | None = None) -> List[Dict[str, Any]]:
         )
         output.parent.mkdir(parents=True, exist_ok=True)
         export_html(plan, output)
+    if args.progress_csv and plan is not None:
+        export_progress_csv(plan, args.progress_csv)
+    if args.progress_html and plan is not None:
+        export_progress_html(plan, args.progress_html)
 
     return matrix
 

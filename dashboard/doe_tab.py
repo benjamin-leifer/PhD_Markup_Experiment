@@ -7,6 +7,15 @@ from typing import Any, Dict, List, Optional
 import dash
 import plotly.graph_objs as go
 from dash import Input, Output, dcc, html
+import pandas as pd
+import tempfile
+from pathlib import Path
+import types
+
+try:  # pragma: no cover - optional dependency
+    from battery_analysis.utils import doe_builder
+except Exception:  # pragma: no cover - gracefully handle missing package
+    doe_builder = None  # type: ignore
 
 # Component ids used across the DOE tab.  They are centralized here so the
 # callbacks in :mod:`dashboard.app` can reference them without duplicating the
@@ -26,6 +35,10 @@ PLAN_STORE = "doe-plan-store"
 SAVE_PLAN = "doe-save-plan"
 FEEDBACK_DIV = "doe-feedback"
 HEATMAP_GRAPH = "doe-heatmap"
+PROGRESS_CSV_BTN = "doe-progress-csv-btn"
+PROGRESS_HTML_BTN = "doe-progress-html-btn"
+PROGRESS_CSV_DOWNLOAD = "doe-progress-csv-download"
+PROGRESS_HTML_DOWNLOAD = "doe-progress-html-download"
 
 
 def _load_plans() -> List[Dict[str, Any]]:
@@ -104,6 +117,14 @@ def layout() -> html.Div:
             html.Div(id=MATRIX_DIV),
             html.Button("Save Plan", id=SAVE_PLAN),
             html.Div(id=FEEDBACK_DIV, className="text-danger"),
+            html.Div(
+                [
+                    html.Button("Download Progress CSV", id=PROGRESS_CSV_BTN),
+                    html.Button("Download Progress HTML", id=PROGRESS_HTML_BTN),
+                    dcc.Download(id=PROGRESS_CSV_DOWNLOAD),
+                    dcc.Download(id=PROGRESS_HTML_DOWNLOAD),
+                ]
+            ),
             dcc.Graph(id=HEATMAP_GRAPH),
         ]
     )
@@ -180,3 +201,78 @@ def register_callbacks(app: dash.Dash) -> None:
         if not plan:
             return go.Figure()
         return _build_figure(plan)
+
+    @app.callback(  # type: ignore[misc]
+        Output(PROGRESS_CSV_DOWNLOAD, "data"),
+        Input(PROGRESS_CSV_BTN, "n_clicks"),
+        State(PLAN_DROPDOWN, "value"),
+        prevent_initial_call=True,
+    )
+    def _download_progress_csv(n_clicks: int, plan_name: Optional[str]):
+        if not plan_name:
+            return dash.no_update
+        plan = next((p for p in _load_plans() if p["name"] == plan_name), None)
+        if not plan:
+            return dash.no_update
+        rows = [
+            {**row, "completed": bool(row.get("tests"))}
+            for row in plan.get("matrix", [])
+        ]
+        if doe_builder is not None:
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
+            tmp.close()
+            pseudo = types.SimpleNamespace(name=plan_name, matrix=rows)
+            doe_builder.export_progress_csv(pseudo, tmp.name)  # type: ignore[arg-type]
+            csv_str = Path(tmp.name).read_text()
+            Path(tmp.name).unlink(missing_ok=True)
+        else:
+            df = pd.DataFrame(rows)
+            csv_str = df.to_csv(index=False)
+        return dcc.send_string(csv_str, f"{plan_name}_progress.csv")
+
+    @app.callback(  # type: ignore[misc]
+        Output(PROGRESS_HTML_DOWNLOAD, "data"),
+        Input(PROGRESS_HTML_BTN, "n_clicks"),
+        State(PLAN_DROPDOWN, "value"),
+        prevent_initial_call=True,
+    )
+    def _download_progress_html(n_clicks: int, plan_name: Optional[str]):
+        if not plan_name:
+            return dash.no_update
+        plan = next((p for p in _load_plans() if p["name"] == plan_name), None)
+        if not plan:
+            return dash.no_update
+        rows = [
+            {**row, "completed": bool(row.get("tests"))}
+            for row in plan.get("matrix", [])
+        ]
+        if doe_builder is not None:
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
+            tmp.close()
+            pseudo = types.SimpleNamespace(name=plan_name, matrix=rows)
+            doe_builder.export_progress_html(pseudo, tmp.name)  # type: ignore[arg-type]
+            html_str = Path(tmp.name).read_text()
+            Path(tmp.name).unlink(missing_ok=True)
+        else:
+            df = pd.DataFrame(rows)
+            table_html = df.to_html(
+                index=False, table_id="doe-progress-table", classes="display"
+            )
+            html_str = f"""<!DOCTYPE html>
+<html lang=\"en\">
+<head>
+<meta charset=\"utf-8\" />
+<link rel=\"stylesheet\" href=\"https://cdn.datatables.net/1.13.5/css/jquery.dataTables.min.css\" />
+<script src=\"https://code.jquery.com/jquery-3.6.0.min.js\"></script>
+<script src=\"https://cdn.datatables.net/1.13.5/js/jquery.dataTables.min.js\"></script>
+</head>
+<body>
+{table_html}
+<script>
+$(document).ready(function() {{
+    $('#doe-progress-table').DataTable();
+}});
+</script>
+</body>
+</html>"""
+        return dcc.send_string(html_str, f"{plan_name}_progress.html")
