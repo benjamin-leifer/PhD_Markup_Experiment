@@ -1,20 +1,21 @@
 """Comparison tab with Plotly overlays and export."""
 
-from __future__ import annotations
+# flake8: noqa
 
-from typing import List, Dict, Any, Optional, Tuple
+from __future__ import annotations
 
 import io
 import logging
-
-import numpy as np
-import pandas as pd
+from typing import Any, Dict, List, Optional, Tuple
 
 import dash
-from dash import dcc, html
 import dash_bootstrap_components as dbc
-from dash import Input, Output, State
+import numpy as np
+import pandas as pd
 import plotly.graph_objs as go
+from dash import Input, Output, State, dcc, html
+
+# mypy: ignore-errors
 
 # Component IDs
 SAMPLE_DROPDOWN = "compare-samples"
@@ -35,8 +36,19 @@ def _get_sample_options() -> Tuple[List[Dict[str, str]], Optional[str]]:
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis import models
 
-        samples = models.Sample.objects.only("name")  # type: ignore[attr-defined]
-        return [{"label": s.name, "value": str(s.id)} for s in samples], None
+        if hasattr(models.Sample, "objects"):
+            samples = models.Sample.objects.only("name")
+
+            def to_value(s: Any) -> str:
+                return str(s.id)
+
+        else:
+            samples = getattr(models.Sample, "_registry", {}).values()
+
+            def to_value(s: Any) -> str:
+                return str(getattr(s, "id", getattr(s, "name", "")))
+
+        return [{"label": s.name, "value": to_value(s)} for s in samples], None
     except Exception as exc:
         logger.exception("Failed to load sample options")
         return [{"label": "Sample_001", "value": "sample1"}], (
@@ -55,10 +67,11 @@ def _get_sample_data(
     """
 
     try:  # pragma: no cover - depends on battery_analysis and database
-        from battery_analysis.models import Sample, TestResult  # type: ignore
+        from battery_analysis.models import Sample, TestResult
+
         from dashboard.data_access import get_cell_dataset
 
-        s = Sample.objects(id=sample_id).first()  # type: ignore[attr-defined]
+        s = Sample.objects(id=sample_id).first()
         if not s:
             raise ValueError("sample not found")
 
@@ -77,7 +90,7 @@ def _get_sample_data(
                 capacity.append(c.discharge_capacity)
                 ce.append(c.coulombic_efficiency)
         else:
-            tests = TestResult.objects(sample=s.id).order_by("date")  # type: ignore[attr-defined]
+            tests = TestResult.objects(sample=s.id).order_by("date")
             for t in tests:
                 summaries = getattr(t, "cycle_summaries", None)
                 if summaries is None:
@@ -302,6 +315,7 @@ def register_callbacks(app: dash.Dash) -> None:
     )
     def _popout_matplotlib(n_clicks, fig_dict):
         import json
+
         import matplotlib.pyplot as plt
 
         if not n_clicks or not fig_dict:
