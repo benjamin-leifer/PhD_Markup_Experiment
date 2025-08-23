@@ -19,6 +19,9 @@ from urllib.parse import ParseResult, urlparse
 # mypy: ignore-errors
 
 
+# These third-party libraries are optional at runtime.  They are only imported
+# when the corresponding URI scheme is used so the package can function without
+# heavyweight dependencies installed.
 try:  # pragma: no cover - optional dependency
     import boto3
 except Exception:  # pragma: no cover - allow running without boto3
@@ -28,6 +31,9 @@ try:  # pragma: no cover - optional dependency
     import paramiko
 except Exception:  # pragma: no cover - allow running without paramiko
     paramiko = None
+
+
+__all__ = ["remote_files"]
 
 
 @contextmanager
@@ -58,6 +64,16 @@ def remote_files(uri: str) -> Iterator[str]:
 
 
 def _fetch_sftp(parsed: ParseResult, dst: str) -> None:
+    """Download an SFTP tree into ``dst``.
+
+    Parameters
+    ----------
+    parsed:
+        Parsed result of :func:`urllib.parse.urlparse` for the SFTP URI.
+    dst:
+        Destination directory to populate with downloaded files.
+    """
+
     if paramiko is None:  # pragma: no cover - dependency not installed
         raise RuntimeError("paramiko is required for SFTP imports")
     username = parsed.username or os.getenv("SFTP_USERNAME")
@@ -91,6 +107,16 @@ def _sftp_walk(sftp: "paramiko.SFTPClient", path: str) -> Iterator[str]:
 
 
 def _fetch_s3(parsed: ParseResult, dst: str) -> None:
+    """Download objects from an S3 bucket into ``dst``.
+
+    Parameters
+    ----------
+    parsed:
+        Parsed S3 URI.
+    dst:
+        Directory where objects should be downloaded.
+    """
+
     if boto3 is None:  # pragma: no cover - dependency not installed
         raise RuntimeError("boto3 is required for S3 imports")
     bucket = parsed.netloc
