@@ -7,3 +7,32 @@ html {
         font-size: 16px;
     }
 }
+
+/* Utility spacing and heading classes */
+:root {
+    --space-sm: 0.5rem;
+    --space-md: 1rem;
+    --space-lg: 1.5rem;
+    --heading-sm: 1.25rem;
+    --heading-md: 1.5rem;
+    --heading-lg: 2rem;
+}
+
+/* Margin utilities */
+.m-sm { margin: var(--space-sm); }
+.m-md { margin: var(--space-md); }
+.m-lg { margin: var(--space-lg); }
+
+/* Margin side utilities */
+.mb-md { margin-bottom: var(--space-md); }
+.mb-lg { margin-bottom: var(--space-lg); }
+
+/* Padding utilities */
+.p-sm { padding: var(--space-sm); }
+.p-md { padding: var(--space-md); }
+.p-lg { padding: var(--space-lg); }
+
+/* Heading size utilities */
+.heading-sm { font-size: var(--heading-sm); }
+.heading-md { font-size: var(--heading-md); }
+.heading-lg { font-size: var(--heading-lg); }
