@@ -38,7 +38,7 @@ def test_all_tabs_render():
     """The app layout renders and includes all tab labels for an admin user."""
     create_app = pytest.importorskip("dashboard.app").create_app
     app = create_app()
-    render = app.callback_map["page-content.children"]["callback"].__wrapped__
+    render = app.callback_map["main-content.children"]["callback"].__wrapped__
     layout = render("admin")
     html_str = str(layout)
     for label in TAB_LABELS:
