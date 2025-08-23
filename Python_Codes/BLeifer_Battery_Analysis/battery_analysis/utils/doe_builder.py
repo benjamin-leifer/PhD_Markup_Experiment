@@ -257,6 +257,44 @@ def remaining_combinations(plan: ExperimentPlan) -> List[Dict[str, Any]]:
     return [entry for entry in plan.matrix if not entry.get("tests")]
 
 
+def link_test_to_plan(test: Any, metadata: Dict[str, Any]) -> None:
+    """Associate ``test`` with matching :class:`ExperimentPlan` rows.
+
+    Parameters
+    ----------
+    test:
+        TestResult-like object containing an ``id`` attribute.
+    metadata:
+        Mapping of factor names to values used for matching against plan
+        matrices. Typically derived from sample tags or other test metadata.
+    """
+
+    if not metadata:
+        return
+
+    try:  # pragma: no cover - requires database
+        plans = list(ExperimentPlan.objects())
+    except Exception:
+        registry = getattr(ExperimentPlan, "_registry", {})
+        plans = list(registry.values())
+
+    for plan in plans:
+        factors = getattr(plan, "factors", {})
+        relevant = {k: metadata.get(k) for k in factors.keys() if k in metadata}
+        if len(relevant) != len(factors):
+            continue
+        updated = False
+        for row in getattr(plan, "matrix", []):
+            if all(row.get(k) == v for k, v in relevant.items()):
+                row.setdefault("tests", []).append({"id": str(getattr(test, "id", ""))})
+                updated = True
+        if updated:
+            try:  # pragma: no cover - ignore save failures without DB
+                plan.save()
+            except Exception:
+                pass
+
+
 def status_report(plan_id: str) -> List[Dict[str, Any]]:
     """Print and return remaining combinations for ``plan_id``.
 

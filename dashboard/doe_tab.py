@@ -59,6 +59,13 @@ def _load_plans() -> List[Dict[str, Any]]:
                 "matrix",
             )
         )
+        if doe_builder is not None:
+            try:
+                for test in models.TestResult.objects.only("metadata"):
+                    metadata = getattr(test, "metadata", {}) or {}
+                    doe_builder.link_test_to_plan(test, metadata)
+            except Exception:
+                pass
         return [
             {
                 "name": p.name,

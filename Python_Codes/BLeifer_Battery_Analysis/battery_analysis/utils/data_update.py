@@ -23,6 +23,11 @@ from battery_analysis.utils.validators import CycleSummaryModel, TestMetadataMod
 from mongoengine.queryset.visitor import Q
 from pydantic import ValidationError
 
+try:  # pragma: no cover - optional dependency
+    from battery_analysis.utils import doe_builder
+except Exception:  # pragma: no cover - gracefully handle missing package
+    doe_builder = None  # type: ignore
+
 
 def _normalize_identifier(name: str | None) -> str | None:
     """Return a normalized identifier with sequential suffixes removed.
@@ -384,6 +389,11 @@ def process_file_with_update(file_path, sample):
                 logging.error(f"Error storing detailed cycle data: {e}")
 
         _match_experiment_plans(sample, updated_test)
+        if doe_builder is not None:
+            try:  # pragma: no cover - best effort
+                doe_builder.link_test_to_plan(updated_test, metadata)
+            except Exception:
+                pass
         return updated_test, True
     else:
         # Before creating a new test, ensure file hash isn't already present
@@ -420,6 +430,11 @@ def process_file_with_update(file_path, sample):
                 logging.error(f"Error storing detailed cycle data: {e}")
 
         _match_experiment_plans(sample, test_result)
+        if doe_builder is not None:
+            try:  # pragma: no cover - best effort
+                doe_builder.link_test_to_plan(test_result, metadata)
+            except Exception:
+                pass
         return test_result, False
 
 
