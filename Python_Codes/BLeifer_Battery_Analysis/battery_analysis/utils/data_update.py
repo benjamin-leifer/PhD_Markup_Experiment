@@ -1,26 +1,27 @@
 # mypy: ignore-errors
+# flake8: noqa
 """Utilities for handling data updates and file processing."""
 
-import os
-import logging
-import re
-import hashlib
 import datetime
-from mongoengine.queryset.visitor import Q
-from pydantic import ValidationError
+import hashlib
+import logging
+import os
+import re
 
 # Update imports to avoid circular dependencies
 from battery_analysis import models, parsers
-from battery_analysis.utils.db import ensure_connection
-from battery_analysis.utils.validators import TestMetadataModel, CycleSummaryModel
 
 # Import directly from the analysis package
 from battery_analysis.analysis import (
     compute_metrics,
-    update_sample_properties,
     create_test_result,
     summarize_detailed_cycles,
+    update_sample_properties,
 )
+from battery_analysis.utils.db import ensure_connection
+from battery_analysis.utils.validators import CycleSummaryModel, TestMetadataModel
+from mongoengine.queryset.visitor import Q
+from pydantic import ValidationError
 
 
 def _normalize_identifier(name: str | None) -> str | None:
@@ -385,6 +386,17 @@ def process_file_with_update(file_path, sample):
         _match_experiment_plans(sample, updated_test)
         return updated_test, True
     else:
+        # Before creating a new test, ensure file hash isn't already present
+        if file_hash:
+            global_match = models.TestResult.objects(file_hash=file_hash).first()
+            if global_match:
+                logging.info(
+                    "Duplicate file hash %s detected for %s; skipping import",
+                    file_hash,
+                    file_path,
+                )
+                return global_match, True
+
         # Create a new test
         test_result = create_test_result(
             sample=sample,
@@ -427,6 +439,7 @@ def backfill_cycle_summaries(test_ids=None):
     """
 
     import pickle
+
     from battery_analysis.utils.detailed_data_manager import get_detailed_cycle_data
 
     if not ensure_connection():

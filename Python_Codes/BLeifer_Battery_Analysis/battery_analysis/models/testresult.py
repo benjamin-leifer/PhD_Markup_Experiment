@@ -1,12 +1,15 @@
+# mypy: ignore-errors
+# flake8: noqa
 # battery_analysis/models/test_result.py
 
 import datetime
 import os
 import re
-from mongoengine import Document, fields, ValidationError
 
-from battery_analysis.utils.gridfs_conversion import data_to_gridfs, gridfs_to_data
 from battery_analysis.utils.db import ensure_connection
+from battery_analysis.utils.gridfs_conversion import data_to_gridfs, gridfs_to_data
+from mongoengine import Document, ValidationError, fields
+
 from .stages import inherit_metadata
 
 try:
@@ -107,7 +110,7 @@ class TestResult(Document):
             "base_test_name",
             "base_file_name",
             "test_id",
-            {"fields": ["file_hash"], "unique": True},
+            {"fields": ["file_hash"], "unique": True, "sparse": True},
             "cell_code",
             "date",
             "sample.anode",
