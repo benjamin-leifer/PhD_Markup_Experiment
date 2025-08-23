@@ -165,15 +165,20 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
 
     def dashboard_layout(user_role: str) -> html.Div:
         prefs = preferences.load_preferences()
-        navbar = dbc.NavbarSimple(
-            dbc.Switch(
-                id="theme-toggle",
-                label="Dark mode",
-                value=prefs.get("theme", "light") == "dark",
-                className="ms-2",
-                title="Toggle dark mode",
+        navbar = dbc.Navbar(
+            dbc.Container(
+                [
+                    dbc.NavbarToggler(id="navbar-toggler", className="me-2 d-md-none"),
+                    dbc.NavbarBrand("Battery Test Dashboard", className="me-auto"),
+                    dbc.Switch(
+                        id="theme-toggle",
+                        label="Dark mode",
+                        value=prefs.get("theme", "light") == "dark",
+                        className="ms-auto",
+                        title="Toggle dark mode",
+                    ),
+                ]
             ),
-            brand="Battery Test Dashboard",
             color="primary",
             dark=True,
             className="mb-3",
@@ -239,14 +244,23 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
             ],
         }
 
-        sidebar_children = []
-        for section, links in nav_sections.items():
-            sidebar_children.append(html.H4(section))
-            sidebar_children.append(
-                dbc.Nav(links, vertical=True, pills=True, className="mb-4")
-            )
+        def _sidebar_children():
+            children: list[dash.Component] = []
+            for section, links in nav_sections.items():
+                children.append(html.H4(section))
+                children.append(
+                    dbc.Nav(links, vertical=True, pills=True, className="mb-4")
+                )
+            return children
 
-        sidebar = html.Div(sidebar_children)
+        sidebar = html.Div(_sidebar_children())
+        sidebar_offcanvas = dbc.Offcanvas(
+            _sidebar_children(),
+            id="sidebar-offcanvas",
+            placement="start",
+            className="d-md-none",
+            title="Menu",
+        )
 
         return dbc.Container(
             [
@@ -272,10 +286,11 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                 html.Div(id="user-set-out", style={"display": "none"}),
                 dbc.Row(
                     [
-                        dbc.Col(sidebar, md=2),
+                        dbc.Col(sidebar, md=2, className="d-none d-md-block"),
                         dbc.Col(html.Div(id="tab-content"), md=10),
                     ]
                 ),
+                sidebar_offcanvas,
                 layout_components.metadata_modal(),
                 layout_components.export_modal(),
                 dcc.Interval(id="refresh-interval", interval=60 * 1000, n_intervals=0),
@@ -338,6 +353,16 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         prefs["default_tab"] = tab
         preferences.save_preferences(prefs)
         return prefs
+
+    @app.callback(
+        Output("sidebar-offcanvas", "is_open"),
+        Input("navbar-toggler", "n_clicks"),
+        State("sidebar-offcanvas", "is_open"),
+    )
+    def toggle_sidebar(n_clicks, is_open):
+        if n_clicks:
+            return not is_open
+        return is_open
 
     @app.callback(
         Output("metadata-modal", "is_open"),
