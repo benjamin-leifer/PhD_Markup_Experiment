@@ -54,6 +54,7 @@ def flagged_table(flags: List[Dict[str, str]]) -> dbc.Table:
                             id={"type": "clear-flag", "index": f["sample_id"]},
                             color="secondary",
                             size="sm",
+                            title="Clear flag",
                         )
                     ),
                 ]
@@ -154,6 +155,7 @@ def running_tests_table(tests: List[Dict]) -> dash_table.DataTable:
     return dash_table.DataTable(
         id="running-tests-table",
         className="m-md",
+        **{"aria-label": "Running tests table"},
         columns=[
             {"name": "Cell ID", "id": "cell_id"},
             {"name": "Test Type", "id": "test_type"},
@@ -185,6 +187,7 @@ def upcoming_tests_table(tests: List[Dict]) -> dash_table.DataTable:
     return dash_table.DataTable(
         id="upcoming-tests-table",
         className="m-md",
+        **{"aria-label": "Upcoming tests table"},
         columns=[
             {"name": "Cell ID", "id": "cell_id"},
             {"name": "Test Type", "id": "test_type"},
@@ -218,6 +221,7 @@ def metadata_modal() -> dbc.Modal:
                     id="close-metadata",
                     className="ms-auto",
                     n_clicks=0,
+                    title="Close metadata modal",
                 )
             ),
         ],
@@ -269,6 +273,7 @@ def new_material_form() -> dbc.Form:
                 id="submit-material",
                 color="primary",
                 className="mt-2",
+                title="Submit material",
             ),
             html.Div(id="material-submit-feedback", className="mt-2"),
         ]
@@ -277,7 +282,12 @@ def new_material_form() -> dbc.Form:
 
 def export_button() -> dbc.Button:
     """Button to open the export modal."""
-    return dbc.Button("Export Data", id="open-export", color="secondary")
+    return dbc.Button(
+        "Export Data",
+        id="open-export",
+        color="secondary",
+        title="Open export modal",
+    )
 
 
 def export_modal() -> dbc.Modal:
@@ -320,12 +330,14 @@ def export_modal() -> dbc.Modal:
                             id="download-csv",
                             color="primary",
                             className="mb-2",
+                            title="Download as CSV",
                         ),
                         dbc.Button(
                             "Download PDF",
                             id="download-pdf",
                             color="secondary",
                             className="mb-2",
+                            title="Download as PDF",
                         ),
                         dcc.Download(id="download-data"),
                         dcc.Download(id="download-pdf-file"),
@@ -333,7 +345,12 @@ def export_modal() -> dbc.Modal:
                 )
             ),
             dbc.ModalFooter(
-                dbc.Button("Close", id="close-export", className="ms-auto")
+                dbc.Button(
+                    "Close",
+                    id="close-export",
+                    className="ms-auto",
+                    title="Close export modal",
+                )
             ),
         ],
         id="export-modal",
@@ -377,9 +394,13 @@ def data_import_layout() -> html.Div:
                                 id="save-metadata",
                                 color="primary",
                                 className="me-2",
+                                title="Save metadata",
                             ),
                             dbc.Button(
-                                "Cancel", id="cancel-metadata", color="secondary"
+                                "Cancel",
+                                id="cancel-metadata",
+                                color="secondary",
+                                title="Cancel metadata entry",
                             ),
                         ],
                         id="upload-form",
@@ -443,7 +464,15 @@ def import_jobs_table(jobs: List[Dict[str, str]]) -> dbc.Table:
                     html.Td(job.get("updated", "")),
                     html.Td(job.get("skipped", "")),
                     html.Td(job.get("errors", "")),
-                    html.Td(job.get("status", "")),
+                    html.Td(
+                        dbc.Button(
+                            "Rollback",
+                            id={"type": "rollback-job", "index": job.get("id")},
+                            color="danger",
+                            size="sm",
+                            title="Rollback import job",
+                        )
+                    ),
                 ]
             )
         )
@@ -483,6 +512,9 @@ def watcher_table(watchers: List[Dict[str, Any]]) -> dbc.Table:
                             id={"type": "watcher-toggle", "index": idx},
                             color="danger" if w.get("running") else "success",
                             size="sm",
+                            title=(
+                                "Stop watcher" if w.get("running") else "Start watcher"
+                            ),
                         )
                     ),
                 ]

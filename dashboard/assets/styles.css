@@ -36,3 +36,9 @@ html {
 .heading-sm { font-size: var(--heading-sm); }
 .heading-md { font-size: var(--heading-md); }
 .heading-lg { font-size: var(--heading-lg); }
+
+/* Visible focus styles for keyboard navigation */
+:focus {
+    outline: 3px solid #2684FF;
+    outline-offset: 2px;
+}
