@@ -445,9 +445,11 @@ def import_jobs_table(jobs: List[Dict[str, str]]) -> dbc.Table:
             [
                 html.Th("Start Time"),
                 html.Th("End Time"),
-                html.Th("Files"),
+                html.Th("Created"),
+                html.Th("Updated"),
+                html.Th("Skipped"),
                 html.Th("Errors"),
-                html.Th("Actions"),
+                html.Th("Status"),
             ]
         )
     )
@@ -458,7 +460,9 @@ def import_jobs_table(jobs: List[Dict[str, str]]) -> dbc.Table:
                 [
                     html.Td(job.get("start_time", "")),
                     html.Td(job.get("end_time", "")),
-                    html.Td(job.get("file_count", "")),
+                    html.Td(job.get("created", "")),
+                    html.Td(job.get("updated", "")),
+                    html.Td(job.get("skipped", "")),
                     html.Td(job.get("errors", "")),
                     html.Td(
                         dbc.Button(

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from dashboard.auth import load_users
 from battery_analysis.utils.import_directory import import_directory
 from battery_analysis.utils.doe_builder import save_plan
-from battery_analysis.models import ImportJob
+from battery_analysis.models import ImportJob, ImportJobSummary
 from battery_analysis.utils import file_storage
 from fastapi.responses import StreamingResponse
 
@@ -151,3 +151,27 @@ def get_import_job(
             "errors": list(getattr(job, "errors", [])),
         },
     }
+
+
+@app.get("/import-job-summaries")  # type: ignore[misc]
+def list_import_job_summaries(
+    role: str = Depends(require_role("admin", "viewer"))
+) -> Dict[str, Any]:
+    jobs: List[Dict[str, Any]] = []
+    try:
+        for s in ImportJobSummary.objects.order_by("-start_time"):
+            jobs.append(
+                {
+                    "id": str(s.id),
+                    "start_time": getattr(s.start_time, "isoformat", lambda: None)(),
+                    "end_time": getattr(s.end_time, "isoformat", lambda: None)(),
+                    "created": getattr(s, "created_count", 0),
+                    "updated": getattr(s, "updated_count", 0),
+                    "skipped": getattr(s, "skipped_count", 0),
+                    "status": getattr(s, "status", ""),
+                    "errors": list(getattr(s, "errors", [])),
+                }
+            )
+    except Exception:
+        pass
+    return {"status": "ok", "jobs": jobs}

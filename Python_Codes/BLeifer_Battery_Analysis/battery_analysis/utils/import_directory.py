@@ -57,9 +57,8 @@ except Exception:  # pragma: no cover - optional dependency
     redis = None
 
 from battery_analysis import parsers
-from battery_analysis.models import ImportJob, Sample, TestResult
+from battery_analysis.models import ImportJob, ImportJobSummary, Sample, TestResult
 from battery_analysis.utils import data_update, file_storage, notifications
-from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
 from battery_analysis.utils.config import load_config
 from battery_analysis.utils.db import ensure_connection
 from battery_analysis.utils.logging import get_logger
@@ -315,6 +314,7 @@ def import_directory(
             return 1
 
     job: ImportJob | None = None
+    summary: ImportJobSummary | None = None
     start_idx = 0
     processed_paths: Set[str] = set()
     if not dry_run:
@@ -330,6 +330,10 @@ def import_directory(
                 job = ImportJob().save()
             except Exception:  # pragma: no cover - best effort
                 job = None
+        try:
+            summary = ImportJobSummary().save()
+        except Exception:  # pragma: no cover - best effort
+            summary = None
 
     include = include or []
     exclude = exclude or []
@@ -455,6 +459,17 @@ def import_directory(
             pub = redis.from_url(CONFIG["redis_url"])
         except Exception:
             pub = None
+
+    if summary is not None:
+        summary.total_count = total
+        summary.processed_count = start_idx
+        summary.created_count = created
+        summary.updated_count = updated
+        summary.skipped_count = skipped
+        try:
+            summary.save()
+        except Exception:
+            pass
 
     if job is not None:
         job.total_count = max(job.total_count, total)
@@ -591,6 +606,18 @@ def import_directory(
                         logger.error("Failed to write state to %s: %s", state_path, exc)
                 detail = str(test_id) if test_id is not None else error
                 report_entries.append((abs_path, action, detail))
+                if summary is not None:
+                    if error is not None:
+                        summary.errors.append(error)
+                    summary.processed_count = start_idx + idx
+                    summary.created_count = created
+                    summary.updated_count = updated
+                    summary.skipped_count = skipped
+                    try:
+                        if (start_idx + idx) % 5 == 0 or (start_idx + idx) == total:
+                            summary.save()
+                    except Exception:
+                        pass
                 if job is not None:
                     entry = {"path": abs_path, "action": action}
                     if test_id is not None:
@@ -651,6 +678,7 @@ def import_directory(
         for name in processed:
             logger.info("Would refresh dataset for %s", name)
     else:
+        from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
         for name in processed:
             try:
                 update_cell_dataset(name)
@@ -670,6 +698,18 @@ def import_directory(
         updated,
         skipped,
     )
+
+    if summary is not None:
+        summary.end_time = datetime.datetime.utcnow()
+        summary.processed_count = total
+        summary.created_count = created
+        summary.updated_count = updated
+        summary.skipped_count = skipped
+        summary.status = "failed" if summary.errors else "completed"
+        try:
+            summary.save()
+        except Exception:
+            pass
 
     if job is not None:
         job.end_time = datetime.datetime.utcnow()
@@ -712,6 +752,41 @@ def import_directory(
         except Exception as exc:  # pragma: no cover - defensive
             logger.error("Failed to write report to %s: %s", report, exc)
 
+    return 0
+
+
+def show_history() -> int:
+    """Print history of import job summaries."""
+
+    if not ensure_connection():
+        logger.error("Database connection not available")
+        return 1
+
+    summaries: list[ImportJobSummary]
+    if callable(getattr(ImportJobSummary, "objects", None)):
+        summaries = list(ImportJobSummary.objects())
+        summaries.sort(
+            key=lambda s: getattr(s, "start_time", None), reverse=True
+        )
+    else:  # pragma: no cover - defensive
+        summaries = []
+    if not summaries:
+        print("No import summaries found")
+        return 0
+
+    for s in summaries:
+        start = s.start_time.isoformat() if s.start_time else "N/A"
+        end = s.end_time.isoformat() if s.end_time else "N/A"
+        counts = (
+            f"created={getattr(s, 'created_count', 0)} "
+            f"updated={getattr(s, 'updated_count', 0)} "
+            f"skipped={getattr(s, 'skipped_count', 0)}"
+        )
+        errs = "; ".join(getattr(s, "errors", [])) or "None"
+        status = getattr(s, "status", "")
+        print(
+            f"{s.id} | start: {start} | end: {end} | {counts} | status: {status} | errors: {errs}"
+        )
     return 0
 
 
@@ -869,6 +944,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Show status of import jobs; optionally provide JOB_ID",
     )
     parser.add_argument(
+        "--history",
+        action="store_true",
+        help="Show import job summaries and exit",
+    )
+    parser.add_argument(
         "--resume",
         metavar="JOB_ID",
         help="Resume a previously interrupted import job",
@@ -893,7 +973,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--verify",
         action="store_true",
-        help="Verify imported files against database and GridFS after processing",
+        help="Verify imported files against stored hashes after processing",
     )
     parser.add_argument(
         "--verify-report",
@@ -905,6 +985,8 @@ def main(argv: list[str] | None = None) -> int:
     from battery_analysis.utils.logging import get_logger
 
     _logger = get_logger(__name__)
+    if args.history:
+        return show_history()
     if args.status is not None:
         return show_status(args.status or None)
     if args.rollback:
@@ -912,9 +994,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.remote and args.archive:
         parser.error("--archive cannot be used with --remote")
 
-    if not args.root and not args.remote and not args.archive:
+    if not args.root and not args.remote and not args.archive and not args.history:
         parser.error(
-            "root is required unless --rollback, --status, --remote or --archive is specified",
+            "root is required unless --rollback, --status, --history, --remote or --archive is specified",
         )
     include = args.include if args.include is not None else CONFIG.get("include")
     exclude = args.exclude if args.exclude is not None else CONFIG.get("exclude")
@@ -991,7 +1073,7 @@ def main(argv: list[str] | None = None) -> int:
             retries=args.retries,
             tags=args.tags,
         )
-    if args.verify and result == 0 and not args.remote and not args.archive:
+    if args.verify and result == 0:
         from battery_analysis.utils import verify_import
 
         rows = verify_import.verify_directory(root_path)
