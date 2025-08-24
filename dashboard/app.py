@@ -165,6 +165,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
 
     def dashboard_layout(user_role: str) -> html.Div:
         prefs = preferences.load_preferences()
+        db_status = "Connected" if data_access.db_connected() else "Not Connected"
         navbar = dbc.Navbar(
             dbc.Container(
                 [
@@ -197,7 +198,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                         **{"aria-live": "polite"},
                     ),
                     html.Span(
-                        "Database: Not Connected",
+                        f"Database: {db_status}",
                         id="db-status",
                         className="ms-auto navbar-text",
                         **{"aria-live": "polite"},
@@ -505,11 +506,31 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         return (current or []) + layout_components.upcoming_tests_rows(new_rows)
 
     @app.callback(
-        Output("db-status", "children"), Input("refresh-interval", "n_intervals")
+        Output("db-status", "children"),
+        Output("notification-toast", "is_open", allow_duplicate=True),
+        Output("notification-toast", "children", allow_duplicate=True),
+        Output("notification-toast", "header", allow_duplicate=True),
+        Output("notification-toast", "icon", allow_duplicate=True),
+        Input("refresh-interval", "n_intervals"),
     )
     def refresh_db_status(_):
-        status = "Connected" if data_access.db_connected() else "Not Connected"
-        return f"Database: {status}"
+        connected = data_access.db_connected()
+        status = "Connected" if connected else "Not Connected"
+        if connected:
+            return (
+                f"Database: {status}",
+                False,
+                dash.no_update,
+                dash.no_update,
+                dash.no_update,
+            )
+        return (
+            f"Database: {status}",
+            True,
+            "Unable to connect to the database.",
+            "Database Error",
+            "danger",
+        )
 
     @app.callback(
         Output("download-data", "data"),
