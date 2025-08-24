@@ -34,6 +34,11 @@ except Exception:  # pragma: no cover - allow running without DB
     Sample = None
     connect = None
 
+try:  # pragma: no cover - database utility optional
+    from battery_analysis.utils.db import connect_with_fallback
+except Exception:  # pragma: no cover - provide dummy fallback
+    connect_with_fallback = None
+
 from Mongodb_implementation import get_client
 
 from battery_analysis.utils.logging import get_logger
@@ -90,28 +95,54 @@ def db_connected() -> bool:
     db_name = os.getenv("BATTERY_DB_NAME", "battery_test_db")
     client = get_client()
     uri = getattr(client, "_configured_uri", None)
+    host = getattr(client, "_configured_host", "localhost")
+    port = getattr(client, "_configured_port", 27017)
     try:
+        connected = False
         if uri:
-            connect(
-                db_name,
-                host=uri,
-                alias="default",
-                serverSelectionTimeoutMS=2000,
-            )
+            if connect_with_fallback is not None:
+                connected = connect_with_fallback(
+                    db_name=db_name,
+                    host=uri,
+                    ask_if_fails=False,
+                    alias="default",
+                    serverSelectionTimeoutMS=2000,
+                )
+            else:
+                connect(
+                    db_name,
+                    host=uri,
+                    alias="default",
+                    serverSelectionTimeoutMS=2000,
+                )
+                connected = True
         else:
-            connect(
-                db_name,
-                host=getattr(client, "_configured_host", "localhost"),
-                port=getattr(client, "_configured_port", 27017),
-                alias="default",
-                serverSelectionTimeoutMS=2000,
-            )
-        Sample.objects.first()  # type: ignore[attr-defined]
-        _DB_CONNECTED = True
-        return True
+            if connect_with_fallback is not None:
+                connected = connect_with_fallback(
+                    db_name=db_name,
+                    host=host,
+                    port=port,
+                    ask_if_fails=False,
+                    alias="default",
+                    serverSelectionTimeoutMS=2000,
+                )
+            else:
+                connect(
+                    db_name,
+                    host=host,
+                    port=port,
+                    alias="default",
+                    serverSelectionTimeoutMS=2000,
+                )
+                connected = True
+        if connected:
+            Sample.objects.first()  # type: ignore[attr-defined]
+            _DB_CONNECTED = True
+            return True
     except Exception:
-        _DB_CONNECTED = False
-        return False
+        pass
+    _DB_CONNECTED = False
+    return False
 
 
 # ---------------------------------------------------------------------------
