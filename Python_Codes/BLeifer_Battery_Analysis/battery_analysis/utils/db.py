@@ -39,7 +39,7 @@ def connect_with_fallback(
     """
     if connect is None:
         logger.warning("mongoengine not available; cannot connect to database")
-        connect_with_fallback.last_error = "mongoengine not available"
+        connect_with_fallback.last_error = "mongoengine not available"  # type: ignore[attr-defined]  # noqa: E501
         return False
     try:
         is_uri = host.startswith(("mongodb://", "mongodb+srv://"))
@@ -51,7 +51,7 @@ def connect_with_fallback(
                 alias="default",
                 **connect_kwargs,
             )
-            logger.info("✅ Connected to MongoDB via %s", host)
+            logger.info("Connected to MongoDB via %s", host)
         else:
             port = port or 27017
             connect(
@@ -62,29 +62,29 @@ def connect_with_fallback(
                 alias="default",
                 **connect_kwargs,
             )
-            logger.info("✅ Connected to MongoDB at %s:%s", host, port)
-        connect_with_fallback.last_error = None
+            logger.info("Connected to MongoDB at %s:%s", host, port)
+        connect_with_fallback.last_error = None  # type: ignore[attr-defined]  # noqa: E501
         return True
     except Exception as exc:
         logger.warning("Local MongoDB connection failed: %s", exc)
-        connect_with_fallback.last_error = str(exc)
+        connect_with_fallback.last_error = str(exc)  # type: ignore[attr-defined]  # noqa: E501
         if not ask_if_fails:
             return False
 
-    # ── interactive fallback ───────────────────────────────────────────────
-    logger.warning("⚠️  Couldn’t reach MongoDB on localhost.")
+    # -- interactive fallback ------------------------------------------------
+    logger.warning("Could not reach MongoDB on localhost.")
     new_uri = input("MongoDB URI (blank to abort) > ").strip()
     if not new_uri:
-        connect_with_fallback.last_error = "user aborted"
+        connect_with_fallback.last_error = "user aborted"  # type: ignore[attr-defined]  # noqa: E501
         return False
     try:
         connect(host=new_uri, alias="default", **connect_kwargs)
-        logger.info("✅ Connected via URI %s", new_uri)
-        connect_with_fallback.last_error = None
+        logger.info("Connected via URI %s", new_uri)
+        connect_with_fallback.last_error = None  # type: ignore[attr-defined]  # noqa: E501
         return True
     except Exception as exc:
         logger.error("Connection via %s also failed: %s", new_uri, exc)
-        connect_with_fallback.last_error = str(exc)
+        connect_with_fallback.last_error = str(exc)  # type: ignore[attr-defined]  # noqa: E501
         return False
 
 
@@ -122,7 +122,7 @@ def ensure_connection(**connect_kwargs: Any) -> bool:
 
 # Keep the legacy public name so existing imports work
 connect_to_database = connect_with_fallback
-connect_with_fallback.last_error = None
+connect_with_fallback.last_error = None  # type: ignore[attr-defined]  # noqa: E501
 
 
 # Allow `python -m battery_analysis.utils.db` for a quick test
