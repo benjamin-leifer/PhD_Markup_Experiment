@@ -512,6 +512,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         Output("notification-toast", "header", allow_duplicate=True),
         Output("notification-toast", "icon", allow_duplicate=True),
         Input("refresh-interval", "n_intervals"),
+        prevent_initial_call=True,
     )
     def refresh_db_status(_):
         connected = data_access.db_connected()
