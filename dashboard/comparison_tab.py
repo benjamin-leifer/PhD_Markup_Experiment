@@ -314,29 +314,38 @@ def register_callbacks(app: dash.Dash) -> None:
         prevent_initial_call=True,
     )
     def _popout_matplotlib(n_clicks, fig_dict):
-        import json
-
-        import matplotlib.pyplot as plt
+        from multiprocessing import Process
 
         if not n_clicks or not fig_dict:
             raise dash.exceptions.PreventUpdate
 
-        def _prepare(vals):
-            if not vals:
-                return []
-            return [
-                json.dumps(v, sort_keys=True) if isinstance(v, dict) else v
-                for v in vals
-            ]
-
-        plt.figure()
-        for trace in fig_dict.get("data", []):
-            if trace.get("type") == "scatter":
-                plt.plot(
-                    _prepare(trace.get("x", [])),
-                    _prepare(trace.get("y", [])),
-                    label=trace.get("name"),
-                )
-        plt.legend()
-        plt.show()
+        Process(target=_render_matplotlib, args=(fig_dict,)).start()
         return 0
+
+
+def _render_matplotlib(fig_dict: Dict[str, Any]) -> None:
+    """Render ``fig_dict`` using Matplotlib in a separate process."""
+    import json
+
+    import matplotlib.pyplot as plt
+
+    def _prepare(vals):
+        if not vals:
+            return []
+        return [
+            json.dumps(v, sort_keys=True) if isinstance(v, dict) else v for v in vals
+        ]
+
+    plt.figure()
+    for trace in fig_dict.get("data", []):
+        if trace.get("type") == "scatter":
+            x = _prepare(trace.get("x", []))
+            y = _prepare(trace.get("y", []))
+            name = trace.get("name")
+            plt.plot(x, y, label=name if name else None)
+
+    handles, labels = plt.gca().get_legend_handles_labels()
+    if any(label and not label.startswith("_") for label in labels):
+        plt.legend()
+
+    plt.show()
