@@ -106,7 +106,8 @@ def db_connected() -> bool:
     if not is_mock:
         try:
             client.admin.command("ping")
-        except Exception:
+        except Exception as exc:
+            logger.warning("MongoDB ping failed: %s", exc)
             is_mock = True
 
     if is_mock:
@@ -168,8 +169,14 @@ def db_connected() -> bool:
             Sample.objects.first()  # type: ignore[attr-defined]
             _DB_CONNECTED = True
             return True
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.exception(
+            "MongoDB connection failed for %s (host=%s port=%s): %s",
+            db_name,
+            host,
+            port,
+            exc,
+        )
     _DB_CONNECTED = False
     return False
 
