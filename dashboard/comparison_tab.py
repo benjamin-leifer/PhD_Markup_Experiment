@@ -15,6 +15,10 @@ import pandas as pd
 import plotly.graph_objs as go
 from dash import Input, Output, State, dcc, html
 
+# Database helpers
+from dashboard.data_access import db_connected
+from Mongodb_implementation import find_samples
+
 # mypy: ignore-errors
 
 # Component IDs
@@ -33,31 +37,27 @@ logger = logging.getLogger(__name__)
 
 def _get_sample_options() -> Tuple[List[Dict[str, str]], Optional[str]]:
     """Return dropdown options for available samples and an error message."""
-    try:  # pragma: no cover - depends on MongoDB
-        from battery_analysis import models
-
-        if hasattr(models.Sample, "objects"):
-            samples = list(models.Sample.objects.only("name"))
-
-            def to_value(s: Any) -> str:
-                return str(s.id)
-
-        else:
-            samples = list(getattr(models.Sample, "_registry", {}).values())
-
-            def to_value(s: Any) -> str:
-                return str(getattr(s, "id", getattr(s, "name", "")))
-
-        opts = [{"label": s.name, "value": to_value(s)} for s in samples]
-        if not opts:
-            raise ValueError("no sample options")
-        return opts, None
-    except ValueError:
-        logger.warning("No sample options found; using demo data")
+    if not db_connected():
+        logger.warning("Database not connected; using demo data")
         return (
             [{"label": "Sample_001", "value": "sample1"}],
-            "No sample options available; using demo data",
+            "Database not connected; using demo data",
         )
+
+    try:
+        samples = find_samples()
+        opts = [
+            {"label": s.get("name", ""), "value": str(s.get("_id", s.get("name", "")))}
+            for s in samples
+            if s.get("name")
+        ]
+        if not opts:
+            logger.warning("No sample options found; using demo data")
+            return (
+                [{"label": "Sample_001", "value": "sample1"}],
+                "No sample options available; using demo data",
+            )
+        return opts, None
     except Exception as exc:
         logger.exception("Failed to load sample options")
         return (
