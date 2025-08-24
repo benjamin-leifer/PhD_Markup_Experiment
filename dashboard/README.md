@@ -8,6 +8,15 @@ dataset is available, the dashboard falls back to the raw `TestResult`
 records, ensuring the views remain populated even for cells without a
 precomputed dataset.
 
+### MongoDB configuration
+
+Runtime setup now loads the user configuration via
+`battery_analysis.utils.config.load_config` and uses the resulting
+`db_uri` to populate the `MONGO_URI` environment variable if it is not
+already set. The dashboard and helper scripts rely on `MONGO_URI`,
+`MONGO_HOST` and `MONGO_PORT` for database connections and the older
+`BATTERY_DB_*` variables are no longer populated by default.
+
 ### User selection
 
 The **Current User** dropdown now retrieves its options from

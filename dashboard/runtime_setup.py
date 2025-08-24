@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from battery_analysis.utils.config import load_config
+
 
 def configure() -> None:
     """Ensure battery_analysis is installed and DB env vars are set.
@@ -28,6 +30,19 @@ def configure() -> None:
             [sys.executable, "-m", "pip", "install", "-e", str(package_dir)]
         )
 
-    os.environ.setdefault("BATTERY_DB_HOST", "localhost")
-    os.environ.setdefault("BATTERY_DB_PORT", "27017")
-    os.environ.setdefault("BATTERY_DB_NAME", "battery_test_db")
+    cfg = load_config()
+    os.environ.setdefault("MONGO_URI", cfg["db_uri"])
+
+    host = os.environ.pop("BATTERY_DB_HOST", None)
+    port = os.environ.pop("BATTERY_DB_PORT", None)
+
+    if host:
+        os.environ.setdefault("MONGO_HOST", host)
+    else:
+        os.environ.setdefault("MONGO_HOST", "localhost")
+
+    if port:
+        os.environ.setdefault("MONGO_PORT", port)
+    else:
+        os.environ.setdefault("MONGO_PORT", "27017")
+

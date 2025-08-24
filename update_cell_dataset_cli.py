@@ -8,6 +8,7 @@ dataset. Run ``python update_cell_dataset_cli.py --help`` for usage details.
 import argparse
 import os
 import sys
+from urllib.parse import urlparse
 
 PACKAGE_ROOT = os.path.join(
     os.path.dirname(__file__), "Python_Codes", "BLeifer_Battery_Analysis"
@@ -61,7 +62,11 @@ def main() -> None:
     logger = get_logger(__name__)
 
     client = get_client()
-    db_name = os.getenv("BATTERY_DB_NAME", "battery_test_db")
+    uri_env = os.getenv("MONGO_URI", "")
+    db_name = os.getenv("BATTERY_DB_NAME")
+    if not db_name and uri_env:
+        db_name = urlparse(uri_env).path.lstrip("/") or None
+    db_name = db_name or "battery_test_db"
     try:
         uri = getattr(client, "_configured_uri", None)
         if uri:
