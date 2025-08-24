@@ -52,10 +52,17 @@ def _get_sample_options() -> Tuple[List[Dict[str, str]], Optional[str]]:
         if not opts:
             raise ValueError("no sample options")
         return opts, None
+    except ValueError:
+        logger.warning("No sample options found; using demo data")
+        return (
+            [{"label": "Sample_001", "value": "sample1"}],
+            "No sample options available; using demo data",
+        )
     except Exception as exc:
         logger.exception("Failed to load sample options")
-        return [{"label": "Sample_001", "value": "sample1"}], (
-            f"Could not load sample options: {exc}"
+        return (
+            [{"label": "Sample_001", "value": "sample1"}],
+            f"Could not load sample options: {exc}",
         )
 
 
