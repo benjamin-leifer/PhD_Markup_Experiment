@@ -35,6 +35,16 @@ def get_client() -> MongoClient:
     callers can reuse them without establishing a connection.
     """
 
+    if os.getenv("USE_MONGO_MOCK"):
+        import mongomock
+
+        host = os.getenv("MONGO_HOST", "localhost")
+        port = int(os.getenv("MONGO_PORT", "27017"))
+        client = mongomock.MongoClient()
+        client._configured_host = host  # type: ignore[attr-defined]
+        client._configured_port = port  # type: ignore[attr-defined]
+        return client
+
     uri = os.getenv("MONGO_URI")
     if uri:
         client = MongoClient(uri)
