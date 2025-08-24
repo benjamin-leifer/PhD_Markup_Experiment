@@ -191,6 +191,12 @@ A lightweight Dash application provides a simple interface for monitoring batter
 The required dependencies, including `dash` and `dash-bootstrap-components`, are listed in
 `requirements.txt`.
 
+Before launching the dashboard, verify that the MongoDB connection is working:
+
+```bash
+python check_db_connection.py
+```
+
 To run the dashboard locally, execute:
 
 ```bash
