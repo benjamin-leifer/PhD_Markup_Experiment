@@ -156,6 +156,7 @@ def db_connected() -> bool:
         msg = f"Missing database dependencies: {', '.join(missing)}"
         logger.error(msg)
         _DB_ERROR = msg
+        logger.error("Missing database dependencies: %s", ", ".join(missing))
         _DB_CONNECTED = False
         return False
     logger.info(
@@ -215,6 +216,17 @@ def db_connected() -> bool:
     else:
         _DB_ERROR = f"MongoDB connection could not be established to {uri if uri else f'{host}:{port}'}"
         logger.error("%s; using demo data", _DB_ERROR)
+        logger.exception(
+            "MongoDB connection failed for %s (host=%s port=%s): %s",
+            db_name,
+            host,
+            port,
+            exc,
+        )
+    logger.error(
+        "MongoDB connection could not be established to %s; using demo data",
+        uri if uri else f"{host}:{port}",
+    )
     _DB_CONNECTED = False
     return False
 
