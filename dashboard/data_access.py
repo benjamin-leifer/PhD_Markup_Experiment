@@ -214,10 +214,19 @@ def db_connected() -> bool:
         )
         logger.exception(_DB_ERROR)
     else:
-        _DB_ERROR = (
-            f"MongoDB connection could not be established to "
-            f"{uri if uri else f'{host}:{port}'}"
-        )
+        last_err = None
+        if connect_with_fallback is not None:
+            last_err = getattr(connect_with_fallback, "last_error", None)
+        if last_err:
+            _DB_ERROR = (
+                f"MongoDB connection failed for {db_name} "
+                f"(host={host} port={port}): {last_err}"
+            )
+        else:
+            _DB_ERROR = (
+                f"MongoDB connection could not be established to "
+                f"{uri if uri else f'{host}:{port}'}"
+            )
     logger.error(
         "MongoDB connection could not be established to %s; using demo data",
         uri if uri else f"{host}:{port}",
