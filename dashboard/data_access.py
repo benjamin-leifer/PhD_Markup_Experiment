@@ -54,6 +54,7 @@ UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 _uploaded_files: List[Dict] = []
 _DB_CONNECTED: bool | None = None
+_DB_ERROR: str | None = None
 
 # ---------------------------------------------------------------------------
 # User helpers
@@ -89,11 +90,29 @@ def get_available_users() -> List[str]:
 
 def db_connected() -> bool:
     """Return True if the MongoDB backend is reachable."""
-    global _DB_CONNECTED
+    global _DB_CONNECTED, _DB_ERROR
     if _DB_CONNECTED is not None:
         return _DB_CONNECTED
 
     client = get_client()
+
+    uri_env = os.getenv("MONGO_URI", "")
+    host_env = os.getenv("MONGO_HOST", "localhost")
+    port_env = os.getenv("MONGO_PORT", "27017")
+    db_name = os.getenv("BATTERY_DB_NAME")
+    if not db_name and uri_env:
+        db_name = urlparse(uri_env).path.lstrip("/") or None
+    db_name = db_name or "battery_test_db"
+    uri = getattr(client, "_configured_uri", None) or uri_env or None
+    host = getattr(client, "_configured_host", host_env)
+    port = int(getattr(client, "_configured_port", port_env))
+    logger.debug(
+        "db_connected check using db=%s uri=%s host=%s port=%s",
+        db_name,
+        uri,
+        host,
+        port,
+    )
 
     is_mock = False
     try:  # pragma: no cover - optional dependency
@@ -106,29 +125,43 @@ def db_connected() -> bool:
     if not is_mock:
         try:
             client.admin.command("ping")
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "MongoDB ping failed for %s:%s (uri=%s): %s",
+                host,
+                port,
+                uri,
+                exc,
+            )
             is_mock = True
 
     if is_mock:
+        logger.warning(
+            "Using mongomock client; database operations will use in-memory mock",
+        )
+        _DB_ERROR = "Using mongomock in-memory client"
         _DB_CONNECTED = True
         return True
 
     if models is None or connect is None or Sample is None:
-        logger.error(
-            "battery_analysis or mongoengine not installed; database unavailable"
-        )
+        missing = [
+            name
+            for name, val in [
+                ("battery_analysis.models", models),
+                ("mongoengine.connect", connect),
+                ("Sample model", Sample),
+            ]
+            if val is None
+        ]
+        msg = f"Missing database dependencies: {', '.join(missing)}"
+        logger.error(msg)
+        _DB_ERROR = msg
         _DB_CONNECTED = False
         return False
-
-    uri_env = os.getenv("MONGO_URI", "")
-    db_name = os.getenv("BATTERY_DB_NAME")
-    if not db_name and uri_env:
-        db_name = urlparse(uri_env).path.lstrip("/") or None
-    db_name = db_name or "battery_test_db"
-    uri = getattr(client, "_configured_uri", None) or uri_env
-    host = getattr(client, "_configured_host", os.getenv("MONGO_HOST", "localhost"))
-    port_val = getattr(client, "_configured_port", os.getenv("MONGO_PORT", "27017"))
-    port = int(port_val)
+    logger.info(
+        "Attempting MongoDB connection to %s",
+        uri if uri else f"{host}:{port}",
+    )
     try:
         connected = False
         if uri:
@@ -165,13 +198,30 @@ def db_connected() -> bool:
                 )
                 connected = True
         if connected:
+            logger.info(
+                "MongoDB connection established to %s",
+                uri if uri else f"{host}:{port}",
+            )
             Sample.objects.first()  # type: ignore[attr-defined]
+            _DB_ERROR = None
             _DB_CONNECTED = True
             return True
-    except Exception:
-        pass
+    except Exception as exc:
+        msg = (
+            f"MongoDB connection failed for {db_name} (host={host} port={port}): {exc}"
+        )
+        logger.exception(msg)
+        _DB_ERROR = msg
+    else:
+        _DB_ERROR = f"MongoDB connection could not be established to {uri if uri else f'{host}:{port}'}"
+        logger.error("%s; using demo data", _DB_ERROR)
     _DB_CONNECTED = False
     return False
+
+
+def get_db_error() -> str | None:
+    """Return the reason why the MongoDB connection is unavailable."""
+    return _DB_ERROR
 
 
 # ---------------------------------------------------------------------------
