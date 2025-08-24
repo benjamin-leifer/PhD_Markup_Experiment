@@ -208,11 +208,11 @@ def db_connected() -> bool:
             _DB_CONNECTED = True
             return True
     except Exception as exc:
-        msg = (
-            f"MongoDB connection failed for {db_name} (host={host} port={port}): {exc}"
+        _DB_ERROR = (
+            f"MongoDB connection failed for {db_name} "
+            f"(host={host} port={port}): {exc}"
         )
-        logger.exception(msg)
-        _DB_ERROR = msg
+        logger.exception(_DB_ERROR)
     else:
         _DB_ERROR = (
             f"MongoDB connection could not be established to "

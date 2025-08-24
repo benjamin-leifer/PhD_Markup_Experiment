@@ -165,7 +165,12 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
 
     def dashboard_layout(user_role: str) -> html.Div:
         prefs = preferences.load_preferences()
-        db_status = "Connected" if data_access.db_connected() else "Not Connected"
+        connected = data_access.db_connected()
+        if connected:
+            db_status = "Connected"
+        else:
+            err = data_access.get_db_error() or "Unknown error"
+            db_status = f"Not Connected: {err}"
         navbar = dbc.Navbar(
             dbc.Container(
                 [
@@ -526,6 +531,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         Input("refresh-interval", "n_intervals"),
         prevent_initial_call=True,
     )
+
     def refresh_db_status(_):
         connected = data_access.db_connected()
         status = "Connected" if connected else "Not Connected"
@@ -537,10 +543,11 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                 dash.no_update,
                 dash.no_update,
             )
+        error = data_access.get_db_error() or "Unable to connect to the database."
         return (
-            f"Database: {status}",
+            f"Database: {status} - {error}",
             True,
-            "Unable to connect to the database.",
+            error,
             "Database Error",
             "danger",
         )
