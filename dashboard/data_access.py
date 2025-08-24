@@ -54,6 +54,7 @@ UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 _uploaded_files: List[Dict] = []
 _DB_CONNECTED: bool | None = None
+_DB_ERROR: str | None = None
 
 # ---------------------------------------------------------------------------
 # User helpers
@@ -89,7 +90,7 @@ def get_available_users() -> List[str]:
 
 def db_connected() -> bool:
     """Return True if the MongoDB backend is reachable."""
-    global _DB_CONNECTED
+    global _DB_CONNECTED, _DB_ERROR
     if _DB_CONNECTED is not None:
         return _DB_CONNECTED
 
@@ -138,6 +139,7 @@ def db_connected() -> bool:
         logger.warning(
             "Using mongomock client; database operations will use in-memory mock",
         )
+        _DB_ERROR = "Using mongomock in-memory client"
         _DB_CONNECTED = True
         return True
 
@@ -151,6 +153,9 @@ def db_connected() -> bool:
             ]
             if val is None
         ]
+        msg = f"Missing database dependencies: {', '.join(missing)}"
+        logger.error(msg)
+        _DB_ERROR = msg
         logger.error("Missing database dependencies: %s", ", ".join(missing))
         _DB_CONNECTED = False
         return False
@@ -199,9 +204,18 @@ def db_connected() -> bool:
                 uri if uri else f"{host}:{port}",
             )
             Sample.objects.first()  # type: ignore[attr-defined]
+            _DB_ERROR = None
             _DB_CONNECTED = True
             return True
     except Exception as exc:
+        msg = (
+            f"MongoDB connection failed for {db_name} (host={host} port={port}): {exc}"
+        )
+        logger.exception(msg)
+        _DB_ERROR = msg
+    else:
+        _DB_ERROR = f"MongoDB connection could not be established to {uri if uri else f'{host}:{port}'}"
+        logger.error("%s; using demo data", _DB_ERROR)
         logger.exception(
             "MongoDB connection failed for %s (host=%s port=%s): %s",
             db_name,
@@ -215,6 +229,11 @@ def db_connected() -> bool:
     )
     _DB_CONNECTED = False
     return False
+
+
+def get_db_error() -> str | None:
+    """Return the reason why the MongoDB connection is unavailable."""
+    return _DB_ERROR
 
 
 # ---------------------------------------------------------------------------

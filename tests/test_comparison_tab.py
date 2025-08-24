@@ -8,16 +8,21 @@ sys.path.insert(0, str(ROOT))
 from dashboard import comparison_tab  # noqa: E402
 
 
-def test_get_sample_options_db_unavailable(monkeypatch: Any, caplog: Any) -> None:
+def test_get_sample_options_db_unavailable(
+    monkeypatch: Any, caplog: Any
+) -> None:  # noqa: E501
     monkeypatch.setattr(comparison_tab, "db_connected", lambda: False)
-    with caplog.at_level("WARNING", logger=comparison_tab.logger.name):
+    monkeypatch.setattr(comparison_tab, "get_db_error", lambda: "no db")
+    with caplog.at_level("ERROR", logger=comparison_tab.logger.name):
         opts, error = comparison_tab._get_sample_options()
     assert opts == [{"label": "Sample_001", "value": "sample1"}]
-    assert error is not None
-    assert "Database not connected" in caplog.text
+    assert error == "Database not connected; using demo data (no db)"
+    assert "Database not connected: no db; using demo data" in caplog.text
 
 
-def test_get_sample_options_db_available(monkeypatch: Any, caplog: Any) -> None:
+def test_get_sample_options_db_available(
+    monkeypatch: Any, caplog: Any
+) -> None:  # noqa: E501
     monkeypatch.setattr(comparison_tab, "db_connected", lambda: True)
     samples = [
         {"_id": "id1", "name": "SampleA"},
@@ -32,4 +37,3 @@ def test_get_sample_options_db_available(monkeypatch: Any, caplog: Any) -> None:
     ]
     assert error is None
     assert caplog.text == ""
-

@@ -16,7 +16,7 @@ import plotly.graph_objs as go
 from dash import Input, Output, State, dcc, html
 
 # Database helpers
-from dashboard.data_access import db_connected
+from dashboard.data_access import db_connected, get_db_error
 from Mongodb_implementation import find_samples
 
 # mypy: ignore-errors
@@ -38,10 +38,11 @@ logger = logging.getLogger(__name__)
 def _get_sample_options() -> Tuple[List[Dict[str, str]], Optional[str]]:
     """Return dropdown options for available samples and an error message."""
     if not db_connected():
-        logger.warning("Database not connected; using demo data")
+        reason = get_db_error() or "unknown reason"
+        logger.error("Database not connected: %s; using demo data", reason)
         return (
             [{"label": "Sample_001", "value": "sample1"}],
-            "Database not connected; using demo data",
+            f"Database not connected; using demo data ({reason})",
         )
 
     try:
