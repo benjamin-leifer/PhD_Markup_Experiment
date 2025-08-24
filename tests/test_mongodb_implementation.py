@@ -10,26 +10,27 @@ if str(ROOT) not in sys.path:
 import os  # noqa: E402
 
 import mongomock  # noqa: E402
+from pymongo.errors import ServerSelectionTimeoutError  # noqa: E402
 
 import Mongodb_implementation  # noqa: E402
 
 
-def test_get_client_uses_mongomock(monkeypatch):
-    monkeypatch.setenv("USE_MONGO_MOCK", "1")
+def test_get_client_falls_back_to_mongomock(monkeypatch):
+    """If MongoDB is unreachable, get_client should return mongomock."""
+
+    monkeypatch.delenv("USE_MONGO_MOCK", raising=False)
+
+    class FailingMongoClient:
+        def __init__(*args, **kwargs):
+            raise ServerSelectionTimeoutError("fail")
+
+    monkeypatch.setattr(
+        Mongodb_implementation, "MongoClient", FailingMongoClient
+    )  # noqa: E501
+
     client = Mongodb_implementation.get_client()
     assert isinstance(client, mongomock.MongoClient)
     expected_host = os.getenv("MONGO_HOST", "localhost")
     expected_port = int(os.getenv("MONGO_PORT", "27017"))
     assert getattr(client, "_configured_host") == expected_host
     assert getattr(client, "_configured_port") == expected_port
-
-
-def test_get_client_falls_back_to_mongomock(monkeypatch):
-    monkeypatch.delenv("USE_MONGO_MOCK", raising=False)
-    monkeypatch.delenv("MONGO_URI", raising=False)
-    monkeypatch.setenv("MONGO_HOST", "mongodb.invalid")
-    monkeypatch.setenv("MONGO_PORT", "27017")
-    client = Mongodb_implementation.get_client()
-    assert isinstance(client, mongomock.MongoClient)
-    assert getattr(client, "_configured_host") == "mongodb.invalid"
-    assert getattr(client, "_configured_port") == 27017

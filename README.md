@@ -57,16 +57,20 @@ Once the dependencies are available, run the tests from the repository root:
 pytest -q
 ```
 
-The package requires a running MongoDB instance for data storage.
+The package expects a running MongoDB instance for data storage during normal
+development. If a connection cannot be made (as is common in CI or other
+isolated environments) the helpers automatically fall back to an in-memory
+`mongomock` database so the code and tests remain usable.
 
 Connection details are configured through environment variables:
 
 * `MONGO_URI` – full MongoDB connection string. When provided it takes precedence.
 * `MONGO_HOST` and `MONGO_PORT` – host and port values used when `MONGO_URI` is unset.
 * `BATTERY_DB_NAME` – optional database name (defaults to `battery_test_db`).
-* `USE_MONGO_MOCK` – set to `1` to use an in-memory mock database (via
-  `mongomock`) instead of connecting to a real MongoDB server. This is useful
-  for running the test suite without MongoDB.
+* `USE_MONGO_MOCK` – optional flag to force an in-memory mock database (via
+  `mongomock`). The flag is rarely needed because the code automatically falls
+  back to `mongomock` when a real database connection cannot be established,
+  which is how the test suite runs.
 
 Both the dashboard and the `update_cell_dataset_cli.py` script rely on these
 variables when establishing database connections.
