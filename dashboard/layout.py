@@ -162,7 +162,6 @@ def running_tests_table(tests: List[Dict]) -> dash_table.DataTable:
     """Table of running tests using a ``DataTable`` component."""
     return dash_table.DataTable(
         id="running-tests-table",
-        **{"aria-label": "Running tests table"},
         columns=[
             {"name": "Cell ID", "id": "cell_id"},
             {"name": "Test Type", "id": "test_type"},
@@ -193,7 +192,6 @@ def upcoming_tests_table(tests: List[Dict]) -> dash_table.DataTable:
     """Table of upcoming tests using a ``DataTable`` component."""
     return dash_table.DataTable(
         id="upcoming-tests-table",
-        **{"aria-label": "Upcoming tests table"},
         columns=[
             {"name": "Cell ID", "id": "cell_id"},
             {"name": "Test Type", "id": "test_type"},
