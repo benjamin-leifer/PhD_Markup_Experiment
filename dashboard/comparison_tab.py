@@ -37,18 +37,21 @@ def _get_sample_options() -> Tuple[List[Dict[str, str]], Optional[str]]:
         from battery_analysis import models
 
         if hasattr(models.Sample, "objects"):
-            samples = models.Sample.objects.only("name")
+            samples = list(models.Sample.objects.only("name"))
 
             def to_value(s: Any) -> str:
                 return str(s.id)
 
         else:
-            samples = getattr(models.Sample, "_registry", {}).values()
+            samples = list(getattr(models.Sample, "_registry", {}).values())
 
             def to_value(s: Any) -> str:
                 return str(getattr(s, "id", getattr(s, "name", "")))
 
-        return [{"label": s.name, "value": to_value(s)} for s in samples], None
+        opts = [{"label": s.name, "value": to_value(s)} for s in samples]
+        if not opts:
+            raise ValueError("no sample options")
+        return opts, None
     except Exception as exc:
         logger.exception("Failed to load sample options")
         return [{"label": "Sample_001", "value": "sample1"}], (
