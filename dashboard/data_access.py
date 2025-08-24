@@ -214,14 +214,9 @@ def db_connected() -> bool:
         logger.exception(msg)
         _DB_ERROR = msg
     else:
-        _DB_ERROR = f"MongoDB connection could not be established to {uri if uri else f'{host}:{port}'}"
-        logger.error("%s; using demo data", _DB_ERROR)
-        logger.exception(
-            "MongoDB connection failed for %s (host=%s port=%s): %s",
-            db_name,
-            host,
-            port,
-            exc,
+        _DB_ERROR = (
+            f"MongoDB connection could not be established to "
+            f"{uri if uri else f'{host}:{port}'}"
         )
     logger.error(
         "MongoDB connection could not be established to %s; using demo data",
