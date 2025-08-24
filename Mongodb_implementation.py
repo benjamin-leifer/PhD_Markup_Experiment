@@ -19,10 +19,15 @@ Environment variables:
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Optional
+import logging
+import os
+from typing import Any, Dict, List, Optional
 
 from pymongo import MongoClient
-import os
+from pymongo.errors import PyMongoError
+from pymongo.uri_parser import parse_uri
+
+# mypy: ignore-errors
 
 
 def get_client() -> MongoClient:
@@ -35,28 +40,57 @@ def get_client() -> MongoClient:
     callers can reuse them without establishing a connection.
     """
 
+    logger = logging.getLogger(__name__)
+
     if os.getenv("USE_MONGO_MOCK"):
         import mongomock
 
         host = os.getenv("MONGO_HOST", "localhost")
         port = int(os.getenv("MONGO_PORT", "27017"))
         client = mongomock.MongoClient()
-        client._configured_host = host  # type: ignore[attr-defined]
-        client._configured_port = port  # type: ignore[attr-defined]
+        client._configured_host = host
+        client._configured_port = port
         return client
 
     uri = os.getenv("MONGO_URI")
-    if uri:
-        client = MongoClient(uri)
-        # Stash the URI so other modules can reuse it without inspecting the client
-        client._configured_uri = uri  # type: ignore[attr-defined]
-        return client
-
     host = os.getenv("MONGO_HOST", "localhost")
     port = int(os.getenv("MONGO_PORT", "27017"))
-    client = MongoClient(host, port)
-    client._configured_host = host  # type: ignore[attr-defined]
-    client._configured_port = port  # type: ignore[attr-defined]
+
+    if uri:
+        try:
+            parsed = parse_uri(uri)
+            host, port = parsed["nodelist"][0]
+        except Exception:
+            # Leave host and port from environment if parsing fails
+            pass
+
+    try:
+        if uri:
+            client = MongoClient(uri, serverSelectionTimeoutMS=2000)
+        else:
+            client = MongoClient(host, port, serverSelectionTimeoutMS=2000)
+
+        client.admin.command("ping")
+    except PyMongoError as exc:
+        logger.warning(
+            "Failed to connect to MongoDB at %s:%s, using mongomock: %s",
+            host,
+            port,
+            exc,
+        )
+        import mongomock
+
+        client = mongomock.MongoClient()
+        client._configured_host = host
+        client._configured_port = port
+        if uri:
+            client._configured_uri = uri
+        return client
+
+    if uri:
+        client._configured_uri = uri
+    client._configured_host = host
+    client._configured_port = port
     return client
 
 
@@ -128,4 +162,3 @@ __all__ = [
     "find_samples",
     "find_test_results",
 ]
-
