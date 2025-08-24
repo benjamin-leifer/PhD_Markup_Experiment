@@ -114,6 +114,9 @@ def db_connected() -> bool:
         return True
 
     if models is None or connect is None or Sample is None:
+        logger.error(
+            "battery_analysis or mongoengine not installed; database unavailable"
+        )
         _DB_CONNECTED = False
         return False
 
