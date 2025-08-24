@@ -5,6 +5,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List
+from urllib.parse import urlparse
 
 try:  # pragma: no cover - optional dependency
     from battery_analysis import user_tracking
@@ -92,11 +93,16 @@ def db_connected() -> bool:
     if models is None or connect is None or Sample is None:
         _DB_CONNECTED = False
         return False
-    db_name = os.getenv("BATTERY_DB_NAME", "battery_test_db")
+    uri_env = os.getenv("MONGO_URI", "")
+    db_name = os.getenv("BATTERY_DB_NAME")
+    if not db_name and uri_env:
+        db_name = urlparse(uri_env).path.lstrip("/") or None
+    db_name = db_name or "battery_test_db"
     client = get_client()
-    uri = getattr(client, "_configured_uri", None)
-    host = getattr(client, "_configured_host", "localhost")
-    port = getattr(client, "_configured_port", 27017)
+    uri = getattr(client, "_configured_uri", None) or uri_env
+    host = getattr(client, "_configured_host", os.getenv("MONGO_HOST", "localhost"))
+    port_val = getattr(client, "_configured_port", os.getenv("MONGO_PORT", "27017"))
+    port = int(port_val)
     try:
         connected = False
         if uri:
@@ -109,12 +115,7 @@ def db_connected() -> bool:
                     serverSelectionTimeoutMS=2000,
                 )
             else:
-                connect(
-                    db_name,
-                    host=uri,
-                    alias="default",
-                    serverSelectionTimeoutMS=2000,
-                )
+                connect(db_name, host=uri, alias="default", serverSelectionTimeoutMS=2000)
                 connected = True
         else:
             if connect_with_fallback is not None:
@@ -127,13 +128,7 @@ def db_connected() -> bool:
                     serverSelectionTimeoutMS=2000,
                 )
             else:
-                connect(
-                    db_name,
-                    host=host,
-                    port=port,
-                    alias="default",
-                    serverSelectionTimeoutMS=2000,
-                )
+                connect(db_name, host=host, port=port, alias="default", serverSelectionTimeoutMS=2000)
                 connected = True
         if connected:
             Sample.objects.first()  # type: ignore[attr-defined]

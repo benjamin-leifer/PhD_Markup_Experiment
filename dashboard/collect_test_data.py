@@ -12,7 +12,8 @@ The script relies only on ``pymongo`` and ``gridfs`` so it can run in
 minimal environments. The MongoDB connection itself is handled by
 ``Mongodb_implementation.get_client`` which pulls settings from the
 ``MONGO_URI`` (or ``MONGO_HOST``/``MONGO_PORT``) environment variables.
-The database name can still be overridden with ``BATTERY_DB_NAME``.
+The database name is taken from the path portion of ``MONGO_URI`` when
+available and otherwise defaults to ``battery_test_db``.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
+from urllib.parse import urlparse
 
 import gridfs
 
@@ -34,7 +36,11 @@ logger = get_logger(__name__)
 
 def export_dataset(limit: int = 10) -> Path:
     """Export ``limit`` test results and return path to manifest file."""
-    db_name = os.getenv("BATTERY_DB_NAME", "battery_test_db")
+    uri = os.getenv("MONGO_URI", "")
+    db_name = os.getenv("BATTERY_DB_NAME")
+    if not db_name and uri:
+        db_name = urlparse(uri).path.lstrip("/") or None
+    db_name = db_name or "battery_test_db"
 
     client = get_client()
     db = client[db_name]
