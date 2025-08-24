@@ -342,6 +342,18 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         )
 
     app.layout = serve_layout
+    # Validation layout includes dynamic components so callbacks referencing
+    # them are recognized even if those components aren't in the initial
+    # layout. This prevents "nonexistent object" errors for elements like
+    # the theme toggle.
+    if enable_login:
+        app.validation_layout = html.Div(
+            [serve_layout(), auth.layout(), dashboard_layout(test_role or "admin")]
+        )
+    else:
+        app.validation_layout = html.Div(
+            [serve_layout(), dashboard_layout(test_role or "admin")]
+        )
 
     @app.callback(Output("main-content", "children"), Input("user-role", "data"))
     def display_page(role):
