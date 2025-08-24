@@ -171,7 +171,6 @@ def db_connected() -> bool:
                     db_name=db_name,
                     host=uri,
                     ask_if_fails=False,
-                    serverSelectionTimeoutMS=2000,
                 )
             else:
                 connect(
@@ -185,7 +184,6 @@ def db_connected() -> bool:
                     host=host,
                     port=port,
                     ask_if_fails=False,
-                    serverSelectionTimeoutMS=2000,
                 )
             else:
                 connect(
