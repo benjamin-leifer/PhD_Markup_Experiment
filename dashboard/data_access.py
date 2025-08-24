@@ -90,6 +90,10 @@ def db_connected() -> bool:
     global _DB_CONNECTED
     if _DB_CONNECTED is not None:
         return _DB_CONNECTED
+    if os.getenv("USE_MONGO_MOCK"):
+        get_client()
+        _DB_CONNECTED = True
+        return True
     if models is None or connect is None or Sample is None:
         _DB_CONNECTED = False
         return False
