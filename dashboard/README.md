@@ -14,9 +14,10 @@ Runtime setup now loads the user configuration via
 `battery_analysis.utils.config.load_config` and uses the resulting
 `db_uri` to populate the `MONGO_URI` environment variable if it is not
 already set. The dashboard first attempts to connect to a real MongoDB
-instance using `MONGO_URI`, `MONGO_HOST` and `MONGO_PORT`. When that
-connection fails (as in tests or remote deployments without a database)
-it automatically falls back to an in-memory `mongomock` database so the
+instance using `MONGO_URI`, `MONGO_HOST` and `MONGO_PORT`. Local runs
+therefore talk to your development database. When the connection fails
+(as in tests or remote deployments without a database) the code
+automatically falls back to an in-memory `mongomock` database so the
 interface remains functional. The older `BATTERY_DB_*` variables are no
 longer populated by default.
 

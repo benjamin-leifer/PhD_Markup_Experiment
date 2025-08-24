@@ -57,10 +57,11 @@ Once the dependencies are available, run the tests from the repository root:
 pytest -q
 ```
 
-The package expects a running MongoDB instance for data storage during normal
-development. If a connection cannot be made (as is common in CI or other
-isolated environments) the helpers automatically fall back to an in-memory
-`mongomock` database so the code and tests remain usable.
+Local development assumes a real MongoDB server is available and the helpers
+will attempt to connect using the configured host, port, or URI. When running
+in tests or remote environments where the database is unreachable, the
+connection attempt fails and the helpers automatically fall back to an
+in-memory `mongomock` instance so the code continues to operate.
 
 Connection details are configured through environment variables:
 
