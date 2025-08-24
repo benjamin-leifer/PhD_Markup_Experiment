@@ -43,7 +43,7 @@ __all__ = ["load_config"]
 
 # Default configuration values used when no file is present
 DEFAULTS: Dict[str, Any] = {
-    "db_uri": None,
+    "db_uri": "mongodb://localhost:27017/battery_test_db",
     "include": [],
     "exclude": [],
     "workers": None,

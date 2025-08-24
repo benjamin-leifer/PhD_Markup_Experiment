@@ -1,5 +1,4 @@
 {
   "theme": "light",
-  "default_tab": "missing-data",
-  "watcher_dirs": []
+  "default_tab": "import-jobs"
 }
