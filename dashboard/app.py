@@ -342,6 +342,11 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                 dcc.Store(id="preferences", storage_type="local", data=prefs),
                 dcc.Store(id="active-tab", data=prefs.get("default_tab", "overview")),
                 html.Link(rel="stylesheet", href=theme_href, id="theme"),
+                dbc.Switch(
+                    id="theme-toggle",
+                    value=prefs.get("theme", "light") == "dark",
+                    style={"display": "none"},
+                ),
                 html.Div(id="main-content"),
             ]
         )
