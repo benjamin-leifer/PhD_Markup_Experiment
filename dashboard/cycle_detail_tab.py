@@ -69,7 +69,7 @@ def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
         from battery_analysis import models
         from .data_access import get_cell_dataset
 
-        if hasattr(models.Sample, "objects"):
+        if hasattr(models.Sample, "objects") and hasattr(models.TestResult, "objects"):
             sample = models.Sample.objects(id=sample_id).first()  # type: ignore[attr-defined]
             if not sample:
                 return []
@@ -135,27 +135,47 @@ def _get_cycle_indices(test_id: str) -> List[int]:
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis import models
 
-        test = models.TestResult.objects(id=test_id).only("cycles").first()
-        if test and getattr(test, "cycles", None):
-            indices = [
-                c.cycle_index
-                for c in test.cycles
-                if getattr(c, "charge_capacity", 0) > 0
-                and getattr(c, "discharge_capacity", 0) > 0
-            ]
+        if hasattr(models.TestResult, "objects"):
+            test = models.TestResult.objects(id=test_id).only("cycles").first()
+            if test and getattr(test, "cycles", None):
+                indices = [
+                    c.cycle_index
+                    for c in test.cycles
+                    if getattr(c, "charge_capacity", 0) > 0
+                    and getattr(c, "discharge_capacity", 0) > 0
+                ]
+                if indices:
+                    return sorted(indices)
+
+            cycles = models.CycleDetailData.objects(test_result=test_id).only(
+                "cycle_index"
+            )  # type: ignore[attr-defined]
+            indices = [c.cycle_index for c in cycles]
             if indices:
                 return sorted(indices)
-
-        cycles = models.CycleDetailData.objects(test_result=test_id).only(
-            "cycle_index"
-        )  # type: ignore[attr-defined]
-        indices = [c.cycle_index for c in cycles]
-        if indices:
-            return sorted(indices)
+        else:
+            try:
+                test_oid = ObjectId(test_id)
+            except InvalidId:
+                test_oid = test_id
+            tests = find_test_results({"_id": test_oid})
+            if tests:
+                test_doc = tests[0]
+                cycles = test_doc.get("cycles", [])
+                indices = [
+                    c.get("cycle_index")
+                    for c in cycles
+                    if c.get("charge_capacity", 0) > 0
+                    and c.get("discharge_capacity", 0) > 0
+                ]
+                if indices:
+                    return sorted(indices)
     except Exception:
         logger.warning("Failed to load cycle indices from DB", exc_info=True)
 
     data = get_detailed_cycle_data(test_id)
+    if not data:
+        logger.warning("No cycle data found for test %s", test_id)
     return sorted(data.keys())
 
 

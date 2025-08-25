@@ -176,7 +176,7 @@ def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis import models
 
-        if hasattr(models.Sample, "objects"):
+        if hasattr(models.Sample, "objects") and hasattr(models.TestResult, "objects"):
             tests = models.TestResult.objects(sample=sample_id).only("name")  # type: ignore[attr-defined]
             return [{"label": t.name, "value": str(t.id)} for t in tests]
 
