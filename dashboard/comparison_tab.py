@@ -81,12 +81,15 @@ def _get_sample_data(
     generated so the dashboard remains functional.
     """
 
+    logger.debug("Starting _get_sample_data for sample %s", sample_id)
+
     try:  # pragma: no cover - depends on battery_analysis and database
         from battery_analysis.models import Sample, TestResult
 
         from dashboard.data_access import get_cell_dataset
 
         if hasattr(Sample, "objects"):
+            logger.debug("sample %s: using mongoengine path", sample_id)
             # Mongoengine models are available; use them directly
             s = Sample.objects(id=sample_id).first()
             if not s:
@@ -117,19 +120,24 @@ def _get_sample_data(
                         capacity.append(getattr(c, "discharge_capacity", np.nan))
                         ce.append(getattr(c, "coulombic_efficiency", np.nan))
         else:
+            logger.debug("sample %s: using pymongo path", sample_id)
             # ``Sample`` lacks ``objects``; fall back to raw pymongo helpers
             from bson import ObjectId
             from bson.errors import InvalidId
 
             try:
                 oid = ObjectId(sample_id)
-            except InvalidId as exc:
-                logger.error("Invalid sample id %s", sample_id)
-                raise ValueError("invalid sample id") from exc
+            except InvalidId:
+                logger.warning("Invalid sample id %s; using raw value", sample_id)
+                oid = sample_id
 
-            sample_docs = find_samples({"_id": oid})
+            sample_query = {"_id": oid}
+            logger.debug("find_samples query: %s", sample_query)
+            sample_docs = find_samples(sample_query)
             if not sample_docs:
+                logger.warning("find_samples returned no documents")
                 raise ValueError("sample not found")
+            logger.debug("find_samples returned %d documents", len(sample_docs))
             s = sample_docs[0]
             sample_name = s.get("name", str(sample_id))
 
@@ -137,7 +145,13 @@ def _get_sample_data(
             capacity = []
             ce = []
 
-            tests = find_test_results({"sample": oid})
+            tests_query = {"sample": oid}
+            logger.debug("find_test_results query: %s", tests_query)
+            tests = find_test_results(tests_query)
+            if not tests:
+                logger.warning("find_test_results returned no documents")
+            else:
+                logger.debug("find_test_results returned %d documents", len(tests))
             for t in tests:
                 summaries = t.get("cycle_summaries")
                 if summaries is None:
@@ -146,6 +160,10 @@ def _get_sample_data(
                     cycles.append(c.get("cycle_index", len(cycles) + 1))
                     capacity.append(c.get("discharge_capacity", np.nan))
                     ce.append(c.get("coulombic_efficiency", np.nan))
+
+            logger.debug("Parsed %d cycles from summaries", len(cycles))
+            if not cycles:
+                logger.warning("No cycle summaries found for sample %s", sample_id)
 
         if not cycles:
             raise ValueError("no cycle data")
