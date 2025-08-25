@@ -30,6 +30,14 @@ from pymongo.uri_parser import parse_uri
 # mypy: ignore-errors
 
 
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.INFO)
+    logger.addHandler(handler)
+logger.setLevel(logging.INFO)
+
+
 def get_client() -> MongoClient:
     """Return a :class:`~pymongo.mongo_client.MongoClient` instance.
 
@@ -39,8 +47,6 @@ def get_client() -> MongoClient:
     configuration. The resulting client stores the parameters used so
     callers can reuse them without establishing a connection.
     """
-
-    logger = logging.getLogger(__name__)
 
     use_mock_env = os.getenv("USE_MONGO_MOCK")
     uri = os.getenv("MONGO_URI")
