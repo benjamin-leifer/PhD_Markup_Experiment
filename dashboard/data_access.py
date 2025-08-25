@@ -183,24 +183,32 @@ def db_connected() -> bool:
     diagnostics.append(f"connect function present: {connect_present}")
     diagnostics.append(f"Sample class present: {sample_present}")
     diagnostics.append(f"Sample.objects present: {sample_objects_present}")
-    if not all(
-        [models_present, connect_present, sample_present, sample_objects_present]
-    ):
+    essential_ok = all([models_present, connect_present])
+    if not essential_ok:
         missing: list[str] = []
         if not models_present:
             missing.append("battery_analysis.models")
         if not connect_present:
             missing.append("mongoengine.connect")
-        if not sample_present:
-            missing.append("Sample model")
-        if sample_present and not sample_objects_present:
-            missing.append("Sample.objects manager")
         msg = f"Missing database dependencies: {', '.join(missing)}"
         logger.error(msg)
         _DB_ERROR = msg
         _DB_CONNECTED = False
         logger.info("DB connection diagnostics:\n%s", "\n".join(diagnostics))
         return False
+    if not sample_present or not sample_objects_present:
+        missing: list[str] = []
+        if not sample_present:
+            missing.append("Sample model")
+        if sample_present and not sample_objects_present:
+            missing.append("Sample.objects manager")
+        msg = (
+            "Missing optional database dependencies: "
+            + ", ".join(missing)
+            + "; proceeding with pymongo client"
+        )
+        logger.warning(msg)
+        diagnostics.append(msg)
     logger.info(
         "Attempting MongoDB connection to %s",
         uri if uri else f"{host}:{port}",
@@ -251,7 +259,10 @@ def db_connected() -> bool:
                 uri if uri else f"{host}:{port}",
             )
             diagnostics.append("Connection established")
-            Sample.objects.first()  # type: ignore[attr-defined]
+            if sample_objects_present:
+                Sample.objects.first()  # type: ignore[attr-defined]
+            else:
+                diagnostics.append("Skipping Sample.objects check")
             _DB_ERROR = None
             _DB_CONNECTED = True
             return True

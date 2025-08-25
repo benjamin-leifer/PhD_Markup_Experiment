@@ -182,6 +182,11 @@ def test_db_connected_missing_sample_objects(monkeypatch) -> None:
     monkeypatch.setattr(data_access, "Sample", DummySample)
     monkeypatch.setattr(data_access, "models", object())
     monkeypatch.setattr(data_access, "connect", lambda *a, **k: None)
+    monkeypatch.setattr(
+        data_access,
+        "connect_with_fallback",
+        lambda *a, **k: True,
+    )
 
     class DummyClient:
         def __init__(self):
@@ -197,8 +202,6 @@ def test_db_connected_missing_sample_objects(monkeypatch) -> None:
     monkeypatch.delenv("MONGO_URI", raising=False)
     monkeypatch.setenv("MONGO_HOST", "localhost")
     monkeypatch.setenv("MONGO_PORT", "27017")
-
-    assert data_access.db_connected() is False
-    error = data_access.get_db_error() or ""
-    assert "Sample model" in error
+    assert data_access.db_connected() is True
+    assert data_access.get_db_error() is None
     data_access._DB_CONNECTED = None
