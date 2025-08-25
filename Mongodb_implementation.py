@@ -99,13 +99,20 @@ def get_client() -> MongoClient:
         logger.info("Pinging MongoDB at %s:%s", host, port)
         client.admin.command("ping")
         logger.info("MongoDB ping succeeded")
-    except PyMongoError:
+    except PyMongoError as exc:
         logger.exception(
             "Failed to connect to MongoDB with uri=%s host=%s port=%s; "
             "falling back to mongomock",
             uri,
             host,
             port,
+        )
+        logger.info(
+            "Connection attempt failed using uri=%s host=%s port=%s: %s",
+            uri,
+            host,
+            port,
+            exc,
         )
         import mongomock
 
