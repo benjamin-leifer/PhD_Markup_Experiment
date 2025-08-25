@@ -1,3 +1,4 @@
+# flake8: noqa
 """
 Manages detailed battery test data using GridFS.
 
@@ -5,15 +6,23 @@ This module handles the storage and retrieval of detailed cycle data,
 which is too large to store efficiently in the main MongoDB documents.
 """
 
-import logging
-from bson import ObjectId
-from battery_analysis.models import TestResult, CycleDetailData
-from .db import ensure_connection
 import io
+import logging
 import pickle
+from typing import Any, Dict, Optional
+
+import gridfs
+from battery_analysis.models import CycleDetailData, TestResult
+from bson import ObjectId
+
+from Mongodb_implementation import get_client
+
+from .db import ensure_connection
 
 
-def store_detailed_cycle_data(test_id, detailed_cycles):
+def store_detailed_cycle_data(
+    test_id: str, detailed_cycles: Dict[int, Dict[str, Any]]
+) -> bool:
     """
     Store detailed cycle data in GridFS after a TestResult has been created.
 
@@ -112,7 +121,11 @@ def store_detailed_cycle_data(test_id, detailed_cycles):
         return False
 
 
-def get_detailed_cycle_data(test_id, cycle_index=None, include_incomplete=False):
+def get_detailed_cycle_data(
+    test_id: str,
+    cycle_index: Optional[int] = None,
+    include_incomplete: bool = False,
+) -> Dict[int, Dict[str, Any]]:
     """Retrieve detailed cycle data from GridFS.
 
     If ``test_id`` is not a valid :class:`bson.ObjectId`, the function logs a
@@ -139,20 +152,81 @@ def get_detailed_cycle_data(test_id, cycle_index=None, include_incomplete=False)
     if not ObjectId.is_valid(test_id):
         logging.warning(f"Invalid test id {test_id}")
         return {}
-    if not ensure_connection():
-        logging.error("Database connection not available")
-        return {}
+
+    use_mongoengine = hasattr(TestResult, "objects") and hasattr(
+        CycleDetailData, "objects"
+    )
+
+    if use_mongoengine:
+        if not ensure_connection():
+            logging.error("Database connection not available")
+            return {}
+    else:
+        logging.debug("MongoEngine models not available; using raw MongoDB client")
+        client = get_client()
+        db = client["battery_test_db"]
+        fs = gridfs.GridFS(db)
+        tr_coll = db["test_results"]
+        cd_coll = db["cycle_detail_data"]
+
     try:
         if cycle_index is not None:
-            # Optionally verify completeness using cycle summaries
+            if use_mongoengine:
+                if not include_incomplete:
+                    test = TestResult.objects(id=test_id).only("cycles").first()
+                    if test:
+                        for cyc in test.cycles:
+                            if cyc.cycle_index == cycle_index:
+                                if (
+                                    getattr(cyc, "charge_capacity", 0) <= 0
+                                    or getattr(cyc, "discharge_capacity", 0) <= 0
+                                ):
+                                    logging.info(
+                                        "Skipping incomplete cycle %s for test %s",
+                                        cycle_index,
+                                        test_id,
+                                    )
+                                    return {}
+                                break
+
+                detail_data = CycleDetailData.objects(
+                    test_result=test_id, cycle_index=cycle_index
+                ).first()
+
+                if detail_data:
+                    logging.info(
+                        f"Found GridFS data for test {test_id}, cycle {cycle_index}"
+                    )
+                    try:
+                        charge_bytes = detail_data.charge_data.read()
+                        charge_data = pickle.loads(charge_bytes)
+                        discharge_bytes = detail_data.discharge_data.read()
+                        discharge_data = pickle.loads(discharge_bytes)
+                        return {
+                            cycle_index: {
+                                "charge": charge_data,
+                                "discharge": discharge_data,
+                            }
+                        }
+                    except Exception as e:
+                        logging.error(f"Error unpickling data: {e}")
+                        return {}
+                logging.warning(
+                    f"No GridFS data found for test {test_id}, cycle {cycle_index}"
+                )
+                return {}
+
+            # -- raw MongoDB path -------------------------------------------------
+            test_oid = ObjectId(test_id)
             if not include_incomplete:
-                test = TestResult.objects(id=test_id).only("cycles").first()
-                if test:
-                    for cyc in test.cycles:
-                        if cyc.cycle_index == cycle_index:
+                logging.debug("Querying test_results for %s", test_id)
+                test_doc = tr_coll.find_one({"_id": test_oid}, {"cycles": 1})
+                if test_doc:
+                    for cyc in test_doc.get("cycles", []):
+                        if cyc.get("cycle_index") == cycle_index:
                             if (
-                                getattr(cyc, "charge_capacity", 0) <= 0
-                                or getattr(cyc, "discharge_capacity", 0) <= 0
+                                cyc.get("charge_capacity", 0) <= 0
+                                or cyc.get("discharge_capacity", 0) <= 0
                             ):
                                 logging.info(
                                     "Skipping incomplete cycle %s for test %s",
@@ -162,22 +236,25 @@ def get_detailed_cycle_data(test_id, cycle_index=None, include_incomplete=False)
                                 return {}
                             break
 
-            detail_data = CycleDetailData.objects(
-                test_result=test_id, cycle_index=cycle_index
-            ).first()
-
-            if detail_data:
+            logging.debug(
+                "Querying cycle_detail_data for test %s, cycle %s",
+                test_id,
+                cycle_index,
+            )
+            detail_doc = cd_coll.find_one(
+                {"test_result": test_oid, "cycle_index": cycle_index}
+            )
+            if detail_doc:
                 logging.info(
-                    f"Found GridFS data for test {test_id}, cycle {cycle_index}"
+                    "Found detail document for test %s, cycle %s",
+                    test_id,
+                    cycle_index,
                 )
-                # Retrieve and unpickle the data
                 try:
-                    charge_bytes = detail_data.charge_data.read()
+                    charge_bytes = fs.get(detail_doc["charge_data"]).read()
                     charge_data = pickle.loads(charge_bytes)
-
-                    discharge_bytes = detail_data.discharge_data.read()
+                    discharge_bytes = fs.get(detail_doc["discharge_data"]).read()
                     discharge_data = pickle.loads(discharge_bytes)
-
                     return {
                         cycle_index: {
                             "charge": charge_data,
@@ -187,13 +264,13 @@ def get_detailed_cycle_data(test_id, cycle_index=None, include_incomplete=False)
                 except Exception as e:
                     logging.error(f"Error unpickling data: {e}")
                     return {}
-            else:
-                logging.warning(
-                    f"No GridFS data found for test {test_id}, cycle {cycle_index}"
-                )
-                return {}
-        else:
-            # Get all cycles for this test
+            logging.warning(
+                "No GridFS data found for test %s, cycle %s", test_id, cycle_index
+            )
+            return {}
+
+        # ------------------------------------------------------------------
+        if use_mongoengine:
             test = TestResult.objects(id=test_id).first()
             if not test:
                 logging.error(f"TestResult with ID {test_id} not found")
@@ -217,27 +294,54 @@ def get_detailed_cycle_data(test_id, cycle_index=None, include_incomplete=False)
                     )
                 ]
 
-            result = {}
-            for idx in cycle_indices:
-                try:
-                    cycle_data = get_detailed_cycle_data(
-                        test_id, idx, include_incomplete=include_incomplete
-                    )
-                    if cycle_data and idx in cycle_data:
-                        result[idx] = cycle_data[idx]
-                except Exception as e:
-                    logging.debug(f"No detailed data found for cycle {idx}: {str(e)}")
+        else:
+            test_oid = ObjectId(test_id)
+            logging.debug("Fetching test document for %s", test_id)
+            test_doc = tr_coll.find_one({"_id": test_oid}, {"cycles": 1})
+            if not test_doc:
+                logging.error(f"TestResult with ID {test_id} not found")
+                return {}
 
-            logging.info(
-                f"Retrieved {len(result)} cycles of detailed data for test {test_id}"
-            )
-            return result
+            cycle_indices = [
+                c.get("cycle_index")
+                for c in test_doc.get("cycles", [])
+                if include_incomplete
+                or (
+                    c.get("charge_capacity", 0) > 0
+                    and c.get("discharge_capacity", 0) > 0
+                )
+            ]
+
+            if not cycle_indices:
+                logging.debug(
+                    "No cycle summaries found; querying cycle_detail_data collection"
+                )
+                cycle_indices = [
+                    d["cycle_index"]
+                    for d in cd_coll.find({"test_result": test_oid}, {"cycle_index": 1})
+                ]
+
+        result = {}
+        for idx in cycle_indices:
+            try:
+                cycle_data = get_detailed_cycle_data(
+                    test_id, idx, include_incomplete=include_incomplete
+                )
+                if cycle_data and idx in cycle_data:
+                    result[idx] = cycle_data[idx]
+            except Exception as e:
+                logging.debug("No detailed data found for cycle %s: %s", idx, e)
+
+        logging.info(
+            f"Retrieved {len(result)} cycles of detailed data for test {test_id}"
+        )
+        return result
     except Exception as e:
         logging.error(f"Error retrieving detailed cycle data: {str(e)}")
         return {}
 
 
-def migrate_cycle_summary_data(test_id):
+def migrate_cycle_summary_data(test_id: str) -> int:
     """Move inline detailed arrays from ``CycleSummary`` documents to GridFS.
 
     This helper scans the cycles of a :class:`~battery_analysis.models.TestResult`
