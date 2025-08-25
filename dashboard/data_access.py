@@ -143,16 +143,19 @@ def db_connected() -> bool:
         _DB_CONNECTED = True
         return True
 
-    if models is None or connect is None or Sample is None:
-        missing = [
-            name
-            for name, val in [
-                ("battery_analysis.models", models),
-                ("mongoengine.connect", connect),
-                ("Sample model", Sample),
-            ]
-            if val is None
-        ]
+    if (
+        models is None
+        or connect is None
+        or Sample is None
+        or not hasattr(Sample, "objects")
+    ):
+        missing: list[str] = []
+        if models is None:
+            missing.append("battery_analysis.models")
+        if connect is None:
+            missing.append("mongoengine.connect")
+        if Sample is None or not hasattr(Sample, "objects"):
+            missing.append("Sample model with objects manager")
         msg = f"Missing database dependencies: {', '.join(missing)}"
         logger.error(msg)
         _DB_ERROR = msg

@@ -168,3 +168,37 @@ def test_db_connected_reports_error(monkeypatch) -> None:
     error = data_access.get_db_error() or ""
     assert "boom" in error
     data_access._DB_CONNECTED = None
+
+
+def test_db_connected_missing_sample_objects(monkeypatch) -> None:
+    """db_connected handles Sample without objects manager."""
+
+    data_access._DB_CONNECTED = None
+    data_access._DB_ERROR = None
+
+    class DummySample:
+        pass
+
+    monkeypatch.setattr(data_access, "Sample", DummySample)
+    monkeypatch.setattr(data_access, "models", object())
+    monkeypatch.setattr(data_access, "connect", lambda *a, **k: None)
+
+    class DummyClient:
+        def __init__(self):
+            def _command(_self, _cmd):
+                return {"ok": 1}
+
+            self.admin = type("A", (), {"command": _command})()
+            self._configured_host = "localhost"
+            self._configured_port = 27017
+
+    monkeypatch.setattr(data_access, "get_client", lambda: DummyClient())
+
+    monkeypatch.delenv("MONGO_URI", raising=False)
+    monkeypatch.setenv("MONGO_HOST", "localhost")
+    monkeypatch.setenv("MONGO_PORT", "27017")
+
+    assert data_access.db_connected() is False
+    error = data_access.get_db_error() or ""
+    assert "Sample model" in error
+    data_access._DB_CONNECTED = None
