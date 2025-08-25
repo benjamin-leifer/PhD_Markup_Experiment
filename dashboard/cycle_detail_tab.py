@@ -2,24 +2,23 @@
 
 from __future__ import annotations
 
-from typing import List, Dict, Optional
-
 import io
 import logging
+from typing import Dict, List, Optional
 
 import dash
-from dash import dcc, html
 import dash_bootstrap_components as dbc
-from dash import Input, Output, State
 import plotly.graph_objects as go
-
-from battery_analysis.utils.detailed_data_manager import (
-    get_detailed_cycle_data,
-)
-from dashboard.data_access import db_connected, get_db_error
-from Mongodb_implementation import find_samples, find_test_results
+from battery_analysis.utils.detailed_data_manager import get_detailed_cycle_data
 from bson import ObjectId
 from bson.errors import InvalidId
+from dash import Input, Output, State, dcc, html
+
+from dashboard.data_access import db_connected, get_db_error
+from Mongodb_implementation import find_samples, find_test_results
+
+# mypy: ignore-errors
+
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +41,7 @@ def _get_sample_options() -> List[Dict[str, str]]:
         from battery_analysis import models
 
         if hasattr(models.Sample, "objects"):
-            samples = models.Sample.objects.only("name")  # type: ignore[attr-defined]
+            samples = models.Sample.objects.only("name")
             opts = [{"label": s.name, "value": str(s.id)} for s in samples]
         else:
             samples = find_samples()
@@ -69,16 +68,20 @@ def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
         return []
     if not db_connected():
         reason = get_db_error() or "unknown reason"
-        logger.error(
-            "Database not connected: %s; using demo data for tests", reason
-        )
+        logger.error("Database not connected: %s; using demo data for tests", reason)
         return [{"label": f"{sample_id}-TestA", "value": str(ObjectId())}]
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis import models
 
         if hasattr(models.Sample, "objects") and hasattr(models.TestResult, "objects"):
-            sample = models.Sample.objects(id=sample_id).first()  # type: ignore[attr-defined]
+            logger.info(
+                "Using mongoengine backend for test options; sample_id=%s", sample_id
+            )
+            sample = models.Sample.objects(id=sample_id).first()
             if not sample:
+                logger.info(
+                    "Mongoengine query returned 0 tests for sample %s", sample_id
+                )
                 return []
 
             dataset = getattr(sample, "default_dataset", None)
@@ -94,24 +97,45 @@ def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
                     except Exception:
                         pass
             if options:
+                logger.info(
+                    "Mongoengine dataset provided %d test options for sample %s",
+                    len(options),
+                    sample_id,
+                )
                 return options
 
-            tests = models.TestResult.objects(sample=sample_id).only("name")  # type: ignore[attr-defined]
-            return [{"label": t.name, "value": str(t.id)} for t in tests]
+            tests = models.TestResult.objects(sample=sample_id).only("name")
+            opts = [{"label": t.name, "value": str(t.id)} for t in tests]
+            logger.info(
+                "Mongoengine TestResult query sample=%s returned %d tests",
+                sample_id,
+                len(opts),
+            )
+            return opts
 
         # Fallback to raw MongoDB helpers
         try:
             sample_oid = ObjectId(sample_id)
-        except InvalidId:
+        except InvalidId as exc:
+            logger.warning("InvalidId for sample_id %s: %s", sample_id, exc)
             sample_oid = sample_id
-        tests = find_test_results({"sample": sample_oid})
+        query = {"sample": sample_oid}
+        logger.info("Using PyMongo backend for test options; query=%s", query)
+        tests = find_test_results(query)
         opts = [
             {"label": t.get("name", ""), "value": str(t.get("_id", ""))}
             for t in tests
             if t.get("name")
         ]
+        logger.info(
+            "PyMongo backend returned %d test options for sample %s",
+            len(opts),
+            sample_id,
+        )
         if not opts:
-            logger.warning("No test options found for sample %s; using demo data", sample_id)
+            logger.warning(
+                "No test options found for sample %s; using demo data", sample_id
+            )
             return [{"label": f"{sample_id}-TestA", "value": str(ObjectId())}]
         return opts
     except Exception:
@@ -131,18 +155,25 @@ def _get_cycle_indices(test_id: str) -> List[int]:
     which may consult inline cycle summaries.
     """
 
+    logger.debug("Fetching cycle indices for test %s", test_id)
     if not db_connected():
         reason = get_db_error() or "unknown reason"
-        logger.warning(
-            "Database not connected: %s; using fallback cycle data", reason
-        )
+        logger.warning("Database not connected: %s; using fallback cycle data", reason)
         data = get_detailed_cycle_data(test_id)
+        logger.info(
+            "Fallback cycle data returned %d cycles for test %s",
+            len(data),
+            test_id,
+        )
         return sorted(data.keys())
 
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis import models
 
         if hasattr(models.TestResult, "objects"):
+            logger.info(
+                "Using mongoengine backend for cycle indices; test_id=%s", test_id
+            )
             test = models.TestResult.objects(id=test_id).only("cycles").first()
             if test and getattr(test, "cycles", None):
                 indices = [
@@ -151,21 +182,34 @@ def _get_cycle_indices(test_id: str) -> List[int]:
                     if getattr(c, "charge_capacity", 0) > 0
                     and getattr(c, "discharge_capacity", 0) > 0
                 ]
+                logger.info(
+                    "Mongoengine TestResult.cycles returned %d indices for test %s",
+                    len(indices),
+                    test_id,
+                )
                 if indices:
                     return sorted(indices)
 
             cycles = models.CycleDetailData.objects(test_result=test_id).only(
                 "cycle_index"
-            )  # type: ignore[attr-defined]
+            )
             indices = [c.cycle_index for c in cycles]
+            logger.info(
+                "Mongoengine CycleDetailData query test_result=%s returned %d indices",
+                test_id,
+                len(indices),
+            )
             if indices:
                 return sorted(indices)
         else:
             try:
                 test_oid = ObjectId(test_id)
-            except InvalidId:
+            except InvalidId as exc:
+                logger.warning("InvalidId for test_id %s: %s", test_id, exc)
                 test_oid = test_id
-            tests = find_test_results({"_id": test_oid})
+            query = {"_id": test_oid}
+            logger.info("Using PyMongo backend for cycle indices; query=%s", query)
+            tests = find_test_results(query)
             if tests:
                 test_doc = tests[0]
                 cycles = test_doc.get("cycles", [])
@@ -175,14 +219,28 @@ def _get_cycle_indices(test_id: str) -> List[int]:
                     if c.get("charge_capacity", 0) > 0
                     and c.get("discharge_capacity", 0) > 0
                 ]
+                logger.info(
+                    "PyMongo backend returned %d cycle indices for test %s",
+                    len(indices),
+                    test_id,
+                )
                 if indices:
                     return sorted(indices)
     except Exception:
         logger.warning("Failed to load cycle indices from DB", exc_info=True)
 
     data = get_detailed_cycle_data(test_id)
+    logger.info(
+        "get_detailed_cycle_data returned %d cycles for test %s",
+        len(data),
+        test_id,
+    )
     if not data:
-        logger.warning("No cycle data found for test %s", test_id)
+        logger.warning(
+            "No cycle data found for test %s (db_connected=%s)",
+            test_id,
+            db_connected(),
+        )
     return sorted(data.keys())
 
 
@@ -299,10 +357,23 @@ def register_callbacks(app: dash.Dash) -> None:
         Input(CYCLE_DROPDOWN, "value"),
     )
     def _update_figure(test_id: Optional[str], cycle_index: Optional[int]):
+        logger.info(
+            "Update figure called with test_id=%s cycle_index=%s (db_connected=%s)",
+            test_id,
+            cycle_index,
+            db_connected(),
+        )
         if not test_id or cycle_index is None:
             return go.Figure(), go.Figure()
         data = get_detailed_cycle_data(test_id, cycle_index)
+        logger.info("Retrieved %d cycles for test %s", len(data), test_id)
         if cycle_index not in data:
+            logger.warning(
+                "Cycle %s missing from test %s data (db_connected=%s)",
+                cycle_index,
+                test_id,
+                db_connected(),
+            )
             return go.Figure(), go.Figure()
         cycle_data = data[cycle_index]
         charge = cycle_data.get("charge", {})
