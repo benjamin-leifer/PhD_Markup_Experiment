@@ -143,9 +143,7 @@ def db_connected() -> bool:
             "Pinging MongoDB at %s",
             uri if uri else f"{host}:{port}",
         )
-        diagnostics.append(
-            f"Ping target: {uri if uri else f'{host}:{port}'}"
-        )
+        diagnostics.append(f"Ping target: {uri if uri else f'{host}:{port}'}")
         try:
             client.admin.command("ping")
             logger.info("MongoDB ping succeeded")
@@ -185,7 +183,9 @@ def db_connected() -> bool:
     diagnostics.append(f"connect function present: {connect_present}")
     diagnostics.append(f"Sample class present: {sample_present}")
     diagnostics.append(f"Sample.objects present: {sample_objects_present}")
-    if not all([models_present, connect_present, sample_present, sample_objects_present]):
+    if not all(
+        [models_present, connect_present, sample_present, sample_objects_present]
+    ):
         missing: list[str] = []
         if not models_present:
             missing.append("battery_analysis.models")
@@ -205,9 +205,7 @@ def db_connected() -> bool:
         "Attempting MongoDB connection to %s",
         uri if uri else f"{host}:{port}",
     )
-    diagnostics.append(
-        f"Attempting connection to {uri if uri else f'{host}:{port}'}"
-    )
+    diagnostics.append(f"Attempting connection to {uri if uri else f'{host}:{port}'}")
     try:
         connected = False
         if uri:
@@ -263,6 +261,13 @@ def db_connected() -> bool:
             f"(host={host} port={port}): {exc}"
         )
         logger.exception(_DB_ERROR)
+        logger.info(
+            "Connection attempt failed using uri=%s host=%s port=%s: %s",
+            uri,
+            host,
+            port,
+            exc,
+        )
         diagnostics.append(f"Exception during connection: {exc}")
     else:
         last_err = None
@@ -284,9 +289,7 @@ def db_connected() -> bool:
         "MongoDB connection could not be established to %s; using demo data",
         uri if uri else f"{host}:{port}",
     )
-    diagnostics.append(
-        f"Using demo data for {uri if uri else f'{host}:{port}'}"
-    )
+    diagnostics.append(f"Using demo data for {uri if uri else f'{host}:{port}'}")
     logger.info("DB connection diagnostics:\n%s", "\n".join(diagnostics))
     _DB_CONNECTED = False
     return False
