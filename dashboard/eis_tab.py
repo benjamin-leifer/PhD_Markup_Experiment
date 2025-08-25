@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import tempfile
 from typing import List, Dict
+import logging
 
 import dash
 from dash import html, dcc
@@ -13,6 +14,12 @@ from dash import Input, Output, State
 from plotly import graph_objs as go
 from plotly.subplots import make_subplots
 import numpy as np
+from dashboard.data_access import db_connected, get_db_error
+from Mongodb_implementation import find_samples, find_test_results
+from bson import ObjectId
+from bson.errors import InvalidId
+
+logger = logging.getLogger(__name__)
 
 try:  # pragma: no cover - optional dependency
     from battery_analysis import eis
@@ -46,25 +53,70 @@ MPL_POPOUT_BUTTON = "eis-mpl-popout-btn"
 
 
 def _get_sample_options() -> List[Dict[str, str]]:
+    if not db_connected():
+        reason = get_db_error() or "unknown reason"
+        logger.error("Database not connected: %s; using demo data", reason)
+        return [{"label": "Sample_001", "value": "sample1"}]
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis import models
 
-        samples = models.Sample.objects.only("name")  # type: ignore[attr-defined]
-        return [{"label": s.name, "value": str(s.id)} for s in samples]
+        if hasattr(models.Sample, "objects"):
+            samples = models.Sample.objects.only("name")  # type: ignore[attr-defined]
+            opts = [{"label": s.name, "value": str(s.id)} for s in samples]
+        else:
+            samples = find_samples()
+            opts = [
+                {
+                    "label": s.get("name", ""),
+                    "value": str(s.get("_id", s.get("name", ""))),
+                }
+                for s in samples
+                if s.get("name")
+            ]
+        if not opts:
+            logger.warning("No sample options found; using demo data")
+            return [{"label": "Sample_001", "value": "sample1"}]
+        return opts
     except Exception:
+        logger.exception("Failed to load sample options")
         return [{"label": "Sample_001", "value": "sample1"}]
 
 
 def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
+    if not sample_id:
+        return []
+    if not db_connected():
+        reason = get_db_error() or "unknown reason"
+        logger.error(
+            "Database not connected: %s; using demo data for EIS tests", reason
+        )
+        return [{"label": "EIS_Test", "value": str(ObjectId())}]
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis import models
 
-        tests = models.TestResult.objects(sample=sample_id, test_type="EIS").only(
-            "name"
-        )  # type: ignore[attr-defined]
-        return [{"label": t.name, "value": str(t.id)} for t in tests]
+        if hasattr(models.Sample, "objects"):
+            tests = models.TestResult.objects(sample=sample_id, test_type="EIS").only(
+                "name"
+            )  # type: ignore[attr-defined]
+            return [{"label": t.name, "value": str(t.id)} for t in tests]
+
+        try:
+            sample_oid = ObjectId(sample_id)
+        except InvalidId:
+            sample_oid = sample_id
+        tests = find_test_results({"sample": sample_oid, "test_type": "EIS"})
+        opts = [
+            {"label": t.get("name", ""), "value": str(t.get("_id", ""))}
+            for t in tests
+            if t.get("name")
+        ]
+        if not opts:
+            logger.warning("No EIS tests found for sample %s; using demo data", sample_id)
+            return [{"label": "EIS_Test", "value": str(ObjectId())}]
+        return opts
     except Exception:
-        return [{"label": "EIS_Test", "value": "test1"}]
+        logger.exception("Failed to load EIS tests for sample %s", sample_id)
+        return [{"label": "EIS_Test", "value": str(ObjectId())}]
 
 
 def layout() -> html.Div:

@@ -14,8 +14,15 @@ import pandas as pd
 import base64
 import tempfile
 import io
+import logging
+from types import SimpleNamespace
 from bson import ObjectId
+from bson.errors import InvalidId
+from dashboard.data_access import db_connected, get_db_error
+from Mongodb_implementation import find_samples, find_test_results
 import normalization_utils
+
+logger = logging.getLogger(__name__)
 
 try:  # pragma: no cover - optional dependency
     from scipy.signal import savgol_filter
@@ -127,25 +134,69 @@ def compute_dqdv_pitt(
 
 def _get_sample_options() -> List[Dict[str, str]]:
     """Return dropdown options for available samples."""
+    if not db_connected():
+        reason = get_db_error() or "unknown reason"
+        logger.error("Database not connected: %s; using demo data", reason)
+        return [{"label": "Sample_001", "value": "sample1"}]
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis import models
 
-        samples = models.Sample.objects.only("name")  # type: ignore[attr-defined]
-        return [{"label": s.name, "value": str(s.id)} for s in samples]
+        if hasattr(models.Sample, "objects"):
+            samples = models.Sample.objects.only("name")  # type: ignore[attr-defined]
+            opts = [{"label": s.name, "value": str(s.id)} for s in samples]
+        else:
+            samples = find_samples()
+            opts = [
+                {
+                    "label": s.get("name", ""),
+                    "value": str(s.get("_id", s.get("name", ""))),
+                }
+                for s in samples
+                if s.get("name")
+            ]
+        if not opts:
+            logger.warning("No sample options found; using demo data")
+            return [{"label": "Sample_001", "value": "sample1"}]
+        return opts
     except Exception:
+        logger.exception("Failed to load sample options")
         return [{"label": "Sample_001", "value": "sample1"}]
 
 
 def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
     """Return dropdown options for tests belonging to ``sample_id``."""
+    if not sample_id:
+        return []
+    if not db_connected():
+        reason = get_db_error() or "unknown reason"
+        logger.error(
+            "Database not connected: %s; using demo data for tests", reason
+        )
+        return [{"label": f"{sample_id}-TestA", "value": str(ObjectId())}]
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis import models
 
-        tests = models.TestResult.objects(sample=sample_id).only("name")  # type: ignore[attr-defined]
-        return [{"label": t.name, "value": str(t.id)} for t in tests]
+        if hasattr(models.Sample, "objects"):
+            tests = models.TestResult.objects(sample=sample_id).only("name")  # type: ignore[attr-defined]
+            return [{"label": t.name, "value": str(t.id)} for t in tests]
+
+        try:
+            sample_oid = ObjectId(sample_id)
+        except InvalidId:
+            sample_oid = sample_id
+        tests = find_test_results({"sample": sample_oid})
+        opts = [
+            {"label": t.get("name", ""), "value": str(t.get("_id", ""))}
+            for t in tests
+            if t.get("name")
+        ]
+        if not opts:
+            logger.warning("No test options found for sample %s; using demo data", sample_id)
+            return [{"label": f"{sample_id}-TestA", "value": str(ObjectId())}]
+        return opts
     except Exception:
-        test_id = str(ObjectId())
-        return [{"label": f"{sample_id}-TestA", "value": test_id}]
+        logger.exception("Failed to load test options for sample %s", sample_id)
+        return [{"label": f"{sample_id}-TestA", "value": str(ObjectId())}]
 
 
 def layout() -> html.Div:
@@ -421,11 +472,26 @@ def register_callbacks(app: dash.Dash) -> None:
     def _show_normalization(sample_id):
         if not sample_id:
             return ""
+        if not db_connected():
+            reason = get_db_error() or "unknown reason"
+            logger.warning(
+                "Database not connected: %s; cannot show normalization", reason
+            )
+            return ""
         try:  # pragma: no cover - depends on MongoDB
             from battery_analysis import models
 
-            sample = models.Sample.objects(id=sample_id).first()
+            if hasattr(models.Sample, "objects"):
+                sample = models.Sample.objects(id=sample_id).first()
+            else:
+                try:
+                    oid = ObjectId(sample_id)
+                except InvalidId:
+                    oid = sample_id
+                docs = find_samples({"_id": oid})
+                sample = SimpleNamespace(**docs[0]) if docs else None
         except Exception:  # pragma: no cover - fallback when DB unavailable
+            logger.exception("Failed to load sample for normalization")
             sample = None
         if not sample:
             return ""
@@ -510,6 +576,10 @@ def register_callbacks(app: dash.Dash) -> None:
     ):
         if not HAS_ADVANCED or not advanced_analysis:
             raise dash.exceptions.PreventUpdate
+        if analysis != "Josh_request_Dq_dv" and not db_connected():
+            reason = get_db_error() or "unknown reason"
+            logger.warning("Database not connected: %s; cannot run analysis", reason)
+            return go.Figure(), f"Database not connected ({reason})"
         try:
             if analysis == "dqdv":
                 smooth = smooth_vals and "smooth" in smooth_vals
@@ -535,8 +605,23 @@ def register_callbacks(app: dash.Dash) -> None:
             if analysis == "fade":
                 from battery_analysis import models
 
-                test = models.TestResult.objects(id=test_id).first()
+                if hasattr(models.TestResult, "objects"):
+                    test = models.TestResult.objects(id=test_id).first()
+                else:
+                    try:
+                        oid = ObjectId(test_id)
+                    except InvalidId:
+                        oid = test_id
+                    docs = find_test_results({"_id": oid})
+                    if docs:
+                        cycles = docs[0].get("cycles") or docs[0].get("cycle_summaries", [])
+                        test = SimpleNamespace(
+                            cycles=[SimpleNamespace(**c) for c in cycles]
+                        )
+                    else:
+                        test = None
                 if not test:
+                    logger.warning("Test %s not found; using demo data", test_id)
                     return go.Figure(), "Test not found"
                 if len(test.cycles) < 10:
                     err = f"Need at least 10 cycles for fade analysis, found {len(test.cycles)}"
@@ -594,8 +679,23 @@ def register_callbacks(app: dash.Dash) -> None:
             if analysis == "anomalies":
                 from battery_analysis import models
 
-                test = models.TestResult.objects(id=test_id).first()
+                if hasattr(models.TestResult, "objects"):
+                    test = models.TestResult.objects(id=test_id).first()
+                else:
+                    try:
+                        oid = ObjectId(test_id)
+                    except InvalidId:
+                        oid = test_id
+                    docs = find_test_results({"_id": oid})
+                    if docs:
+                        cycles = docs[0].get("cycles") or docs[0].get("cycle_summaries", [])
+                        test = SimpleNamespace(
+                            cycles=[SimpleNamespace(**c) for c in cycles]
+                        )
+                    else:
+                        test = None
                 if not test:
+                    logger.warning("Test %s not found; using demo data", test_id)
                     return go.Figure(), "Test not found"
                 cycle_nums = [c.cycle_index for c in test.cycles]
                 if metric == "discharge_capacity":
