@@ -47,6 +47,7 @@ from battery_analysis.utils.logging import get_logger
 from Mongodb_implementation import get_client
 
 logger = get_logger(__name__)
+logger.setLevel(logging.INFO)
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -91,11 +92,16 @@ def get_available_users() -> List[str]:
 def db_connected() -> bool:
     """Return True if the MongoDB backend is reachable."""
     global _DB_CONNECTED, _DB_ERROR
+    diagnostics: list[str] = []
     if _DB_CONNECTED is not None:
+        logger.info("db_connected: returning cached status %s", _DB_CONNECTED)
+        diagnostics.append(f"cached status: {_DB_CONNECTED}")
         return _DB_CONNECTED
 
     client = get_client()
 
+    logger.info("Resolving MongoDB environment variables")
+    diagnostics.append("Resolving environment variables")
     uri_env = os.getenv("MONGO_URI", "")
     host_env = os.getenv("MONGO_HOST", "localhost")
     port_env = os.getenv("MONGO_PORT", "27017")
@@ -106,6 +112,16 @@ def db_connected() -> bool:
     uri = getattr(client, "_configured_uri", None) or uri_env or None
     host = getattr(client, "_configured_host", host_env)
     port = int(getattr(client, "_configured_port", port_env))
+    logger.info(
+        "Resolved env vars: MONGO_URI=%s MONGO_HOST=%s MONGO_PORT=%s DB_NAME=%s",
+        uri_env,
+        host_env,
+        port_env,
+        db_name,
+    )
+    diagnostics.append(
+        f"Resolved env -> uri:{uri_env or 'None'} host:{host_env} port:{port_env} db:{db_name}"
+    )
     logger.debug(
         "db_connected check using db=%s uri=%s host=%s port=%s",
         db_name,
@@ -123,8 +139,17 @@ def db_connected() -> bool:
         pass
 
     if not is_mock:
+        logger.info(
+            "Pinging MongoDB at %s",
+            uri if uri else f"{host}:{port}",
+        )
+        diagnostics.append(
+            f"Ping target: {uri if uri else f'{host}:{port}'}"
+        )
         try:
             client.admin.command("ping")
+            logger.info("MongoDB ping succeeded")
+            diagnostics.append("Ping succeeded")
         except Exception as exc:
             logger.warning(
                 "MongoDB ping failed for %s:%s (uri=%s): %s",
@@ -133,42 +158,61 @@ def db_connected() -> bool:
                 uri,
                 exc,
             )
+            logger.info("MongoDB ping failed: %s", exc)
+            diagnostics.append(f"Ping failed: {exc}")
             is_mock = True
 
     if is_mock:
         logger.warning(
             "Using mongomock client; database operations will use in-memory mock",
         )
+        diagnostics.append("Using mongomock client")
         _DB_ERROR = "Using mongomock in-memory client"
         _DB_CONNECTED = True
         return True
 
-    if (
-        models is None
-        or connect is None
-        or Sample is None
-        or not hasattr(Sample, "objects")
-    ):
+    logger.info("Checking database dependencies")
+    diagnostics.append("Checking database dependencies")
+    models_present = models is not None
+    connect_present = connect is not None
+    sample_present = Sample is not None
+    sample_objects_present = sample_present and hasattr(Sample, "objects")
+    logger.info("models module present: %s", models_present)
+    logger.info("connect function present: %s", connect_present)
+    logger.info("Sample class present: %s", sample_present)
+    logger.info("Sample.objects present: %s", sample_objects_present)
+    diagnostics.append(f"models module present: {models_present}")
+    diagnostics.append(f"connect function present: {connect_present}")
+    diagnostics.append(f"Sample class present: {sample_present}")
+    diagnostics.append(f"Sample.objects present: {sample_objects_present}")
+    if not all([models_present, connect_present, sample_present, sample_objects_present]):
         missing: list[str] = []
-        if models is None:
+        if not models_present:
             missing.append("battery_analysis.models")
-        if connect is None:
+        if not connect_present:
             missing.append("mongoengine.connect")
-        if Sample is None or not hasattr(Sample, "objects"):
-            missing.append("Sample model with objects manager")
+        if not sample_present:
+            missing.append("Sample model")
+        if sample_present and not sample_objects_present:
+            missing.append("Sample.objects manager")
         msg = f"Missing database dependencies: {', '.join(missing)}"
         logger.error(msg)
         _DB_ERROR = msg
-        logger.error("Missing database dependencies: %s", ", ".join(missing))
         _DB_CONNECTED = False
+        logger.info("DB connection diagnostics:\n%s", "\n".join(diagnostics))
         return False
     logger.info(
         "Attempting MongoDB connection to %s",
         uri if uri else f"{host}:{port}",
     )
+    diagnostics.append(
+        f"Attempting connection to {uri if uri else f'{host}:{port}'}"
+    )
     try:
         connected = False
         if uri:
+            logger.info("Connecting using URI")
+            diagnostics.append("Connection branch: URI")
             if connect_with_fallback is not None:
                 connected = connect_with_fallback(
                     db_name=db_name,
@@ -180,7 +224,11 @@ def db_connected() -> bool:
                     db_name, host=uri, alias="default", serverSelectionTimeoutMS=2000
                 )
                 connected = True
+            logger.info("URI connection result: %s", connected)
+            diagnostics.append(f"URI connection result: {connected}")
         else:
+            logger.info("Connecting using host/port")
+            diagnostics.append("Connection branch: host/port")
             if connect_with_fallback is not None:
                 connected = connect_with_fallback(
                     db_name=db_name,
@@ -197,11 +245,14 @@ def db_connected() -> bool:
                     serverSelectionTimeoutMS=2000,
                 )
                 connected = True
+            logger.info("Host/port connection result: %s", connected)
+            diagnostics.append(f"Host/port connection result: {connected}")
         if connected:
             logger.info(
                 "MongoDB connection established to %s",
                 uri if uri else f"{host}:{port}",
             )
+            diagnostics.append("Connection established")
             Sample.objects.first()  # type: ignore[attr-defined]
             _DB_ERROR = None
             _DB_CONNECTED = True
@@ -212,6 +263,7 @@ def db_connected() -> bool:
             f"(host={host} port={port}): {exc}"
         )
         logger.exception(_DB_ERROR)
+        diagnostics.append(f"Exception during connection: {exc}")
     else:
         last_err = None
         if connect_with_fallback is not None:
@@ -221,15 +273,21 @@ def db_connected() -> bool:
                 f"MongoDB connection failed for {db_name} "
                 f"(host={host} port={port}): {last_err}"
             )
+            diagnostics.append(f"Connection failed: {last_err}")
         else:
             _DB_ERROR = (
                 f"MongoDB connection could not be established to "
                 f"{uri if uri else f'{host}:{port}'}"
             )
+            diagnostics.append("Connection failed: unknown error")
     logger.error(
         "MongoDB connection could not be established to %s; using demo data",
         uri if uri else f"{host}:{port}",
     )
+    diagnostics.append(
+        f"Using demo data for {uri if uri else f'{host}:{port}'}"
+    )
+    logger.info("DB connection diagnostics:\n%s", "\n".join(diagnostics))
     _DB_CONNECTED = False
     return False
 
