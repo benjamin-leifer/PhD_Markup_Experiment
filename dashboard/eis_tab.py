@@ -60,8 +60,9 @@ def _get_sample_options() -> List[Dict[str, str]]:
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis import models
 
-        if hasattr(models.Sample, "objects"):
-            samples = models.Sample.objects.only("name")  # type: ignore[attr-defined]
+        sample_manager = getattr(models.Sample, "objects", None)
+        if sample_manager:
+            samples = sample_manager.only("name")  # type: ignore[attr-defined]
             opts = [{"label": s.name, "value": str(s.id)} for s in samples]
         else:
             samples = find_samples()
@@ -94,10 +95,10 @@ def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis import models
 
-        if hasattr(models.Sample, "objects") and hasattr(models.TestResult, "objects"):
-            tests = models.TestResult.objects(sample=sample_id, test_type="EIS").only(
-                "name"
-            )  # type: ignore[attr-defined]
+        sample_manager = getattr(models.Sample, "objects", None)
+        test_manager = getattr(models.TestResult, "objects", None)
+        if sample_manager and test_manager:
+            tests = test_manager(sample=sample_id, test_type="EIS").only("name")
             return [{"label": t.name, "value": str(t.id)} for t in tests]
 
         try:
