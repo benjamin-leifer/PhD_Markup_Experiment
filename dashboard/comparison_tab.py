@@ -46,12 +46,21 @@ def _get_sample_options() -> Tuple[List[Dict[str, str]], Optional[str]]:
         )
 
     try:
-        samples = find_samples()
-        opts = [
-            {"label": s.get("name", ""), "value": str(s.get("_id", s.get("name", "")))}
-            for s in samples
-            if s.get("name")
-        ]
+        from battery_analysis import models
+
+        if hasattr(models.Sample, "objects"):
+            samples = models.Sample.objects.only("name")  # type: ignore[attr-defined]
+            opts = [{"label": s.name, "value": str(s.id)} for s in samples]
+        else:
+            samples = find_samples()
+            opts = [
+                {
+                    "label": s.get("name", ""),
+                    "value": str(s.get("_id", s.get("name", ""))),
+                }
+                for s in samples
+                if s.get("name")
+            ]
         if not opts:
             logger.warning("No sample options found; using demo data")
             return (

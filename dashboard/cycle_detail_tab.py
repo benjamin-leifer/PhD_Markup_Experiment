@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import List, Dict, Optional
 
 import io
+import logging
 
 import dash
 from dash import dcc, html
@@ -15,48 +16,100 @@ import plotly.graph_objects as go
 from battery_analysis.utils.detailed_data_manager import (
     get_detailed_cycle_data,
 )
+from dashboard.data_access import db_connected, get_db_error
+from Mongodb_implementation import find_samples, find_test_results
+from bson import ObjectId
+from bson.errors import InvalidId
+
+logger = logging.getLogger(__name__)
 
 
 def _get_sample_options() -> List[Dict[str, str]]:
     """Return dropdown options for available samples."""
+    if not db_connected():
+        reason = get_db_error() or "unknown reason"
+        logger.error("Database not connected: %s; using demo data", reason)
+        return [{"label": "Sample_001", "value": "sample1"}]
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis import models
 
-        samples = models.Sample.objects.only("name")  # type: ignore[attr-defined]
-        return [{"label": s.name, "value": str(s.id)} for s in samples]
+        if hasattr(models.Sample, "objects"):
+            samples = models.Sample.objects.only("name")  # type: ignore[attr-defined]
+            opts = [{"label": s.name, "value": str(s.id)} for s in samples]
+        else:
+            samples = find_samples()
+            opts = [
+                {
+                    "label": s.get("name", ""),
+                    "value": str(s.get("_id", s.get("name", ""))),
+                }
+                for s in samples
+                if s.get("name")
+            ]
+        if not opts:
+            logger.warning("No sample options found; using demo data")
+            return [{"label": "Sample_001", "value": "sample1"}]
+        return opts
     except Exception:
-        return []
+        logger.exception("Failed to load sample options")
+        return [{"label": "Sample_001", "value": "sample1"}]
 
 
 def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
     """Return dropdown options for tests belonging to ``sample_id``."""
+    if not sample_id:
+        return []
+    if not db_connected():
+        reason = get_db_error() or "unknown reason"
+        logger.error(
+            "Database not connected: %s; using demo data for tests", reason
+        )
+        return [{"label": f"{sample_id}-TestA", "value": str(ObjectId())}]
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis import models
         from .data_access import get_cell_dataset
 
-        sample = models.Sample.objects(id=sample_id).first()  # type: ignore[attr-defined]
-        if not sample:
-            return []
+        if hasattr(models.Sample, "objects"):
+            sample = models.Sample.objects(id=sample_id).first()  # type: ignore[attr-defined]
+            if not sample:
+                return []
 
-        dataset = getattr(sample, "default_dataset", None)
-        if not dataset:
-            dataset = get_cell_dataset(getattr(sample, "name", ""))
+            dataset = getattr(sample, "default_dataset", None)
+            if not dataset:
+                dataset = get_cell_dataset(getattr(sample, "name", ""))
 
-        options: List[Dict[str, str]] = []
-        if dataset:
-            for t_ref in getattr(dataset, "tests", []):
-                try:
-                    t_obj = t_ref.fetch() if hasattr(t_ref, "fetch") else t_ref
-                    options.append({"label": t_obj.name, "value": str(t_obj.id)})
-                except Exception:
-                    pass
-        if options:
-            return options
+            options: List[Dict[str, str]] = []
+            if dataset:
+                for t_ref in getattr(dataset, "tests", []):
+                    try:
+                        t_obj = t_ref.fetch() if hasattr(t_ref, "fetch") else t_ref
+                        options.append({"label": t_obj.name, "value": str(t_obj.id)})
+                    except Exception:
+                        pass
+            if options:
+                return options
 
-        tests = models.TestResult.objects(sample=sample_id).only("name")  # type: ignore[attr-defined]
-        return [{"label": t.name, "value": str(t.id)} for t in tests]
+            tests = models.TestResult.objects(sample=sample_id).only("name")  # type: ignore[attr-defined]
+            return [{"label": t.name, "value": str(t.id)} for t in tests]
+
+        # Fallback to raw MongoDB helpers
+        try:
+            sample_oid = ObjectId(sample_id)
+        except InvalidId:
+            sample_oid = sample_id
+        tests = find_test_results({"sample": sample_oid})
+        opts = [
+            {"label": t.get("name", ""), "value": str(t.get("_id", ""))}
+            for t in tests
+            if t.get("name")
+        ]
+        if not opts:
+            logger.warning("No test options found for sample %s; using demo data", sample_id)
+            return [{"label": f"{sample_id}-TestA", "value": str(ObjectId())}]
+        return opts
     except Exception:
-        return []
+        logger.exception("Failed to load test options for sample %s", sample_id)
+        return [{"label": f"{sample_id}-TestA", "value": str(ObjectId())}]
 
 
 def _get_cycle_indices(test_id: str) -> List[int]:
@@ -70,6 +123,14 @@ def _get_cycle_indices(test_id: str) -> List[int]:
     database is unavailable), it falls back to :func:`get_detailed_cycle_data`
     which may consult inline cycle summaries.
     """
+
+    if not db_connected():
+        reason = get_db_error() or "unknown reason"
+        logger.warning(
+            "Database not connected: %s; using fallback cycle data", reason
+        )
+        data = get_detailed_cycle_data(test_id)
+        return sorted(data.keys())
 
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis import models
@@ -92,7 +153,7 @@ def _get_cycle_indices(test_id: str) -> List[int]:
         if indices:
             return sorted(indices)
     except Exception:
-        pass
+        logger.warning("Failed to load cycle indices from DB", exc_info=True)
 
     data = get_detailed_cycle_data(test_id)
     return sorted(data.keys())
