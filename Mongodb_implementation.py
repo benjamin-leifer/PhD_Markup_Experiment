@@ -42,16 +42,7 @@ def get_client() -> MongoClient:
 
     logger = logging.getLogger(__name__)
 
-    if os.getenv("USE_MONGO_MOCK"):
-        import mongomock
-
-        host = os.getenv("MONGO_HOST", "localhost")
-        port = int(os.getenv("MONGO_PORT", "27017"))
-        client = mongomock.MongoClient()
-        client._configured_host = host
-        client._configured_port = port
-        return client
-
+    use_mock_env = os.getenv("USE_MONGO_MOCK")
     uri = os.getenv("MONGO_URI")
     host = os.getenv("MONGO_HOST", "localhost")
     port = int(os.getenv("MONGO_PORT", "27017"))
@@ -64,16 +55,49 @@ def get_client() -> MongoClient:
             # Leave host and port from environment if parsing fails
             pass
 
+    logger.info(
+        "Mongo params - USE_MONGO_MOCK=%s uri=%s host=%s port=%s",
+        bool(use_mock_env),
+        uri,
+        host,
+        port,
+    )
+
+    if use_mock_env:
+        import mongomock
+
+        client = mongomock.MongoClient()
+        client._configured_host = host
+        client._configured_port = port
+        if uri:
+            client._configured_uri = uri
+        logger.info(
+            "USE_MONGO_MOCK set. Created mongomock client for host=%s port=%s",
+            host,
+            port,
+        )
+        logger.info(
+            "Mongo client configured: uri=%s host=%s port=%s",
+            getattr(client, "_configured_uri", None),
+            client._configured_host,
+            client._configured_port,
+        )
+        return client
+
     try:
         if uri:
             client = MongoClient(uri, serverSelectionTimeoutMS=2000)
         else:
             client = MongoClient(host, port, serverSelectionTimeoutMS=2000)
 
+        logger.info("Pinging MongoDB at %s:%s", host, port)
         client.admin.command("ping")
+        logger.info("MongoDB ping succeeded")
     except PyMongoError as exc:
-        logger.warning(
-            "Failed to connect to MongoDB at %s:%s, using mongomock: %s",
+        logger.info(
+            "Failed to connect to MongoDB with uri=%s host=%s port=%s: %s. "
+            "Falling back to mongomock.",
+            uri,
             host,
             port,
             exc,
@@ -85,12 +109,25 @@ def get_client() -> MongoClient:
         client._configured_port = port
         if uri:
             client._configured_uri = uri
+        logger.info("mongomock client created")
+        logger.info(
+            "Mongo client configured: uri=%s host=%s port=%s",
+            getattr(client, "_configured_uri", None),
+            client._configured_host,
+            client._configured_port,
+        )
         return client
 
     if uri:
         client._configured_uri = uri
     client._configured_host = host
     client._configured_port = port
+    logger.info(
+        "Mongo client configured: uri=%s host=%s port=%s",
+        getattr(client, "_configured_uri", None),
+        client._configured_host,
+        client._configured_port,
+    )
     return client
 
 
