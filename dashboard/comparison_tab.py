@@ -17,7 +17,7 @@ from dash import Input, Output, State, dcc, html
 
 # Database helpers
 from dashboard.data_access import db_connected, get_db_error
-from Mongodb_implementation import find_samples
+from Mongodb_implementation import find_samples, find_test_results
 
 # mypy: ignore-errors
 
@@ -72,9 +72,13 @@ def _get_sample_data(
 ) -> Tuple[str, Dict[str, np.ndarray], Optional[str]]:
     """Return (sample name, cycle data, error message) for ``sample_id``.
 
-    The function tries to pull real cycle data from the ``battery_analysis``
-    package. If that fails (e.g. database not available) deterministic demo data
-    is generated instead so that the dashboard remains functional.
+    The function first attempts to pull real cycle data from the
+    ``battery_analysis`` package.  If the ``Sample`` model exposes a
+    mongoengine-style ``objects`` attribute the existing ORM-based logic is
+    used.  Otherwise raw MongoDB helpers :func:`find_samples` and
+    :func:`find_test_results` are used to fetch documents directly.  If any of
+    these steps fail (e.g. database not available) deterministic demo data is
+    generated so the dashboard remains functional.
     """
 
     try:  # pragma: no cover - depends on battery_analysis and database
@@ -82,34 +86,57 @@ def _get_sample_data(
 
         from dashboard.data_access import get_cell_dataset
 
-        s = Sample.objects(id=sample_id).first()
-        if not s:
-            raise ValueError("sample not found")
+        if hasattr(Sample, "objects"):
+            # Mongoengine models are available; use them directly
+            s = Sample.objects(id=sample_id).first()
+            if not s:
+                raise ValueError("sample not found")
 
-        sample_name = getattr(s, "name", str(sample_id))
-        dataset = getattr(s, "default_dataset", None)
-        if not dataset:
-            dataset = get_cell_dataset(sample_name)
+            sample_name = getattr(s, "name", str(sample_id))
+            dataset = getattr(s, "default_dataset", None)
+            if not dataset:
+                dataset = get_cell_dataset(sample_name)
 
-        cycles: List[int] = []
-        capacity: List[float] = []
-        ce: List[float] = []
+            cycles: List[int] = []
+            capacity: List[float] = []
+            ce: List[float] = []
 
-        if dataset and getattr(dataset, "combined_cycles", None):
-            for c in dataset.combined_cycles:
-                cycles.append(c.cycle_index)
-                capacity.append(c.discharge_capacity)
-                ce.append(c.coulombic_efficiency)
+            if dataset and getattr(dataset, "combined_cycles", None):
+                for c in dataset.combined_cycles:
+                    cycles.append(c.cycle_index)
+                    capacity.append(c.discharge_capacity)
+                    ce.append(c.coulombic_efficiency)
+            else:
+                tests = TestResult.objects(sample=s.id).order_by("date")
+                for t in tests:
+                    summaries = getattr(t, "cycle_summaries", None)
+                    if summaries is None:
+                        summaries = getattr(t, "cycles", [])
+                    for c in summaries:
+                        cycles.append(getattr(c, "cycle_index", len(cycles) + 1))
+                        capacity.append(getattr(c, "discharge_capacity", np.nan))
+                        ce.append(getattr(c, "coulombic_efficiency", np.nan))
         else:
-            tests = TestResult.objects(sample=s.id).order_by("date")
+            # ``Sample`` lacks ``objects``; fall back to raw pymongo helpers
+            sample_docs = find_samples({"_id": sample_id})
+            if not sample_docs:
+                raise ValueError("sample not found")
+            s = sample_docs[0]
+            sample_name = s.get("name", str(sample_id))
+
+            cycles = []
+            capacity = []
+            ce = []
+
+            tests = find_test_results({"sample": sample_id})
             for t in tests:
-                summaries = getattr(t, "cycle_summaries", None)
+                summaries = t.get("cycle_summaries")
                 if summaries is None:
-                    summaries = getattr(t, "cycles", [])
+                    summaries = t.get("cycles", [])
                 for c in summaries:
-                    cycles.append(getattr(c, "cycle_index", len(cycles) + 1))
-                    capacity.append(getattr(c, "discharge_capacity", np.nan))
-                    ce.append(getattr(c, "coulombic_efficiency", np.nan))
+                    cycles.append(c.get("cycle_index", len(cycles) + 1))
+                    capacity.append(c.get("discharge_capacity", np.nan))
+                    ce.append(c.get("coulombic_efficiency", np.nan))
 
         if not cycles:
             raise ValueError("no cycle data")
