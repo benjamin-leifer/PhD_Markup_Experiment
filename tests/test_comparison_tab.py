@@ -5,6 +5,7 @@ from typing import Any
 import types
 
 import numpy as np
+from bson import ObjectId
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -125,5 +126,39 @@ def test_get_sample_data_mongoengine(monkeypatch: Any) -> None:
     assert name == "MongoSample"
     assert data["cycle"].tolist() == [1]
     assert data["capacity"].tolist() == [2.0]
+    assert data["ce"].tolist() == [0.9]
+    assert np.isnan(data["impedance"]).all()
+
+
+def test_get_sample_data_objectid_conversion(monkeypatch: Any) -> None:
+    """String sample IDs are converted to :class:`ObjectId` for queries."""
+
+    sample_oid = ObjectId()
+
+    sample_doc = {"_id": sample_oid, "name": "OidSample"}
+    cycle_doc = {
+        "cycle_index": 1,
+        "discharge_capacity": 1.0,
+        "coulombic_efficiency": 0.9,
+    }
+
+    def fake_find_samples(query: dict[str, Any]) -> list[dict[str, Any]]:
+        assert isinstance(query["_id"], ObjectId)
+        assert query["_id"] == sample_oid
+        return [sample_doc]
+
+    def fake_find_test_results(query: dict[str, Any]) -> list[dict[str, Any]]:
+        assert isinstance(query["sample"], ObjectId)
+        assert query["sample"] == sample_oid
+        return [{"cycle_summaries": [cycle_doc]}]
+
+    monkeypatch.setattr(comparison_tab, "find_samples", fake_find_samples)
+    monkeypatch.setattr(comparison_tab, "find_test_results", fake_find_test_results)
+
+    name, data, err = comparison_tab._get_sample_data(str(sample_oid))
+    assert err is None
+    assert name == "OidSample"
+    assert data["cycle"].tolist() == [1]
+    assert data["capacity"].tolist() == [1.0]
     assert data["ce"].tolist() == [0.9]
     assert np.isnan(data["impedance"]).all()
