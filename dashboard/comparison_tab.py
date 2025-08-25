@@ -118,7 +118,16 @@ def _get_sample_data(
                         ce.append(getattr(c, "coulombic_efficiency", np.nan))
         else:
             # ``Sample`` lacks ``objects``; fall back to raw pymongo helpers
-            sample_docs = find_samples({"_id": sample_id})
+            from bson import ObjectId
+            from bson.errors import InvalidId
+
+            try:
+                oid = ObjectId(sample_id)
+            except InvalidId as exc:
+                logger.error("Invalid sample id %s", sample_id)
+                raise ValueError("invalid sample id") from exc
+
+            sample_docs = find_samples({"_id": oid})
             if not sample_docs:
                 raise ValueError("sample not found")
             s = sample_docs[0]
@@ -128,7 +137,7 @@ def _get_sample_data(
             capacity = []
             ce = []
 
-            tests = find_test_results({"sample": sample_id})
+            tests = find_test_results({"sample": oid})
             for t in tests:
                 summaries = t.get("cycle_summaries")
                 if summaries is None:
