@@ -23,6 +23,14 @@ from bson.errors import InvalidId
 
 logger = logging.getLogger(__name__)
 
+try:  # pragma: no cover - optional dependency
+    from dashboard.data_access import get_cell_dataset
+except ImportError:  # pragma: no cover - handled during testing
+    get_cell_dataset = None
+    logger.warning(
+        "get_cell_dataset could not be imported; dataset lookups will be skipped"
+    )
+
 
 def _get_sample_options() -> List[Dict[str, str]]:
     """Return dropdown options for available samples."""
@@ -67,7 +75,6 @@ def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
         return [{"label": f"{sample_id}-TestA", "value": str(ObjectId())}]
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis import models
-        from .data_access import get_cell_dataset
 
         if hasattr(models.Sample, "objects") and hasattr(models.TestResult, "objects"):
             sample = models.Sample.objects(id=sample_id).first()  # type: ignore[attr-defined]
@@ -75,7 +82,7 @@ def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
                 return []
 
             dataset = getattr(sample, "default_dataset", None)
-            if not dataset:
+            if not dataset and get_cell_dataset:
                 dataset = get_cell_dataset(getattr(sample, "name", ""))
 
             options: List[Dict[str, str]] = []
