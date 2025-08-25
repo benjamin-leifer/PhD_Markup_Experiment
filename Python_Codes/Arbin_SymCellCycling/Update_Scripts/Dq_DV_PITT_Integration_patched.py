@@ -28,9 +28,15 @@ DATA_DIR = Path(r"C:\Users\benja\Downloads\DQ_DV Work\Lab Arbin_DQ_DV_2025_07_15
 
 FILES: List[str] = [
     # ---------- your dQ/dV & charge-curve input files ----------
-    "BL-LL-FZ01_RT_C_20_Charge_02_CP_C04.mpt",
-    "BL-LL-GA01_RT_C_20_Charge_02_CP_C02.mpt",
-    "BL-LL-GN01_RT_No_Formation_03_GCPL_C01.mpt"
+    #"BL-LL-FZ01_RT_C_20_Charge_02_CP_C04.mpt",
+    #"BL-LL-GA01_RT_C_20_Charge_02_CP_C02.mpt",
+    #"BL-LL-GN01_RT_No_Formation_03_GCPL_C01.mpt",
+    #"BL-LL-GX05_RT_No_Formation_02_CP_C04.mpt",
+    "BL-LL-GW05_RT_No_Formation_02_CP_C03.mpt",#DTFV1411
+    "BL-LL-GV05_RT_No_Formation_02_CP_C01.mpt",#DTV1410
+    #"BL-LL-GU05_RT_No_Formation_02_CP_C04.mpt",#DTV142
+    "BL-LL-GT05_RT_No_Formation_02_CP_C03.mpt",#DTF1410
+    #"BL-LL-GS05_RT_No_Formation_02_CP_C01.mpt",#DTF142
     #"BL-LL-GA02_RT_C_20_Form_HighFid_Channel_64_Wb_1.xlsx",
     #"BL-LL-FZ02_RT_C_20_Form_HighFid_Channel_63_Wb_1.xlsx",
     #"BL-LL-FW02_RT_C_20_Form_HighFid_Channel_60_Wb_1.xlsx",
@@ -40,7 +46,8 @@ FILES: List[str] = [
 # active-material masses (mg) if you want normalised units
 MASS_MG = {id_: 0.02496886674 / 1000  # mg → g
            for id_ in ["FZ01","FY01","FX01","FW01","GA01",
-                        "FZ02","FY02","FX02","FW02","GA02", "GN01"]}
+                        "FZ02","FY02","FX02","FW02","GA02", "GN01",
+                       "GX05","GW05","GV05","GU05","GT05","GS05"]}
 MASS_G = {
     #"GD01": 0.02496886674,   # example masses
     #"GC01": 0.02496886674,
@@ -60,6 +67,14 @@ electrolyte_lookup = {
     "GK06": "DTFV1425 - PITT",
     "GL01": "DTFV1411 - PITT",
     "GM01": "MF91 - PITT",
+    "GS05": "DTF142 - C/20",
+    "GT05": "DTF1410 - C/20",
+    "GW05": "DTFV1411 - C/20",
+    "GV05": "DTV1410 - C/20",
+    "GU05": "DTV142 - C/20",
+    "GA01": "DTFV1411 - C/20",
+    "GN01": "DTFV1411 - C/20",
+    "FZ01": "DTFV1411 - C/20",
 }
 
 # Analysis parameters (unchanged from original script)
@@ -266,14 +281,16 @@ def main():
         v_mid,y = (savgol_dqdv if DQDV_SMOOTH else raw_dqdv)(df_bin)
         if cell_id in MASS_MG:
             y /= (MASS_MG[cell_id]*1000)
-        ax_dqdv.plot(v_mid,y,lw=1.3,label=cell_id,
+        label = f"{cell_id}: {electrolyte_lookup.get(cell_id, 'Unknown')}"
+        ax_dqdv.plot(v_mid,y,lw=1.3,label=label,
                      color=cmap(idx%10))
 
         v_curve = df_bin["V"].to_numpy()
         q_curve = df_bin["QmAh"].to_numpy()
         if cell_id in MASS_MG:
             q_curve /= (MASS_MG[cell_id]*1000)
-        ax_charge.plot(q_curve, v_curve,lw=1.3,label=cell_id,
+        label = f"{cell_id}: {electrolyte_lookup.get(cell_id, 'Unknown')}"
+        ax_charge.plot(q_curve, v_curve,lw=1.3,label=label,
                        color=cmap(idx%10))
 
     # -------------------- PCGA overlay (mAh g^-1 V^-1) ------------------
@@ -322,6 +339,7 @@ def main():
             #     zorder=10,  # sit on top of curves
             #     label=label,
             # )
+            label = f"{cell_id}: {electrolyte_lookup.get(cell_id, 'Unknown')}"
             ax_dqdv.plot(V, dQdV,
                          color=cmap(len(used_labels) % 10),
                          linestyle= "-",  # dashed line
@@ -336,6 +354,8 @@ def main():
     #ax_pcga.set_ylabel("PCGA dQ/dV (mAh g$^{-1}$ V$^{-1}$)")
     tag = "smoothed" if DQDV_SMOOTH else "raw"
     ax_dqdv.set_title(f"dQ/dV ({tag}) – C{CYCLE}")
+    ax_dqdv.set_ylim(0, 0.07)
+    ax_dqdv.set_xlim(1.8, 3.6)
     ax_charge.set_xlabel("Capacity (mAh g$^{-1}$)" if MASS_MG
                          else "Capacity (mAh)")
     ax_charge.set_ylabel("Voltage (V)")
