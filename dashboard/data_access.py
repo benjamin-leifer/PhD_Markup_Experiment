@@ -316,6 +316,41 @@ def get_db_error() -> str | None:
 # ---------------------------------------------------------------------------
 
 
+def query_samples(
+    query: Dict[str, Any] | None = None, fields: List[str] | None = None
+) -> List[Any]:
+    """Return samples matching ``query`` using available backend.
+
+    When the optional :mod:`battery_analysis` models expose a mongoengine
+    ``objects`` manager it is used with a raw query.  Otherwise the lightweight
+    :func:`Mongodb_implementation.find_samples` helper is used which returns
+    dictionaries.  The function logs which path was taken for easier debugging.
+    """
+
+    query = query or {}
+    try:  # pragma: no cover - optional dependency
+        from battery_analysis.models import Sample  # type: ignore
+
+        if hasattr(Sample, "objects"):
+            logger.debug("query_samples: using Sample.objects path")
+            qs = Sample.objects  # type: ignore[attr-defined]
+            if query:
+                qs = qs(__raw__=query)
+            if fields:
+                qs = qs.only(*fields)
+            return list(qs)
+    except Exception:  # pragma: no cover - fallback when Sample unavailable
+        logger.debug(
+            "query_samples: Sample.objects unavailable; falling back to find_samples",
+            exc_info=True,
+        )
+
+    logger.debug("query_samples: using find_samples path")
+    from Mongodb_implementation import find_samples
+
+    return find_samples(query)
+
+
 def get_cell_dataset(cell_code: str):
     """Return the :class:`CellDataset` for ``cell_code`` if it exists.
 

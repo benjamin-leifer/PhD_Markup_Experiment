@@ -7,6 +7,7 @@ sample data.
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
+from types import SimpleNamespace
 
 import dash
 import dash_bootstrap_components as dbc
@@ -17,6 +18,11 @@ try:
 except ImportError:  # running as a script
     import saved_filters  # type: ignore
     import export_handler  # type: ignore
+
+try:  # access database helpers when running in package or script mode
+    from .data_access import query_samples
+except ImportError:  # pragma: no cover - running as script
+    from data_access import query_samples  # type: ignore
 
 import normalization_utils as norm_utils
 
@@ -49,35 +55,50 @@ SAVED_FILTER_DROPDOWN = "trait-saved-filters"
 
 
 def get_distinct_values(field: str) -> List[str]:
-    """Return placeholder distinct values for ``field``."""
+    """Return distinct ``field`` values from available sample data."""
     try:  # pragma: no cover - depends on MongoDB
-        from battery_analysis.models import Sample  # type: ignore
-
-        return list(Sample.objects.distinct(field))  # type: ignore[attr-defined]
+        samples = query_samples({}, fields=[field])
+        values: set[str] = set()
+        for s in samples:
+            if isinstance(s, dict):
+                val = s.get(field)
+            else:
+                val = getattr(s, field, None)
+            if isinstance(val, list):
+                values.update(str(v) for v in val if v is not None)
+            elif val is not None:
+                values.add(str(val))
+        if values:
+            return sorted(values)
     except Exception:
-        if field == "chemistry":
-            return ["NMC", "LFP", "LCO"]
-        if field == "manufacturer":
-            return ["ABC Batteries", "XYZ Cells"]
-        return []
+        pass
+    if field == "chemistry":
+        return ["NMC", "LFP", "LCO"]
+    if field == "manufacturer":
+        return ["ABC Batteries", "XYZ Cells"]
+    return []
 
 
 def get_sample_names(prefix: str = "") -> List[str]:
-    """Return placeholder sample names starting with ``prefix``."""
+    """Return sample names starting with ``prefix``."""
     try:  # pragma: no cover - depends on MongoDB
-        from battery_analysis.models import Sample  # type: ignore
-
+        query: Dict[str, Any] = {}
         if prefix:
-            return [
-                s.name
-                for s in Sample.objects(name__istartswith=prefix).only("name")  # type: ignore[attr-defined]
-            ]
-        return list(Sample.objects.distinct("name"))  # type: ignore[attr-defined]
+            query = {"name": {"$regex": f"^{prefix}", "$options": "i"}}
+        samples = query_samples(query, fields=["name"])
+        names = [
+            (s.get("name") if isinstance(s, dict) else getattr(s, "name", ""))
+            for s in samples
+            if (s.get("name") if isinstance(s, dict) else getattr(s, "name", None))
+        ]
+        if names:
+            return names
     except Exception:
-        samples = ["Sample_001", "Sample_002", "Demo_Cell"]
-        if prefix:
-            return [s for s in samples if s.lower().startswith(prefix.lower())]
-        return samples
+        pass
+    samples = ["Sample_001", "Sample_002", "Demo_Cell"]
+    if prefix:
+        return [s for s in samples if s.lower().startswith(prefix.lower())]
+    return samples
 
 
 def filter_samples(
@@ -93,47 +114,46 @@ def filter_samples(
     tags: Optional[List[str]] = None,
     tag_mode: str = "any",
 ) -> List[Dict[str, Any]]:
-    """Return sample dictionaries matching the given traits.
-
-    The function attempts to query :mod:`battery_analysis`'s ``Sample`` model to
-    obtain real data. If the database is unavailable, lightweight demo rows are
-    returned instead so the dashboard still functions for documentation builds
-    and tests.
-    """
+    """Return sample dictionaries matching the given traits."""
 
     rows: List[Dict[str, Any]] = []
     try:  # pragma: no cover - depends on MongoDB
-        from battery_analysis.models import Sample  # type: ignore
-
-        qs = Sample.objects  # type: ignore[attr-defined]
-        if chemistry:
-            qs = qs.filter(chemistry=chemistry)
-        if manufacturer:
-            qs = qs.filter(manufacturer=manufacturer)
-        if sample:
-            qs = qs.filter(name=sample)
-        if tags:
-            if tag_mode == "all":
-                qs = qs.filter(tags__all=tags)
-            elif tag_mode == "exclude":
-                qs = qs.filter(tags__nin=tags)
-            else:
-                qs = qs.filter(tags__in=tags)
-
-        samples = list(qs)
+        query = build_query(
+            chemistry,
+            manufacturer,
+            None,
+            "any",
+            tags,
+            tag_mode,
+            cycle_min,
+            cycle_max,
+            None,
+            None,
+            sample,
+            date_range,
+            ce_min,
+            ce_max,
+        )
+        samples = query_samples(query)
         for s in samples:
+            if isinstance(s, dict):
+                getter = lambda k, default=None: s.get(k, default)
+                sample_obj = SimpleNamespace(**s)
+            else:
+                getter = lambda k, default=None: getattr(s, k, default)
+                sample_obj = s
             rows.append(
                 {
-                    "name": getattr(s, "name", ""),
-                    "chemistry": getattr(s, "chemistry", ""),
-                    "manufacturer": getattr(s, "manufacturer", ""),
-                    "sample_obj": s,
-                    "capacity": getattr(s, "avg_final_capacity", None),
-                    "resistance": getattr(s, "median_internal_resistance", None),
-                    "ce": getattr(s, "avg_coulombic_eff", None),
-                    "date": getattr(s, "created_at", None),
-                    "cycle_count": getattr(s, "cycle_count", None),
-                    "tags": getattr(s, "tags", []),
+                    "name": getter("name", ""),
+                    "chemistry": getter("chemistry", ""),
+                    "manufacturer": getter("manufacturer", ""),
+                    "sample_obj": sample_obj,
+                    "capacity": getter("avg_final_capacity", None),
+                    "resistance": getter("median_internal_resistance", None),
+                    "ce": getter("avg_coulombic_eff", None),
+                    "date": getter("created_at", None) or getter("date", None),
+                    "cycle_count": getter("cycle_count", None),
+                    "tags": getter("tags", []),
                 }
             )
     except Exception:
