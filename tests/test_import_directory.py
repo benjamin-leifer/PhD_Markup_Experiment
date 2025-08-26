@@ -351,10 +351,12 @@ def test_sequential_files_append_cycles(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root, make = import_dir
-    make("run_Wb_1.csv")
-    make("run_Wb_2.csv")
+    f1 = make("run_Wb_1.csv", content="first")
+    f2 = make("run_Wb_2.csv", content="second")
 
     def fake_parse(path: str) -> tuple[list[dict[str, float]], dict[str, object]]:
+        import datetime
+
         name = Path(path).name
         if "Wb_1" in name:
             cycles = [
@@ -386,32 +388,45 @@ def test_sequential_files_append_cycles(
                     "coulombic_efficiency": 1.0,
                 },
             ]
-        return cycles, {"tester": "Other", "name": name, "date": None}
+        metadata = {
+            "tester": "Other",
+            "name": name,
+            "date": datetime.datetime.utcnow(),
+        }
+        return cycles, metadata
 
     monkeypatch.setattr(parsers, "parse_file", fake_parse)
-
-    def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
-        cycles, _ = parsers.parse_file(path)
-        if sample.tests:
-            sample.tests[0].cycles.extend(cycles)
-            return sample.tests[0], True
-        test = type("Test", (), {"cycles": cycles})()
-        sample.tests.append(test)
-        return test, False
-
-    monkeypatch.setattr(
-        import_directory.data_update, "process_file_with_update", fake_process
+    import importlib
+    models = importlib.reload(__import__("battery_analysis.models", fromlist=["*"]))
+    data_update = importlib.reload(
+        __import__("battery_analysis.utils.data_update", fromlist=["*"])
     )
-    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+    monkeypatch.setattr(import_directory, "data_update", data_update)
+    Sample = models.Sample
 
-    import_directory.import_directory(root, workers=1)
+    sample = Sample(name="S1").save()
 
-    assert len(Sample._registry) == 1
-    sample = Sample.get_by_name("S1")
-    assert sample is not None
-    assert len(sample.tests) == 1
-    test = sample.tests[0]
-    assert sorted(c["cycle_index"] for c in test.cycles) == [1, 2, 3, 4]
+    test, updated = import_directory.process_file_with_update(
+        str(f1), sample, archive=False
+    )
+    assert not updated
+
+    test2, updated = import_directory.process_file_with_update(
+        str(f2), sample, archive=False
+    )
+    assert updated
+    assert test2.id == test.id
+    assert [c.cycle_index for c in test2.cycles] == [1, 2, 3, 4]
+
+    # Restore dataclass-based models for subsequent tests
+    sys.modules["mongoengine"] = types.ModuleType("mongoengine")
+    importlib.reload(__import__("battery_analysis.models", fromlist=["*"]))
+    sys.modules.pop("mongoengine", None)
+    sys.modules["mongoengine"] = importlib.import_module("mongoengine")
+    restored = importlib.reload(
+        __import__("battery_analysis.utils.data_update", fromlist=["*"])
+    )
+    monkeypatch.setattr(import_directory, "data_update", restored)
 
 
 def test_state_skips_and_reset_reimports(

@@ -318,8 +318,11 @@ def process_file_with_update(file_path, sample):
     # Compute file hash for matching when possible
     file_hash = None
     try:
+        h = hashlib.sha256()
         with open(file_path, "rb") as f:
-            file_hash = hashlib.md5(f.read()).hexdigest()
+            for chunk in iter(lambda: f.read(8192), b""):
+                h.update(chunk)
+        file_hash = h.hexdigest()
     except Exception as exc:  # pragma: no cover - best effort
         logging.warning(f"Could not compute hash for {file_path}: {exc}")
     if metadata is None:
