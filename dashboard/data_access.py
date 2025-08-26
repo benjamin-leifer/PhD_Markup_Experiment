@@ -37,6 +37,11 @@ except Exception:  # pragma: no cover - allow running without DB
     Sample = None
     connect = None
 
+try:  # pragma: no cover - manager optional
+    from mongoengine.queryset.manager import QuerySetManager
+except Exception:  # pragma: no cover - provide dummy fallback
+    QuerySetManager = None  # type: ignore[assignment]
+
 try:  # pragma: no cover - database utility optional
     from battery_analysis.utils.db import connect_with_fallback
 except Exception:  # pragma: no cover - provide dummy fallback
@@ -174,7 +179,11 @@ def db_connected() -> bool:
     models_present = models is not None
     connect_present = connect is not None
     sample_present = Sample is not None
-    sample_objects_present = sample_present and hasattr(Sample, "objects")
+    sample_objects_present = (
+        sample_present
+        and QuerySetManager is not None
+        and isinstance(Sample.__dict__.get("objects"), QuerySetManager)
+    )
     logger.info("models module present: %s", models_present)
     logger.info("connect function present: %s", connect_present)
     logger.info("Sample class present: %s", sample_present)
