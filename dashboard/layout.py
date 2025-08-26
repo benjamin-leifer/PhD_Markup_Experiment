@@ -2,7 +2,7 @@
 
 # flake8: noqa
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import dash_bootstrap_components as dbc
 from dash import dash_table, dcc, html
@@ -461,8 +461,14 @@ def toast_container() -> html.Div:
     )
 
 
-def import_jobs_table(jobs: List[Dict[str, str]]) -> dbc.Table:
-    """Return a table summarizing import jobs."""
+def import_jobs_table(
+    jobs: List[Dict[str, str]], active_job_id: Optional[str] = None
+) -> dbc.Table:
+    """Return a table summarizing import jobs.
+
+    The ``active_job_id`` parameter can be used to visually highlight a
+    particular job, such as a newly started import run.
+    """
 
     header = html.Thead(
         html.Tr(
@@ -476,6 +482,7 @@ def import_jobs_table(jobs: List[Dict[str, str]]) -> dbc.Table:
     )
     rows = []
     for job in jobs:
+        row_class = "table-primary" if job.get("id") == active_job_id else None
         rows.append(
             html.Tr(
                 [
@@ -483,7 +490,8 @@ def import_jobs_table(jobs: List[Dict[str, str]]) -> dbc.Table:
                     html.Td(job.get("end", "")),
                     html.Td(job.get("progress", "")),
                     html.Td(job.get("errors", "")),
-                ]
+                ],
+                className=row_class,
             )
         )
     body = html.Tbody(rows)
