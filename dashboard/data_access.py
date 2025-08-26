@@ -186,14 +186,28 @@ def db_connected() -> bool:
         and QuerySetManager is not None
         and isinstance(Sample.__dict__.get("objects"), QuerySetManager)
     )
+    testresult_objects_present = False
+    try:  # pragma: no cover - optional dependency
+        from battery_analysis.models import TestResult  # type: ignore
+
+        testresult_objects_present = (
+            hasattr(TestResult, "__dict__")
+            and isinstance(TestResult.__dict__.get("objects"), QuerySetManager)
+        )
+    except Exception:
+        TestResult = None  # type: ignore[assignment]
     logger.info("models module present: %s", models_present)
     logger.info("connect function present: %s", connect_present)
     logger.info("Sample class present: %s", sample_present)
     logger.info("Sample.objects present: %s", sample_objects_present)
+    logger.info("TestResult.objects present: %s", testresult_objects_present)
     diagnostics.append(f"models module present: {models_present}")
     diagnostics.append(f"connect function present: {connect_present}")
     diagnostics.append(f"Sample class present: {sample_present}")
     diagnostics.append(f"Sample.objects present: {sample_objects_present}")
+    diagnostics.append(
+        f"TestResult.objects present: {testresult_objects_present}"
+    )
     essential_ok = all([models_present, connect_present])
     if not essential_ok:
         missing: list[str] = []
@@ -207,12 +221,18 @@ def db_connected() -> bool:
         _DB_CONNECTED = False
         logger.info("DB connection diagnostics:\n%s", "\n".join(diagnostics))
         return False
-    if not sample_present or not sample_objects_present:
+    if (
+        not sample_present
+        or not sample_objects_present
+        or not testresult_objects_present
+    ):
         missing: list[str] = []
         if not sample_present:
             missing.append("Sample model")
         if sample_present and not sample_objects_present:
             missing.append("Sample.objects manager")
+        if not testresult_objects_present:
+            missing.append("TestResult.objects manager")
         msg = (
             "Missing optional database dependencies: "
             + ", ".join(missing)
@@ -274,6 +294,10 @@ def db_connected() -> bool:
                 Sample.objects.first()  # type: ignore[attr-defined]
             else:
                 diagnostics.append("Skipping Sample.objects check")
+            if testresult_objects_present:
+                TestResult.objects.first()  # type: ignore[attr-defined]
+            else:
+                diagnostics.append("Skipping TestResult.objects check")
             _DB_ERROR = None
             _DB_CONNECTED = True
             return True
