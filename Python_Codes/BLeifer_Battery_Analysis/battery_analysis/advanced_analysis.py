@@ -99,6 +99,10 @@ def get_voltage_capacity_data(test_id, cycle_number=None):
                 "before using get_voltage_capacity_data."
             ) from exc
 
+    if not hasattr(models.TestResult, "objects"):
+        logging.error("MongoEngine models unavailable")
+        raise RuntimeError("MongoEngine models unavailable")
+
     # ------------------------------------------------------------------ #
     # 1)  Try detailed data stored in GridFS
     # ------------------------------------------------------------------ #
@@ -136,6 +140,9 @@ def get_voltage_capacity_data(test_id, cycle_number=None):
     # ------------------------------------------------------------------ #
     # 2)  Fall back to the TestResult document and original data file
     # ------------------------------------------------------------------ #
+    if not hasattr(models.TestResult, "objects"):
+        logging.error("MongoEngine models unavailable")
+        raise RuntimeError("MongoEngine models unavailable")
     test = models.TestResult.objects(id=test_id).first()
     if test is None:
         raise ValueError(f"Test with ID {test_id} not found")
