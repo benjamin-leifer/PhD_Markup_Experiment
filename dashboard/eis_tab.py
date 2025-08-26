@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import tempfile
 from multiprocessing import Process
@@ -16,6 +17,10 @@ from bson.errors import InvalidId
 from dash import Input, Output, State, dcc, html
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+try:  # pragma: no cover
+    from plotly.utils import PlotlyJSONDecoder
+except Exception:  # pragma: no cover
+    from json import JSONDecoder as PlotlyJSONDecoder  # type: ignore
 
 from dashboard.data_access import db_connected, get_db_error
 from Mongodb_implementation import find_samples, find_test_results
@@ -453,8 +458,9 @@ def register_callbacks(app: dash.Dash) -> None:
 
 def _render_matplotlib(fig_dict):
     import matplotlib.pyplot as plt
-
-    fig = go.Figure(fig_dict)
+    fig = go.Figure(
+        json.loads(json.dumps(fig_dict), cls=PlotlyJSONDecoder)
+    )
     plt.figure()
     for tr in fig.data:
         if isinstance(tr, go.Scatter):
