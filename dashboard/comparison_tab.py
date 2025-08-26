@@ -13,7 +13,7 @@ import dash
 import dash_bootstrap_components as dbc
 import numpy as np
 import pandas as pd
-import plotly.graph_objs as go
+import plotly.graph_objects as go
 from dash import Input, Output, State, dcc, html
 
 # Database helpers
@@ -413,27 +413,14 @@ def register_callbacks(app: dash.Dash) -> None:
 
 def _render_matplotlib(fig_dict: Dict[str, Any]) -> None:
     """Render ``fig_dict`` using Matplotlib."""
-    import json
-
     import matplotlib.pyplot as plt
 
-    def _prepare(vals):
-        if not vals:
-            return []
-        return [
-            json.dumps(v, sort_keys=True) if isinstance(v, dict) else v for v in vals
-        ]
-
+    fig = go.Figure(fig_dict)
     plt.figure()
-    for trace in fig_dict.get("data", []):
-        if trace.get("type") == "scatter":
-            x = _prepare(trace.get("x", []))
-            y = _prepare(trace.get("y", []))
-            name = trace.get("name")
-            plt.plot(x, y, label=name if name else None)
-
+    for tr in fig.data:
+        if isinstance(tr, go.Scatter):
+            plt.plot(tr.x, tr.y, label=tr.name)
     handles, labels = plt.gca().get_legend_handles_labels()
     if any(label and not label.startswith("_") for label in labels):
         plt.legend()
-
     plt.show()
