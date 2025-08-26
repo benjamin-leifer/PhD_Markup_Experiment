@@ -418,6 +418,17 @@ def data_import_layout() -> html.Div:
                     ),
                 ],
             ),
+            dbc.Input(
+                id="import-dir-path",
+                type="text",
+                placeholder="Path to data directory",
+            ),
+            dbc.Button(
+                "Import Directory",
+                id="import-dir-start",
+                color="primary",
+            ),
+            dcc.Store(id="import-dir-job"),
             dcc.Store(id="upload-info"),
             html.Div(id="upload-status"),
             html.Ul(id="uploaded-files-list"),
