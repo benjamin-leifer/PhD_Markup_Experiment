@@ -11,12 +11,14 @@ from typing import Dict, List
 
 import dash
 import dash_bootstrap_components as dbc
+import matplotlib.pyplot as plt
 import numpy as np
+import plotly.graph_objects as go
 from bson import ObjectId
 from bson.errors import InvalidId
 from dash import Input, Output, State, dcc, html
-import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+
 try:  # pragma: no cover
     from plotly.utils import PlotlyJSONDecoder
 except Exception:  # pragma: no cover
@@ -457,10 +459,7 @@ def register_callbacks(app: dash.Dash) -> None:
 
 
 def _render_matplotlib(fig_dict):
-    import matplotlib.pyplot as plt
-    fig = go.Figure(
-        json.loads(json.dumps(fig_dict), cls=PlotlyJSONDecoder)
-    )
+    fig = go.Figure(json.loads(json.dumps(fig_dict), cls=PlotlyJSONDecoder))
     plt.figure()
     for tr in fig.data:
         if isinstance(tr, go.Scatter):
