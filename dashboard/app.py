@@ -7,6 +7,8 @@
 # Automatically configure dependencies so the dashboard works out of the box
 import base64
 import json
+import os
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
 import dash
 import dash_bootstrap_components as dbc
@@ -717,6 +719,81 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
             "Info",
             "secondary",
         )
+
+    @app.callback(
+        Output("import-dir-job", "data"),
+        Output("upload-status", "children", allow_duplicate=True),
+        Output("notification-toast", "is_open", allow_duplicate=True),
+        Output("notification-toast", "children", allow_duplicate=True),
+        Output("notification-toast", "header", allow_duplicate=True),
+        Output("notification-toast", "icon", allow_duplicate=True),
+        Output("url", "pathname"),
+        Input("import-dir-start", "n_clicks"),
+        State("import-dir-path", "value"),
+        State("user-role", "data"),
+        prevent_initial_call=True,
+    )
+    def start_import_directory(n_clicks, path, role):
+        if not n_clicks:
+            raise dash.exceptions.PreventUpdate
+        if not path or not os.path.isdir(path):
+            msg = "Invalid directory"
+            return (
+                dash.no_update,
+                msg,
+                True,
+                msg,
+                "Error",
+                "danger",
+                dash.no_update,
+            )
+        if not auth.has_permission(role or "", "data-import"):
+            msg = "Not authorized"
+            return (
+                dash.no_update,
+                msg,
+                True,
+                msg,
+                "Error",
+                "danger",
+                dash.no_update,
+            )
+
+        def _run() -> object | None:
+            from battery_analysis.utils.import_directory import import_directory
+
+            return import_directory(
+                path, include=["*.csv", "*.xlsx", "*.xls", "*.mpt"]
+            )
+
+        try:
+            executor = ThreadPoolExecutor(max_workers=1)
+            future = executor.submit(_run)
+            job_id = None
+            try:
+                job_id = future.result(timeout=0)
+            except TimeoutError:
+                pass
+            return (
+                job_id,
+                "",
+                True,
+                f"Started import for {path}",
+                "Import Started",
+                "success",
+                "/import-jobs",
+            )
+        except Exception as err:  # pragma: no cover - simple error handling
+            msg = str(err)
+            return (
+                dash.no_update,
+                msg,
+                True,
+                msg,
+                "Error",
+                "danger",
+                dash.no_update,
+            )
 
     @app.callback(
         Output("flagged-container", "children"),
