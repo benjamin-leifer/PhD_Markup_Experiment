@@ -13,8 +13,12 @@ from __future__ import annotations
 
 # Try to import the real MongoEngine models
 try:  # pragma: no cover - behaviour depends on environment
-    from mongoengine import Document, EmbeddedDocument  # type: ignore  # noqa: F401
-    from mongoengine import fields, CASCADE  # type: ignore  # noqa: F401
+    from mongoengine import (  # type: ignore  # noqa: F401
+        CASCADE,
+        Document,
+        EmbeddedDocument,
+        fields,
+    )
 
     try:
         from .cycle_summary import CycleSummary  # type: ignore
@@ -22,31 +26,33 @@ try:  # pragma: no cover - behaviour depends on environment
 
         # Convenience export to create or fetch samples by name
         get_or_create_sample = Sample.get_or_create  # type: ignore
-        from .testresult import TestResult, CycleDetailData  # type: ignore
-        from .raw_file import RawDataFile  # type: ignore
-        from .test_protocol import TestProtocol  # type: ignore
         from .cell_dataset import CellDataset  # type: ignore
         from .experiment_plan import ExperimentPlan  # type: ignore
         from .import_job import ImportJob, ImportJobSummary  # type: ignore
-        from .stages import (
-            CathodeMaterial,
-            Slurry,
-            Electrode,
-            Cell,
-            inherit_metadata,
-        )
+        from .raw_file import RawDataFile  # type: ignore
+        from .stages import CathodeMaterial, Cell, Electrode, Slurry, inherit_metadata
+        from .test_protocol import TestProtocol  # type: ignore
+        from .testresult import CycleDetailData, TestResult  # type: ignore
     except ImportError:  # pragma: no cover - allow running as script
         import importlib
 
-        CycleSummary = importlib.import_module("cycle_summary").CycleSummary  # type: ignore
+        CycleSummary = importlib.import_module(
+            "cycle_summary"
+        ).CycleSummary  # type: ignore
         Sample = importlib.import_module("sample").Sample  # type: ignore
         # Convenience export to create or fetch samples by name
         get_or_create_sample = Sample.get_or_create  # type: ignore
         TestResult = importlib.import_module("testresult").TestResult  # type: ignore
-        CycleDetailData = importlib.import_module("testresult").CycleDetailData  # type: ignore
+        CycleDetailData = importlib.import_module(
+            "testresult"
+        ).CycleDetailData  # type: ignore
         RawDataFile = importlib.import_module("raw_file").RawDataFile  # type: ignore
-        TestProtocol = importlib.import_module("test_protocol").TestProtocol  # type: ignore
-        CellDataset = importlib.import_module("cell_dataset").CellDataset  # type: ignore
+        TestProtocol = importlib.import_module(
+            "test_protocol"
+        ).TestProtocol  # type: ignore
+        CellDataset = importlib.import_module(
+            "cell_dataset"
+        ).CellDataset  # type: ignore
         mod = importlib.import_module("import_job")
         ImportJob = mod.ImportJob  # type: ignore
         ImportJobSummary = mod.ImportJobSummary  # type: ignore
@@ -76,11 +82,18 @@ try:  # pragma: no cover - behaviour depends on environment
         "inherit_metadata",
     ]
 except Exception:  # pragma: no cover - executed when mongoengine is missing
+    import logging
+    import traceback
+
+    logging.exception("Failed to import MongoEngine models")
+    traceback.print_exc()
+
     # Provide very small dataclass implementations used in tests
-    from dataclasses import dataclass, field as dc_field
-    from typing import ClassVar
     import datetime
     import uuid
+    from dataclasses import dataclass
+    from dataclasses import field as dc_field
+    from typing import ClassVar
 
     @dataclass
     class CycleSummary:  # type: ignore
