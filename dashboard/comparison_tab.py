@@ -438,8 +438,7 @@ def _render_matplotlib(fig_dict: Dict[str, Any]) -> None:
         for tr in fig.data:
             if isinstance(tr, go.Scatter):
                 plt.plot(tr.x, tr.y, label=tr.name)
-        handles, labels = plt.gca().get_legend_handles_labels()
-        if any(label and not label.startswith("_") for label in labels):
+        if any(tr.name for tr in fig.data):
             plt.legend()
         plt.show()
     except Exception:
