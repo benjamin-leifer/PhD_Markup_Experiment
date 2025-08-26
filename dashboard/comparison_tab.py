@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import io
+import json
 import logging
 from multiprocessing import Process
 from typing import Any, Dict, List, Optional, Tuple
@@ -15,6 +16,10 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from dash import Input, Output, State, dcc, html
+try:  # pragma: no cover
+    from plotly.utils import PlotlyJSONDecoder
+except Exception:  # pragma: no cover
+    from json import JSONDecoder as PlotlyJSONDecoder  # type: ignore
 
 # Database helpers
 from dashboard.data_access import db_connected, get_db_error
@@ -414,8 +419,9 @@ def register_callbacks(app: dash.Dash) -> None:
 def _render_matplotlib(fig_dict: Dict[str, Any]) -> None:
     """Render ``fig_dict`` using Matplotlib."""
     import matplotlib.pyplot as plt
-
-    fig = go.Figure(fig_dict)
+    fig = go.Figure(
+        json.loads(json.dumps(fig_dict), cls=PlotlyJSONDecoder)
+    )
     plt.figure()
     for tr in fig.data:
         if isinstance(tr, go.Scatter):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 import logging
 from multiprocessing import Process
 from typing import Dict, List, Optional
@@ -10,6 +11,10 @@ from typing import Dict, List, Optional
 import dash
 import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
+try:  # pragma: no cover
+    from plotly.utils import PlotlyJSONDecoder
+except Exception:  # pragma: no cover
+    from json import JSONDecoder as PlotlyJSONDecoder  # type: ignore
 from battery_analysis.utils.detailed_data_manager import get_detailed_cycle_data
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -466,8 +471,9 @@ __all__ = ["layout", "register_callbacks"]
 
 def _render_matplotlib(fig_dict):
     import matplotlib.pyplot as plt
-
-    fig = go.Figure(fig_dict)
+    fig = go.Figure(
+        json.loads(json.dumps(fig_dict), cls=PlotlyJSONDecoder)
+    )
     plt.figure()
     for tr in fig.data:
         if isinstance(tr, go.Scatter):
