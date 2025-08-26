@@ -588,6 +588,14 @@ def register_callbacks(app: dash.Dash) -> None:
             return go.Figure(), f"Database not connected ({reason})"
         try:
             if analysis == "dqdv":
+                from battery_analysis import models
+
+                if not hasattr(models.TestResult, "objects"):
+                    return (
+                        go.Figure(),
+                        "Advanced analysis requires MongoEngine models; please install MongoEngine and retry.",
+                    )
+
                 smooth = smooth_vals and "smooth" in smooth_vals
                 voltage, capacity = advanced_analysis.get_voltage_capacity_data(
                     test_id, cycle
