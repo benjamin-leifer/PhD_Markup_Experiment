@@ -100,7 +100,6 @@ def get_voltage_capacity_data(test_id, cycle_number=None):
             ) from exc
 
     if not hasattr(models.TestResult, "objects"):
-        logging.error("MongoEngine models unavailable")
         raise RuntimeError("MongoEngine models unavailable")
 
     # ------------------------------------------------------------------ #
@@ -141,7 +140,6 @@ def get_voltage_capacity_data(test_id, cycle_number=None):
     # 2)  Fall back to the TestResult document and original data file
     # ------------------------------------------------------------------ #
     if not hasattr(models.TestResult, "objects"):
-        logging.error("MongoEngine models unavailable")
         raise RuntimeError("MongoEngine models unavailable")
     test = models.TestResult.objects(id=test_id).first()
     if test is None:
