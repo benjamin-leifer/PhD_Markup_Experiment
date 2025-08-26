@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import logging
 import tempfile
+from threading import Thread
 from typing import Dict, List
 
 import dash
@@ -432,8 +433,6 @@ def register_callbacks(app: dash.Dash) -> None:
         prevent_initial_call=True,
     )
     def _popout_matplotlib(n_clicks, fig_dict):
-        import json
-
         import matplotlib
 
         if not n_clicks or not fig_dict:
@@ -448,36 +447,27 @@ def register_callbacks(app: dash.Dash) -> None:
                 "danger",
             )
 
-        import matplotlib.pyplot as plt
-
-        def _prepare(vals):
-            if not vals:
-                return []
-            return [
-                json.dumps(v, sort_keys=True) if isinstance(v, dict) else v
-                for v in vals
-            ]
-
-        try:
-            plt.figure()
-            for trace in fig_dict.get("data", []):
-                if trace.get("type") == "scatter":
-                    plt.plot(
-                        _prepare(trace.get("x", [])),
-                        _prepare(trace.get("y", [])),
-                        label=trace.get("name"),
-                    )
-            plt.legend()
-            plt.show()
-        except Exception:
-            return (
-                0,
-                True,
-                "Failed to render plot with Matplotlib.",
-                "Error",
-                "danger",
-            )
+        Thread(target=_render_matplotlib, args=(fig_dict,), daemon=True).start()
         return (0, dash.no_update, dash.no_update, dash.no_update, dash.no_update)
+
+
+def _render_matplotlib(fig_dict):
+    import json
+
+    import matplotlib.pyplot as plt
+
+    def _prepare(vals):
+        return [
+            json.dumps(v, sort_keys=True) if isinstance(v, dict) else v
+            for v in vals or []
+        ]
+
+    plt.figure()
+    for tr in fig_dict.get("data", []):
+        if tr.get("type") == "scatter":
+            plt.plot(_prepare(tr.get("x")), _prepare(tr.get("y")), label=tr.get("name"))
+    plt.legend()
+    plt.show()
 
 
 def make_bode_plot(freq, mag, phase):

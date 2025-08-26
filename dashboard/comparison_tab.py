@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import io
 import logging
+from threading import Thread
 from typing import Any, Dict, List, Optional, Tuple
 
 import dash
@@ -392,8 +393,6 @@ def register_callbacks(app: dash.Dash) -> None:
         prevent_initial_call=True,
     )
     def _popout_matplotlib(n_clicks, fig_dict):
-        from multiprocessing import Process
-
         import matplotlib
 
         if not n_clicks or not fig_dict:
@@ -408,12 +407,12 @@ def register_callbacks(app: dash.Dash) -> None:
                 "danger",
             )
 
-        Process(target=_render_matplotlib, args=(fig_dict,)).start()
+        Thread(target=_render_matplotlib, args=(fig_dict,), daemon=True).start()
         return (0, dash.no_update, dash.no_update, dash.no_update, dash.no_update)
 
 
 def _render_matplotlib(fig_dict: Dict[str, Any]) -> None:
-    """Render ``fig_dict`` using Matplotlib in a separate process."""
+    """Render ``fig_dict`` using Matplotlib."""
     import json
 
     import matplotlib.pyplot as plt
