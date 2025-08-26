@@ -37,26 +37,27 @@ try:  # pragma: no cover - behaviour depends on environment
         import importlib
 
         CycleSummary = importlib.import_module(
-            "cycle_summary"
+            ".cycle_summary", __name__
         ).CycleSummary  # type: ignore
-        Sample = importlib.import_module("sample").Sample  # type: ignore
+        Sample = importlib.import_module(".sample", __name__).Sample  # type: ignore
         # Convenience export to create or fetch samples by name
         get_or_create_sample = Sample.get_or_create  # type: ignore
-        TestResult = importlib.import_module("testresult").TestResult  # type: ignore
-        CycleDetailData = importlib.import_module(
-            "testresult"
-        ).CycleDetailData  # type: ignore
-        RawDataFile = importlib.import_module("raw_file").RawDataFile  # type: ignore
+        testresult_mod = importlib.import_module(".testresult", __name__)
+        TestResult = testresult_mod.TestResult  # type: ignore
+        CycleDetailData = testresult_mod.CycleDetailData  # type: ignore
+        RawDataFile = importlib.import_module(
+            ".raw_file", __name__
+        ).RawDataFile  # type: ignore
         TestProtocol = importlib.import_module(
-            "test_protocol"
+            ".test_protocol", __name__
         ).TestProtocol  # type: ignore
         CellDataset = importlib.import_module(
-            "cell_dataset"
+            ".cell_dataset", __name__
         ).CellDataset  # type: ignore
-        mod = importlib.import_module("import_job")
+        mod = importlib.import_module(".import_job", __name__)
         ImportJob = mod.ImportJob  # type: ignore
         ImportJobSummary = mod.ImportJobSummary  # type: ignore
-        stages_mod = importlib.import_module("stages")
+        stages_mod = importlib.import_module(".stages", __name__)
         CathodeMaterial = stages_mod.CathodeMaterial  # type: ignore
         Slurry = stages_mod.Slurry  # type: ignore
         Electrode = stages_mod.Electrode  # type: ignore
