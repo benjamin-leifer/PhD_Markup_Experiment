@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import io
 import logging
-from threading import Thread
+from multiprocessing import Process
 from typing import Any, Dict, List, Optional, Tuple
 
 import dash
@@ -407,7 +407,7 @@ def register_callbacks(app: dash.Dash) -> None:
                 "danger",
             )
 
-        Thread(target=_render_matplotlib, args=(fig_dict,), daemon=True).start()
+        Process(target=_render_matplotlib, args=(fig_dict,), daemon=True).start()
         return (0, dash.no_update, dash.no_update, dash.no_update, dash.no_update)
 
 
