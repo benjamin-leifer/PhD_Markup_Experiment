@@ -92,9 +92,12 @@ def register_callbacks(app: dash.Dash) -> None:
     @app.callback(  # type: ignore[misc]
         Output(TABLE_CONTAINER, "children"),
         Input(REFRESH_INTERVAL, "n_intervals"),
+        Input("import-dir-job", "data"),
     )
-    def _refresh(_: int) -> dbc.Table:  # pragma: no cover - callback
-        return layout_components.import_jobs_table(_load_jobs())
+    def _refresh(
+        _: int, active_id: str | None
+    ) -> dbc.Table:  # pragma: no cover - callback
+        return layout_components.import_jobs_table(_load_jobs(), active_id)
 
     @app.callback(  # type: ignore[misc]
         Output(STATUS_MESSAGE, "children"),
