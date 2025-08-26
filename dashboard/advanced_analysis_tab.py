@@ -914,16 +914,32 @@ def register_callbacks(app: dash.Dash) -> None:
                 "danger",
             )
 
-        Process(target=_render_matplotlib, args=(fig_dict,), daemon=True).start()
+        try:
+            proc = Process(target=_render_matplotlib, args=(fig_dict,), daemon=True)
+            proc.start()
+            if not proc.is_alive():
+                raise OSError("Matplotlib process failed to start")
+        except OSError:
+            return (
+                0,
+                True,
+                "Failed to launch Matplotlib pop-out.",
+                "Error",
+                "danger",
+            )
         return (0, dash.no_update, dash.no_update, dash.no_update, dash.no_update)
 
 
 def _render_matplotlib(fig_dict):
-    fig = go.Figure(json.loads(json.dumps(fig_dict), cls=PlotlyJSONDecoder))
-    plt.figure()
-    for tr in fig.data:
-        if isinstance(tr, go.Scatter):
-            plt.plot(tr.x, tr.y, label=tr.name)
-    if any(tr.name for tr in fig.data):
-        plt.legend()
-    plt.show()
+    try:
+        fig = go.Figure(json.loads(json.dumps(fig_dict), cls=PlotlyJSONDecoder))
+        plt.figure()
+        for tr in fig.data:
+            if isinstance(tr, go.Scatter):
+                plt.plot(tr.x, tr.y, label=tr.name)
+        if any(tr.name for tr in fig.data):
+            plt.legend()
+        plt.show()
+    except Exception:
+        logging.exception("Matplotlib pop-out failed")
+        raise SystemExit
