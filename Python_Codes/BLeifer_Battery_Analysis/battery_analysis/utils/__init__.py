@@ -8,8 +8,12 @@ import logging
 import pickle
 import os
 import matplotlib
-from .image_pipeline import ingest_image_file
 from .logging import get_logger
+
+
+def ingest_image_file(*args, **kwargs):
+    from .image_pipeline import ingest_image_file as _ingest
+    return _ingest(*args, **kwargs)
 
 # Use the Qt backend only if a backend hasn't been configured already and
 # the Qt dependencies are available.  This prevents import errors during
