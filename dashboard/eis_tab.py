@@ -11,7 +11,6 @@ from typing import Dict, List
 
 import dash
 import dash_bootstrap_components as dbc
-import matplotlib.pyplot as plt
 import numpy as np
 import plotly.graph_objects as go
 from bson import ObjectId
@@ -471,8 +470,10 @@ def register_callbacks(app: dash.Dash) -> None:
 
 
 def _render_matplotlib(fig_dict):
+    import matplotlib.pyplot as plt
+
+    fig = go.Figure(json.loads(json.dumps(fig_dict), cls=PlotlyJSONDecoder))
     try:
-        fig = go.Figure(json.loads(json.dumps(fig_dict), cls=PlotlyJSONDecoder))
         plt.figure()
         for tr in fig.data:
             if isinstance(tr, go.Scatter):

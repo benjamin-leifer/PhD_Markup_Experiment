@@ -12,7 +12,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import dash
 import dash_bootstrap_components as dbc
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -432,8 +431,10 @@ def register_callbacks(app: dash.Dash) -> None:
 
 def _render_matplotlib(fig_dict: Dict[str, Any]) -> None:
     """Render ``fig_dict`` using Matplotlib."""
+    import matplotlib.pyplot as plt
+
+    fig = go.Figure(json.loads(json.dumps(fig_dict), cls=PlotlyJSONDecoder))
     try:
-        fig = go.Figure(json.loads(json.dumps(fig_dict), cls=PlotlyJSONDecoder))
         plt.figure()
         for tr in fig.data:
             if isinstance(tr, go.Scatter):

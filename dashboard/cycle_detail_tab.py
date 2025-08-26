@@ -10,7 +10,6 @@ from typing import Dict, List, Optional
 
 import dash
 import dash_bootstrap_components as dbc
-import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 
 try:  # pragma: no cover
@@ -485,8 +484,10 @@ __all__ = ["layout", "register_callbacks"]
 
 
 def _render_matplotlib(fig_dict):
+    import matplotlib.pyplot as plt
+
+    fig = go.Figure(json.loads(json.dumps(fig_dict), cls=PlotlyJSONDecoder))
     try:
-        fig = go.Figure(json.loads(json.dumps(fig_dict), cls=PlotlyJSONDecoder))
         plt.figure()
         for tr in fig.data:
             if isinstance(tr, go.Scatter):
