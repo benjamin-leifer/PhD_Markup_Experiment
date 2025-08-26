@@ -3,21 +3,23 @@
 from __future__ import annotations
 
 import base64
-import tempfile
-from typing import List, Dict
 import logging
+import tempfile
+from typing import Dict, List
 
 import dash
-from dash import html, dcc
 import dash_bootstrap_components as dbc
-from dash import Input, Output, State
-from plotly import graph_objs as go
-from plotly.subplots import make_subplots
 import numpy as np
-from dashboard.data_access import db_connected, get_db_error
-from Mongodb_implementation import find_samples, find_test_results
 from bson import ObjectId
 from bson.errors import InvalidId
+from dash import Input, Output, State, dcc, html
+from plotly import graph_objs as go
+from plotly.subplots import make_subplots
+
+from dashboard.data_access import db_connected, get_db_error
+from Mongodb_implementation import find_samples, find_test_results
+
+# mypy: ignore-errors
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +114,9 @@ def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
             if t.get("name")
         ]
         if not opts:
-            logger.warning("No EIS tests found for sample %s; using demo data", sample_id)
+            logger.warning(
+                "No EIS tests found for sample %s; using demo data", sample_id
+            )
             return [{"label": "EIS_Test", "value": str(ObjectId())}]
         return opts
     except Exception:
@@ -419,16 +423,32 @@ def register_callbacks(app: dash.Dash) -> None:
 
     @app.callback(
         Output(MPL_POPOUT_BUTTON, "n_clicks"),
+        Output("notification-toast", "is_open", allow_duplicate=True),
+        Output("notification-toast", "children", allow_duplicate=True),
+        Output("notification-toast", "header", allow_duplicate=True),
+        Output("notification-toast", "icon", allow_duplicate=True),
         Input(MPL_POPOUT_BUTTON, "n_clicks"),
         State(GRAPH_COMPONENT, "figure"),
         prevent_initial_call=True,
     )
     def _popout_matplotlib(n_clicks, fig_dict):
         import json
-        import matplotlib.pyplot as plt
+
+        import matplotlib
 
         if not n_clicks or not fig_dict:
             raise dash.exceptions.PreventUpdate
+
+        if matplotlib.get_backend().lower() == "agg":
+            return (
+                0,
+                True,
+                "An interactive Matplotlib backend is required for pop-out plots.",
+                "Error",
+                "danger",
+            )
+
+        import matplotlib.pyplot as plt
 
         def _prepare(vals):
             if not vals:
@@ -438,17 +458,26 @@ def register_callbacks(app: dash.Dash) -> None:
                 for v in vals
             ]
 
-        plt.figure()
-        for trace in fig_dict.get("data", []):
-            if trace.get("type") == "scatter":
-                plt.plot(
-                    _prepare(trace.get("x", [])),
-                    _prepare(trace.get("y", [])),
-                    label=trace.get("name"),
-                )
-        plt.legend()
-        plt.show()
-        return 0
+        try:
+            plt.figure()
+            for trace in fig_dict.get("data", []):
+                if trace.get("type") == "scatter":
+                    plt.plot(
+                        _prepare(trace.get("x", [])),
+                        _prepare(trace.get("y", [])),
+                        label=trace.get("name"),
+                    )
+            plt.legend()
+            plt.show()
+        except Exception:
+            return (
+                0,
+                True,
+                "Failed to render plot with Matplotlib.",
+                "Error",
+                "danger",
+            )
+        return (0, dash.no_update, dash.no_update, dash.no_update, dash.no_update)
 
 
 def make_bode_plot(freq, mag, phase):

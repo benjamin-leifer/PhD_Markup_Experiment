@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Iterable, Mapping, Any, Optional
+import os
+from typing import Any, Iterable, Mapping, Optional
 
-import matplotlib.pyplot as plt
-import numpy as np
+import matplotlib
+
+matplotlib.use(os.environ.get("MPLBACKEND", "Qt5Agg"))
+import matplotlib.pyplot as plt  # noqa: E402
 
 
 def _get_nested(data: Mapping[str, Any], path: str) -> Any:
@@ -60,7 +63,7 @@ def plot_overlay(
         fig = ax.figure
 
     # Determine groups and assign colors
-    groups = list({ _get_nested(s, group_by) for s in samples })
+    groups = list({_get_nested(s, group_by) for s in samples})
     groups = [g if g is not None else "Unknown" for g in groups]
     cmap = plt.get_cmap("tab10")
     colors = {g: cmap(i % 10) for i, g in enumerate(groups)}
@@ -87,9 +90,7 @@ def plot_overlay(
             x = sample.get("cycle_index")
             y = sample.get("coulombic_efficiency")
             if x is None or y is None:
-                raise ValueError(
-                    "Sample lacks cycle index/coulombic efficiency data"
-                )
+                raise ValueError("Sample lacks cycle index/coulombic efficiency data")
             ax.plot(
                 x,
                 y,

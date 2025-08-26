@@ -2,25 +2,27 @@
 
 from __future__ import annotations
 
-from typing import List, Dict
-
-import dash
-from dash import html, dcc
-import dash_bootstrap_components as dbc
-from dash import Input, Output, State
-from plotly import graph_objs as go
-import numpy as np
-import pandas as pd
 import base64
-import tempfile
 import io
 import logging
+import tempfile
 from types import SimpleNamespace
+from typing import Dict, List
+
+import dash
+import dash_bootstrap_components as dbc
+import numpy as np
+import pandas as pd
 from bson import ObjectId
 from bson.errors import InvalidId
+from dash import Input, Output, State, dcc, html
+from plotly import graph_objs as go
+
+import normalization_utils
 from dashboard.data_access import db_connected, get_db_error
 from Mongodb_implementation import find_samples, find_test_results
-import normalization_utils
+
+# mypy: ignore-errors
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +32,7 @@ except Exception:  # pragma: no cover - gracefully handle missing SciPy
     savgol_filter = None  # type: ignore
 
 try:  # pragma: no cover - optional dependencies
-    from battery_analysis import advanced_analysis, MISSING_ADVANCED_PACKAGES
+    from battery_analysis import MISSING_ADVANCED_PACKAGES, advanced_analysis
 except Exception:  # pragma: no cover - gracefully handle missing packages
     advanced_analysis = None  # type: ignore
     MISSING_ADVANCED_PACKAGES = ["advanced analysis"]
@@ -169,15 +171,15 @@ def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
         return []
     if not db_connected():
         reason = get_db_error() or "unknown reason"
-        logger.error(
-            "Database not connected: %s; using demo data for tests", reason
-        )
+        logger.error("Database not connected: %s; using demo data for tests", reason)
         return [{"label": f"{sample_id}-TestA", "value": str(ObjectId())}]
     try:  # pragma: no cover - depends on MongoDB
         from battery_analysis import models
 
         if hasattr(models.Sample, "objects") and hasattr(models.TestResult, "objects"):
-            tests = models.TestResult.objects(sample=sample_id).only("name")  # type: ignore[attr-defined]
+            tests = models.TestResult.objects(sample=sample_id).only(
+                "name"
+            )  # type: ignore[attr-defined]
             return [{"label": t.name, "value": str(t.id)} for t in tests]
 
         try:
@@ -191,7 +193,9 @@ def _get_test_options(sample_id: str) -> List[Dict[str, str]]:
             if t.get("name")
         ]
         if not opts:
-            logger.warning("No test options found for sample %s; using demo data", sample_id)
+            logger.warning(
+                "No test options found for sample %s; using demo data", sample_id
+            )
             return [{"label": f"{sample_id}-TestA", "value": str(ObjectId())}]
         return opts
     except Exception:
@@ -468,7 +472,9 @@ def register_callbacks(app: dash.Dash) -> None:
             return []
         return _get_test_options(sample_id)
 
-    @app.callback(Output(NORMALIZATION_OUTPUT, "children"), Input(SAMPLE_DROPDOWN, "value"))
+    @app.callback(
+        Output(NORMALIZATION_OUTPUT, "children"), Input(SAMPLE_DROPDOWN, "value")
+    )
     def _show_normalization(sample_id):
         if not sample_id:
             return ""
@@ -614,7 +620,9 @@ def register_callbacks(app: dash.Dash) -> None:
                         oid = test_id
                     docs = find_test_results({"_id": oid})
                     if docs:
-                        cycles = docs[0].get("cycles") or docs[0].get("cycle_summaries", [])
+                        cycles = docs[0].get("cycles") or docs[0].get(
+                            "cycle_summaries", []
+                        )
                         test = SimpleNamespace(
                             cycles=[SimpleNamespace(**c) for c in cycles]
                         )
@@ -624,7 +632,10 @@ def register_callbacks(app: dash.Dash) -> None:
                     logger.warning("Test %s not found; using demo data", test_id)
                     return go.Figure(), "Test not found"
                 if len(test.cycles) < 10:
-                    err = f"Need at least 10 cycles for fade analysis, found {len(test.cycles)}"
+                    err = (
+                        "Need at least 10 cycles for fade analysis, "
+                        f"found {len(test.cycles)}"
+                    )
                     return go.Figure(), err
                 cycle_nums = [c.cycle_index for c in test.cycles]
                 discharge_caps = [c.discharge_capacity for c in test.cycles]
@@ -688,7 +699,9 @@ def register_callbacks(app: dash.Dash) -> None:
                         oid = test_id
                     docs = find_test_results({"_id": oid})
                     if docs:
-                        cycles = docs[0].get("cycles") or docs[0].get("cycle_summaries", [])
+                        cycles = docs[0].get("cycles") or docs[0].get(
+                            "cycle_summaries", []
+                        )
                         test = SimpleNamespace(
                             cycles=[SimpleNamespace(**c) for c in cycles]
                         )
@@ -859,16 +872,32 @@ def register_callbacks(app: dash.Dash) -> None:
 
     @app.callback(
         Output(MPL_POPOUT_BUTTON, "n_clicks"),
+        Output("notification-toast", "is_open", allow_duplicate=True),
+        Output("notification-toast", "children", allow_duplicate=True),
+        Output("notification-toast", "header", allow_duplicate=True),
+        Output("notification-toast", "icon", allow_duplicate=True),
         Input(MPL_POPOUT_BUTTON, "n_clicks"),
         State(RESULT_GRAPH, "figure"),
         prevent_initial_call=True,
     )
     def _popout_matplotlib(n_clicks, fig_dict):
         import json
-        import matplotlib.pyplot as plt
+
+        import matplotlib
 
         if not n_clicks or not fig_dict:
             raise dash.exceptions.PreventUpdate
+
+        if matplotlib.get_backend().lower() == "agg":
+            return (
+                0,
+                True,
+                "An interactive Matplotlib backend is required for pop-out plots.",
+                "Error",
+                "danger",
+            )
+
+        import matplotlib.pyplot as plt
 
         def _prepare(vals):
             if not vals:
@@ -878,15 +907,24 @@ def register_callbacks(app: dash.Dash) -> None:
                 for v in vals
             ]
 
-        plt.figure()
-        for trace in fig_dict.get("data", []):
-            if trace.get("type") == "scatter":
-                plt.plot(
-                    _prepare(trace.get("x", [])),
-                    _prepare(trace.get("y", [])),
-                    label=trace.get("name"),
-                )
-        plt.legend()
-        # show the figure without blocking to avoid threading issues
-        plt.show(block=False)
-        return 0
+        try:
+            plt.figure()
+            for trace in fig_dict.get("data", []):
+                if trace.get("type") == "scatter":
+                    plt.plot(
+                        _prepare(trace.get("x", [])),
+                        _prepare(trace.get("y", [])),
+                        label=trace.get("name"),
+                    )
+            plt.legend()
+            # show the figure without blocking to avoid threading issues
+            plt.show(block=False)
+        except Exception:
+            return (
+                0,
+                True,
+                "Failed to render plot with Matplotlib.",
+                "Error",
+                "danger",
+            )
+        return (0, dash.no_update, dash.no_update, dash.no_update, dash.no_update)
