@@ -17,7 +17,7 @@ import pandas as pd
 from bson import ObjectId
 from bson.errors import InvalidId
 from dash import Input, Output, State, dcc, html
-from plotly import graph_objs as go
+import plotly.graph_objects as go
 
 import normalization_utils
 from dashboard.data_access import db_connected, get_db_error
@@ -912,19 +912,13 @@ def register_callbacks(app: dash.Dash) -> None:
 
 
 def _render_matplotlib(fig_dict):
-    import json
-
     import matplotlib.pyplot as plt
 
-    def _prepare(vals):
-        return [
-            json.dumps(v, sort_keys=True) if isinstance(v, dict) else v
-            for v in vals or []
-        ]
-
+    fig = go.Figure(fig_dict)
     plt.figure()
-    for tr in fig_dict.get("data", []):
-        if tr.get("type") == "scatter":
-            plt.plot(_prepare(tr.get("x")), _prepare(tr.get("y")), label=tr.get("name"))
-    plt.legend()
+    for tr in fig.data:
+        if isinstance(tr, go.Scatter):
+            plt.plot(tr.x, tr.y, label=tr.name)
+    if any(tr.name for tr in fig.data):
+        plt.legend()
     plt.show()

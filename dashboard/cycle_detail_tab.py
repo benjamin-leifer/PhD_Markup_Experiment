@@ -465,19 +465,13 @@ __all__ = ["layout", "register_callbacks"]
 
 
 def _render_matplotlib(fig_dict):
-    import json
-
     import matplotlib.pyplot as plt
 
-    def _prepare(vals):
-        return [
-            json.dumps(v, sort_keys=True) if isinstance(v, dict) else v
-            for v in vals or []
-        ]
-
+    fig = go.Figure(fig_dict)
     plt.figure()
-    for tr in fig_dict.get("data", []):
-        if tr.get("type") == "scatter":
-            plt.plot(_prepare(tr.get("x")), _prepare(tr.get("y")), label=tr.get("name"))
-    plt.legend()
+    for tr in fig.data:
+        if isinstance(tr, go.Scatter):
+            plt.plot(tr.x, tr.y, label=tr.name)
+    if any(tr.name for tr in fig.data):
+        plt.legend()
     plt.show()
