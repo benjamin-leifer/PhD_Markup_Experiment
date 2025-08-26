@@ -33,6 +33,8 @@ try:  # pragma: no cover - database optional
     from battery_analysis.models import Sample
     from mongoengine import connect
 except Exception:  # pragma: no cover - allow running without DB
+    import logging
+    logging.exception("Failed to import MongoEngine models")
     models = None
     Sample = None
     connect = None
