@@ -1,7 +1,8 @@
+from __future__ import annotations
+
 import os
 import datetime
 import hashlib
-from battery_analysis.models import ImportJob, RawDataFile, TestResult
 
 
 def store_raw_data_file(
@@ -25,6 +26,8 @@ def store_raw_data_file(
     Returns:
         RawDataFile: The stored file document
     """
+    from battery_analysis.models import ImportJob, RawDataFile, TestResult
+
     filename = os.path.basename(file_path)
 
     # Determine file type if not provided
@@ -94,6 +97,8 @@ def get_raw_data_file(test_id, as_file_path=False):
     Returns:
         bytes or str: The file data or path to temp file
     """
+    from battery_analysis.models import RawDataFile
+
     # Find the file
     raw_file = RawDataFile.objects(test_result=test_id).first()
     if not raw_file:
@@ -131,6 +136,8 @@ def get_raw_data_file_by_id(file_id, as_file_path=False):
         The file's bytes or the temporary file path, depending on
         ``as_file_path``.
     """
+
+    from battery_analysis.models import RawDataFile
 
     raw_file = RawDataFile.objects(id=file_id).first()
     if not raw_file:
@@ -196,6 +203,8 @@ def save_raw(
         the archived bytes.
     """
 
+    from battery_analysis.models import TestResult
+
     file_hash = _sha256_file(file_path)
 
     existing = TestResult.objects(file_hash=file_hash).first()
@@ -259,6 +268,8 @@ def cleanup_orphaned() -> int:
     int
         The number of removed files.
     """
+
+    from battery_analysis.models import RawDataFile, TestResult
 
     removed = 0
     for raw in RawDataFile.objects():
