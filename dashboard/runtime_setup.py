@@ -10,6 +10,9 @@ from pathlib import Path
 
 from battery_analysis.utils.config import load_config
 
+# Ensure an interactive Matplotlib backend is selected before any pyplot imports
+os.environ.setdefault("MPLBACKEND", "Qt5Agg")
+
 
 def configure() -> None:
     """Ensure battery_analysis is installed and DB env vars are set.
@@ -45,4 +48,3 @@ def configure() -> None:
         os.environ.setdefault("MONGO_PORT", port)
     else:
         os.environ.setdefault("MONGO_PORT", "27017")
-

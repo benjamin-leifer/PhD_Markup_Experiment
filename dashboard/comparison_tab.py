@@ -383,6 +383,10 @@ def register_callbacks(app: dash.Dash) -> None:
 
     @app.callback(
         Output(MPL_POPOUT_BUTTON, "n_clicks"),
+        Output("notification-toast", "is_open", allow_duplicate=True),
+        Output("notification-toast", "children", allow_duplicate=True),
+        Output("notification-toast", "header", allow_duplicate=True),
+        Output("notification-toast", "icon", allow_duplicate=True),
         Input(MPL_POPOUT_BUTTON, "n_clicks"),
         State(GRAPH, "figure"),
         prevent_initial_call=True,
@@ -390,11 +394,22 @@ def register_callbacks(app: dash.Dash) -> None:
     def _popout_matplotlib(n_clicks, fig_dict):
         from multiprocessing import Process
 
+        import matplotlib
+
         if not n_clicks or not fig_dict:
             raise dash.exceptions.PreventUpdate
 
+        if matplotlib.get_backend().lower() == "agg":
+            return (
+                0,
+                True,
+                "An interactive Matplotlib backend is required for pop-out plots.",
+                "Error",
+                "danger",
+            )
+
         Process(target=_render_matplotlib, args=(fig_dict,)).start()
-        return 0
+        return (0, dash.no_update, dash.no_update, dash.no_update, dash.no_update)
 
 
 def _render_matplotlib(fig_dict: Dict[str, Any]) -> None:

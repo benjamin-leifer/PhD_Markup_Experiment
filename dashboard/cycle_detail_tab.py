@@ -433,6 +433,10 @@ def register_callbacks(app: dash.Dash) -> None:
 
     @app.callback(
         Output(MPL_POPOUT_BUTTON, "n_clicks"),
+        Output("notification-toast", "is_open", allow_duplicate=True),
+        Output("notification-toast", "children", allow_duplicate=True),
+        Output("notification-toast", "header", allow_duplicate=True),
+        Output("notification-toast", "icon", allow_duplicate=True),
         Input(MPL_POPOUT_BUTTON, "n_clicks"),
         State(GRAPH, "figure"),
         prevent_initial_call=True,
@@ -440,13 +444,21 @@ def register_callbacks(app: dash.Dash) -> None:
     def _popout_matplotlib(n_clicks, fig_dict):
         import json
 
-        try:
-            import matplotlib.pyplot as plt
-        except Exception:
-            return dash.no_update
+        import matplotlib
 
         if not n_clicks or not fig_dict:
             raise dash.exceptions.PreventUpdate
+
+        if matplotlib.get_backend().lower() == "agg":
+            return (
+                0,
+                True,
+                "An interactive Matplotlib backend is required for pop-out plots.",
+                "Error",
+                "danger",
+            )
+
+        import matplotlib.pyplot as plt
 
         def _prepare(vals):
             if not vals:
@@ -468,8 +480,14 @@ def register_callbacks(app: dash.Dash) -> None:
             plt.legend()
             plt.show()
         except Exception:
-            return dash.no_update
-        return 0
+            return (
+                0,
+                True,
+                "Failed to render plot with Matplotlib.",
+                "Error",
+                "danger",
+            )
+        return (0, dash.no_update, dash.no_update, dash.no_update, dash.no_update)
 
 
 __all__ = ["layout", "register_callbacks"]
