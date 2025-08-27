@@ -28,23 +28,37 @@ DATA_DIR = Path(r"C:\Users\benja\Downloads\DQ_DV Work\Lab Arbin_DQ_DV_2025_07_15
 
 FILES: List[str] = [
     # ---------- your dQ/dV & charge-curve input files ----------
-    "BL-LL-FZ01_RT_C_20_Charge_02_CP_C04.mpt",
-    "BL-LL-GA01_RT_C_20_Charge_02_CP_C02.mpt",
-    "BL-LL-GN01_RT_No_Formation_03_GCPL_C01.mpt",
-    "BL-LL-GO01_RT_No_Formation_03_GCPL_C04.mpt",
+    "BL-LL-FZ01_RT_C_20_Charge_02_CP_C04.mpt", #"DTFV1422"
+    #"BL-LL-GA01_RT_C_20_Charge_02_CP_C02.mpt",#DTFV1452 - old
+    "BL-LL-GN01_RT_No_Formation_03_GCPL_C01.mpt",#DTFV1452 - new
+    "BL-LL-GO01_RT_No_Formation_03_GCPL_C04.mpt",#DTFV1425
     #"BL-LL-GX05_RT_No_Formation_02_CP_C04.mpt",
     "BL-LL-GW05_RT_No_Formation_02_CP_C03.mpt",#DTFV1411
     "BL-LL-GV05_RT_No_Formation_02_CP_C01.mpt",#DTV1410
     "BL-LL-GU05_RT_No_Formation_02_CP_C04.mpt",#DTV142
     "BL-LL-GT05_RT_No_Formation_02_CP_C03.mpt",#DTF1410
     "BL-LL-GS05_RT_No_Formation_02_CP_C01.mpt",#DTF142
-    "BL-LL-GY01_RT_No_Formation_02_CP_C01.mpt",#DT14
-    #"BL-LL-GY02_RT_No_Formation_02_CP_C03.mpt",#DT14
+    #"BL-LL-GY01_RT_No_Formation_02_CP_C01.mpt",#DT14
+    "BL-LL-GY02_RT_No_Formation_02_CP_C03.mpt",#DT14
     #"BL-LL-GA02_RT_C_20_Form_HighFid_Channel_64_Wb_1.xlsx",
     #"BL-LL-FZ02_RT_C_20_Form_HighFid_Channel_63_Wb_1.xlsx",
     #"BL-LL-FW02_RT_C_20_Form_HighFid_Channel_60_Wb_1.xlsx",
     #"BL-LL-FX02_RT_C_20_Form_HighFid_Channel_61_Wb_1.xlsx",
 ]
+
+# ---- explicit color overrides for specific base tokens ----
+SPECIAL_COLORS = {
+    "DT14":     "#08306b",  # deep blue (fixed)
+    "DTFV1452": "#9F2B68",  # purple A (DTFV1452)
+    "DTFV1425": "#FF00FF",  # purple B (DTFV1425), different shade
+}
+
+def canonicalize_base_token(s: str) -> str:
+    """Strip parentheses and trailing words so 'DTFV1452 (new)' -> 'DTFV1452'."""
+    s = re.sub(r"\s*\(.*?\)\s*", "", s or "")
+    s = s.split()[0]
+    return s
+
 
 # active-material masses (mg) if you want normalised units
 MASS_MG = {id_: 0.02496886674 / 1000  # mg → g
@@ -165,7 +179,8 @@ def style_for_cell(cell_id: str, idx_hint: int = 0) -> dict:
     {color, linestyle, marker, base, test, label, lw, markevery}
     """
     label = electrolyte_lookup.get(cell_id, "Unknown")
-    base, test = split_base_and_test(label)
+    base_raw, test = split_base_and_test(label)
+    base = canonicalize_base_token(base_raw)  # ← normalize ('DTFV1452 (new)' -> 'DTFV1452')
     color = color_for_base(base, idx_hint)
 
     # Test-type still controls line style (solid vs dashed)
@@ -248,21 +263,7 @@ def style_from_code(base_token: str):
     info = parse_electrolyte_code(base_token)
     total_pct = max(0, info["f_pct"] + info["v_pct"])  # total additive wt%
 
-    # --- choose color family (unchanged from your tone scheme) ---
-    if info["has_f"] and info["has_v"]:
-        base_hex, max_hex = "#cab2d6", "#3f007d"   # purple
-    elif info["has_f"]:
-        base_hex, max_hex = "#b2df8a", "#00441b"   # green
-    elif info["has_v"]:
-        base_hex, max_hex = "#fdbf6f", "#7f2704"   # orange
-    else:
-        base_hex, max_hex = "#a6cee3", "#08306b"   # blue
-
-    # tone by amount (map 0–10% to 0–1; clamp above 10)
-    frac = min(1.0, total_pct/10.0)
-    color = interpolate_color(base_hex, max_hex, frac)
-
-    # marker by identity (optional but keeps redundancy)
+    # Marker by identity (consistent across both override and default paths)
     if info["has_f"] and info["has_v"]:
         marker = "o"
     elif info["has_f"]:
@@ -272,17 +273,32 @@ def style_from_code(base_token: str):
     else:
         marker = "D"
 
-    # --- NEW: line width by total additive ---
-    # baseline = 1.6; add 0.12 per wt% up to 10% => max ~2.8
-    lw = 1.6 + 0.12 * min(total_pct, 10)
-    # (optional) make zero-additive slightly lighter to de-emphasize
-    # alpha = 0.95 if total_pct > 0 else 0.85
+    # --- Hard color overrides take precedence (exact token match) ---
+    if base_token in SPECIAL_COLORS:
+        color = SPECIAL_COLORS[base_token]
+        lw = 1.6 + 0.12 * min(total_pct, 10)  # thickness = total additive
+        markevery = 30
+        return {"color": color, "marker": marker, "lw": lw, "markevery": markevery}
 
-    # marker frequency can stay fixed or scale gently if you like:
+    # --- Default hue families & toning by amount ---
+    # F+V → purple; F only → green; V only → orange; none → blue
+    if info["has_f"] and info["has_v"]:
+        base_hex, max_hex = "#cab2d6", "#3f007d"   # purple family
+    elif info["has_f"]:
+        base_hex, max_hex = "#b2df8a", "#00441b"   # green family
+    elif info["has_v"]:
+        base_hex, max_hex = "#fdbf6f", "#7f2704"   # orange family
+    else:
+        base_hex, max_hex = "#a6cee3", "#08306b"   # blue family
+
+    # tone by amount (map 0–10% to 0–1; clamp above 10)
+    frac = min(1.0, total_pct/10.0)
+    color = interpolate_color(base_hex, max_hex, frac)
+
+    lw = 1.6 + 0.12 * min(total_pct, 10)  # thickness = total additive
     markevery = 30
 
     return {"color": color, "marker": marker, "lw": lw, "markevery": markevery}
-
 
 
 
