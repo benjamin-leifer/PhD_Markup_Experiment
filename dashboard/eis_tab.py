@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import tempfile
 from multiprocessing import Process
@@ -326,8 +327,6 @@ def register_callbacks(app: dash.Dash) -> None:
             tmp.write(data)
             tmp_path = tmp.name
         parsed = eis.parse_eis_file(tmp_path)
-        for key in ["frequency", "Z_real", "Z_imag"]:
-            parsed[key] = np.array(parsed[key]).tolist()
         return parsed
 
     @app.callback(
@@ -340,8 +339,6 @@ def register_callbacks(app: dash.Dash) -> None:
         if not n_clicks or not test_id or not HAS_EIS or eis is None:
             raise dash.exceptions.PreventUpdate
         data = eis.get_eis_data(test_id)
-        for key in ["frequency", "Z_real", "Z_imag"]:
-            data[key] = np.array(data[key]).tolist()
         return data
 
     @app.callback(
@@ -370,9 +367,9 @@ def register_callbacks(app: dash.Dash) -> None:
         )
         data.update(
             {
-                "frequency": freq.tolist(),
-                "Z_real": z_real.tolist(),
-                "Z_imag": z_imag.tolist(),
+                "frequency": freq,
+                "Z_real": z_real,
+                "Z_imag": z_imag,
             }
         )
         return data, ""
@@ -464,9 +461,12 @@ def register_callbacks(app: dash.Dash) -> None:
 
 
 def _render_matplotlib(fig_dict):
+    import json
     import matplotlib.pyplot as plt
+    from plotly import utils as putils
 
-    fig = go.Figure(fig_dict)
+    decoder = getattr(putils, "PlotlyJSONDecoder", json.JSONDecoder)
+    fig = go.Figure(json.loads(json.dumps(fig_dict), cls=decoder))
     try:
         plt.figure()
         for tr in fig.data:

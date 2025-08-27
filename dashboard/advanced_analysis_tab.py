@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import logging
 import tempfile
 from multiprocessing import Process
@@ -924,9 +925,12 @@ def register_callbacks(app: dash.Dash) -> None:
 
 
 def _render_matplotlib(fig_dict):
+    import json
     import matplotlib.pyplot as plt
+    from plotly import utils as putils
 
-    fig = go.Figure(fig_dict)
+    decoder = getattr(putils, "PlotlyJSONDecoder", json.JSONDecoder)
+    fig = go.Figure(json.loads(json.dumps(fig_dict), cls=decoder))
     try:
         plt.figure()
         for tr in fig.data:

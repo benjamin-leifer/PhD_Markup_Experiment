@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import io
+import json
 import logging
 from multiprocessing import Process
 from typing import Any, Dict, List, Optional, Tuple
@@ -425,9 +426,12 @@ def register_callbacks(app: dash.Dash) -> None:
 
 def _render_matplotlib(fig_dict: Dict[str, Any]) -> None:
     """Render ``fig_dict`` using Matplotlib."""
+    import json
     import matplotlib.pyplot as plt
+    from plotly import utils as putils
 
-    fig = go.Figure(fig_dict)
+    decoder = getattr(putils, "PlotlyJSONDecoder", json.JSONDecoder)
+    fig = go.Figure(json.loads(json.dumps(fig_dict), cls=decoder))
     try:
         plt.figure()
         for tr in fig.data:
