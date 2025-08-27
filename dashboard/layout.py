@@ -433,6 +433,16 @@ def data_import_layout() -> html.Div:
                 id="import-dir-start",
                 color="primary",
             ),
+            dcc.Input(
+                id="arbin-dir-path",
+                type="text",
+                placeholder="Directory with Arbin files",
+            ),
+            dbc.Button(
+                "Import Arbin Directory",
+                id="arbin-dir-start",
+                color="primary",
+            ),
             dcc.Store(id="upload-info"),
             html.Div(id="upload-status"),
             html.Ul(id="uploaded-files-list"),
