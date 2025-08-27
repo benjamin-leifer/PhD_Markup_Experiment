@@ -797,6 +797,35 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
             )
 
     @app.callback(
+        Output("notification-toast", "is_open", allow_duplicate=True),
+        Output("notification-toast", "children", allow_duplicate=True),
+        Output("notification-toast", "header", allow_duplicate=True),
+        Output("notification-toast", "icon", allow_duplicate=True),
+        Input("arbin-dir-start", "n_clicks"),
+        State("arbin-dir-path", "value"),
+        State("user-role", "data"),
+        prevent_initial_call=True,
+    )
+    def import_arbin_directory(n_clicks, path, role):
+        if not n_clicks:
+            raise dash.exceptions.PreventUpdate
+        if not path or not os.path.isdir(path):
+            msg = "Invalid directory"
+            return True, msg, "Error", "danger"
+        if not auth.has_permission(role or "", "data-import"):
+            msg = "Not authorized"
+            return True, msg, "Error", "danger"
+        try:
+            from battery_analysis.utils.import_directory import import_directory
+
+            import_directory(path, include=["*.csv", "*.xls", "*.xlsx"])
+            msg = f"Imported Arbin directory {path}"
+            return True, msg, "Import Complete", "success"
+        except Exception as err:  # pragma: no cover - simple error handling
+            msg = str(err)
+            return True, msg, "Error", "danger"
+
+    @app.callback(
         Output("flagged-container", "children"),
         Input({"type": "flag-review", "index": dash.ALL}, "n_clicks"),
         Input({"type": "flag-retest", "index": dash.ALL}, "n_clicks"),

@@ -33,3 +33,30 @@ def test_import_directory_starts_job_and_redirects(monkeypatch, tmp_path, dash_d
         str(tmp_path),
         include=["*.csv", "*.xlsx", "*.xls", "*.mpt"],
     )
+
+
+def test_arbin_import_directory(monkeypatch, tmp_path, dash_duo):
+    """Clicking the Arbin import button uses the correct include patterns."""
+    create_app = pytest.importorskip("dashboard.app").create_app
+    app = create_app()
+
+    mock_import = Mock()
+    monkeypatch.setattr(
+        "battery_analysis.utils.import_directory.import_directory",
+        mock_import,
+    )
+
+    dash_duo.start_server(app)
+    dash_duo.wait_for_page(dash_duo.server_url + "/data-import")
+
+    dash_duo.find_element("#arbin-dir-path").send_keys(str(tmp_path))
+    dash_duo.find_element("#arbin-dir-start").click()
+
+    dash_duo.wait_for_text_to_equal(
+        "#notification-toast .toast-body", f"Imported Arbin directory {tmp_path}"
+    )
+
+    mock_import.assert_called_once_with(
+        str(tmp_path),
+        include=["*.csv", "*.xls", "*.xlsx"],
+    )
