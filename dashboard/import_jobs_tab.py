@@ -13,8 +13,8 @@ try:
     from . import auth
     from . import layout as layout_components
 except ImportError:  # running as a script
-    import auth  # type: ignore
-    import layout as layout_components  # type: ignore
+    import auth
+    import layout as layout_components
 
 try:  # pragma: no cover - optional dependency
     from battery_analysis.models import ImportJob
@@ -92,7 +92,9 @@ def register_callbacks(app: dash.Dash) -> None:
     @app.callback(  # type: ignore[misc]
         Output(TABLE_CONTAINER, "children"),
         Input(REFRESH_INTERVAL, "n_intervals"),
-        Input("import-dir-job", "data"),
+        # The import directory store may not exist until a job has started,
+        # so allow the callback to run even when it's missing.
+        Input("import-dir-job", "data", allow_missing=True),
     )
     def _refresh(
         _: int, active_id: str | None
