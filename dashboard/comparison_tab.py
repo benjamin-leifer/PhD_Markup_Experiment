@@ -16,11 +16,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from dash import Input, Output, State, dcc, html
-
-try:  # pragma: no cover
-    from plotly.utils import PlotlyJSONDecoder
-except Exception:  # pragma: no cover
-    from json import JSONDecoder as PlotlyJSONDecoder  # type: ignore
+from plotly.utils import PlotlyJSONDecoder
 
 # Database helpers
 from dashboard.data_access import db_connected, get_db_error
