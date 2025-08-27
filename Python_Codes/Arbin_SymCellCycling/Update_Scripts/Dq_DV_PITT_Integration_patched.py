@@ -28,15 +28,15 @@ DATA_DIR = Path(r"C:\Users\benja\Downloads\DQ_DV Work\Lab Arbin_DQ_DV_2025_07_15
 
 FILES: List[str] = [
     # ---------- your dQ/dV & charge-curve input files ----------
-    #"BL-LL-FZ01_RT_C_20_Charge_02_CP_C04.mpt",
-    #"BL-LL-GA01_RT_C_20_Charge_02_CP_C02.mpt",
+    "BL-LL-FZ01_RT_C_20_Charge_02_CP_C04.mpt",
+    "BL-LL-GA01_RT_C_20_Charge_02_CP_C02.mpt",
     #"BL-LL-GN01_RT_No_Formation_03_GCPL_C01.mpt",
     #"BL-LL-GX05_RT_No_Formation_02_CP_C04.mpt",
     "BL-LL-GW05_RT_No_Formation_02_CP_C03.mpt",#DTFV1411
     "BL-LL-GV05_RT_No_Formation_02_CP_C01.mpt",#DTV1410
-    #"BL-LL-GU05_RT_No_Formation_02_CP_C04.mpt",#DTV142
+    "BL-LL-GU05_RT_No_Formation_02_CP_C04.mpt",#DTV142
     "BL-LL-GT05_RT_No_Formation_02_CP_C03.mpt",#DTF1410
-    #"BL-LL-GS05_RT_No_Formation_02_CP_C01.mpt",#DTF142
+    "BL-LL-GS05_RT_No_Formation_02_CP_C01.mpt",#DTF142
     #"BL-LL-GA02_RT_C_20_Form_HighFid_Channel_64_Wb_1.xlsx",
     #"BL-LL-FZ02_RT_C_20_Form_HighFid_Channel_63_Wb_1.xlsx",
     #"BL-LL-FW02_RT_C_20_Form_HighFid_Channel_60_Wb_1.xlsx",
@@ -72,10 +72,205 @@ electrolyte_lookup = {
     "GW05": "DTFV1411 - C/20",
     "GV05": "DTV1410 - C/20",
     "GU05": "DTV142 - C/20",
-    "GA01": "DTFV1411 - C/20",
+    "GA01": "DTFV1452 - C/20",
     "GN01": "DTFV1411 - C/20",
-    "FZ01": "DTFV1411 - C/20",
+    "FZ01": "DTFV1422 - C/20",
 }
+
+# ── Consistent style mapping ─────────────────────────────────────────────
+# Okabe–Ito colorblind-safe palette + a few extensions
+PALETTE = [
+    "#0072B2",  # blue
+    "#E69F00",  # orange
+    "#009E73",  # green
+    "#D55E00",  # vermillion
+    "#CC79A7",  # reddish purple
+    "#56B4E9",  # sky blue
+    "#F0E442",  # yellow
+    "#000000",  # black
+    "#999999",  # gray
+    "#7F7F7F",  # dark gray (overflow)
+]
+
+# Map *base electrolyte tokens* to fixed colors.
+# Keys should be the left part of electrolyte_lookup values (before " - ").
+BASE_COLOR = {
+    "DTFV1411": PALETTE[0],
+    "DTFV1422": PALETTE[1],
+    "DTFV1452": PALETTE[2],
+    "DTFV1425": PALETTE[3],
+    "DTV1410":  PALETTE[4],
+    "DTV142":   PALETTE[5],
+    "DTF1410":  PALETTE[6],
+    "DTF142":   PALETTE[7],
+    "MF91":     PALETTE[8],
+}
+
+# Linestyles/markers encode TEST TYPE so C/20 and PITT are visually distinct
+TEST_LS = {
+    "C/20": "-",
+    "PITT": "--",
+    "Unknown": "-.",
+}
+TEST_MK = {
+    "C/20": None,     # lines only
+    "PITT": None,     # lines only (dashed)
+    "PCGA": "o",      # circles for PCGA overlays
+    "Unknown": None,
+}
+
+def split_base_and_test(elec_label: str) -> tuple[str, str]:
+    """
+    'DTFV1411 - C/20' -> ('DTFV1411', 'C/20')
+    'DTFV1452 - Old - PITT' -> ('DTFV1452', 'PITT')  # test = last chunk
+    Handles None/'Unknown' robustly.
+    """
+    if not elec_label or elec_label.lower() == "unknown":
+        return "Unknown", "Unknown"
+    parts = [p.strip() for p in elec_label.split(" - ") if p.strip()]
+    if not parts:
+        return "Unknown", "Unknown"
+    base = parts[0]
+    test = parts[-1] if len(parts) > 1 else "Unknown"
+    # Normalize a few variants
+    if "pitt" in test.lower():
+        test = "PITT"
+    return base, test
+
+_fallback_color_cache = {}
+
+def color_for_base(base: str, idx_hint: int = 0) -> str:
+    """
+    Deterministic color for any base. Known bases use BASE_COLOR; unknown bases
+    get a stable color chosen by hashing the name (cached).
+    """
+    if base in BASE_COLOR:
+        return BASE_COLOR[base]
+    if base not in _fallback_color_cache:
+        # stable hash to select palette slot
+        slot = (abs(hash(base)) % len(PALETTE))
+        _fallback_color_cache[base] = PALETTE[slot]
+    return _fallback_color_cache[base]
+
+def style_for_cell(cell_id: str, idx_hint: int = 0) -> dict:
+    """
+    Looks up electrolyte label via electrolyte_lookup, then returns:
+    {color, linestyle, marker, base, test, label, lw, markevery}
+    """
+    label = electrolyte_lookup.get(cell_id, "Unknown")
+    base, test = split_base_and_test(label)
+    color = color_for_base(base, idx_hint)
+
+    # Test-type still controls line style (solid vs dashed)
+    ls = TEST_LS.get(test, TEST_LS["Unknown"])
+
+    # Refine marker/width/frequency from base token (DT / DTF / DTV variants)
+    code_style = style_from_code(base)
+
+    leg = f"{cell_id}: {label}"
+    return {
+        "color": color,
+        "linestyle": ls,
+        "marker": code_style["marker"],
+        "base": base,
+        "test": test,
+        "label": leg,
+        "lw": code_style["lw"],
+        "markevery": code_style["markevery"],
+    }
+
+import re
+
+def parse_electrolyte_code(code: str):
+    """
+    Parse labels like: DTFV1452, DTF1410, DTV142, DTFV1411, DTFV1450, DTF1425, DT14 (no additives)
+    Meaning:
+        DT         -> DME/THF base
+        F / V     -> presence of FEC and/or VC (order is F then V if both)
+        14        -> ratio DME:THF = 1:4
+        trailing digits -> additive wt% for F then V if present
+            e.g., '...1452' => FEC 5%, VC 2%
+                  '...1410' + F only => FEC 10%
+                  '...142' + V only  => VC 2%
+    Returns dict with: has_f, has_v, f_pct, v_pct, ratio=(1,4)
+    """
+    if not code:
+        return {"has_f": False, "has_v": False, "f_pct": 0, "v_pct": 0, "ratio": (None, None)}
+
+    m = re.match(r'^(DT)(F?)(V?)(\d{2})(\d*)$', code.strip().upper())
+    if not m:
+        # Best effort: treat anything else as no-additive DT of unknown ratio
+        return {"has_f": False, "has_v": False, "f_pct": 0, "v_pct": 0, "ratio": (None, None)}
+
+    _, fflag, vflag, ratio_str, tail = m.groups()
+    has_f = (fflag == 'F')
+    has_v = (vflag == 'V')
+
+    # Ratio like '14' -> (1,4)
+    ratio = (int(ratio_str[0]), int(ratio_str[1]))
+
+    f_pct = v_pct = 0
+    # Interpret trailing digits by presence order (F then V)
+    if has_f and has_v:
+        # expect exactly two digits, but be defensive
+        if len(tail) >= 2:
+            f_pct = int(tail[0])
+            v_pct = int(tail[1])
+        elif len(tail) == 1:
+            f_pct = int(tail[0])
+            v_pct = 0
+    elif has_f and not has_v:
+        # all remaining digits belong to F (could be 1 or 2 digits; we accept up to 2)
+        f_pct = int(tail) if tail else 0
+    elif has_v and not has_f:
+        v_pct = int(tail) if tail else 0
+
+    return {"has_f": has_f, "has_v": has_v, "f_pct": f_pct, "v_pct": v_pct, "ratio": ratio}
+
+
+import matplotlib.colors as mcolors
+
+def interpolate_color(base_hex, max_hex, fraction):
+    """Linear blend between two hex colors given fraction [0,1]."""
+    c1 = mcolors.to_rgb(base_hex)
+    c2 = mcolors.to_rgb(max_hex)
+    out = tuple((1-fraction)*a + fraction*b for a,b in zip(c1,c2))
+    return out
+
+def style_from_code(base_token: str):
+    info = parse_electrolyte_code(base_token)
+    total_pct = info["f_pct"] + info["v_pct"]
+
+    # Hue family
+    if info["has_f"] and info["has_v"]:
+        base_hex, max_hex = "#cab2d6", "#3f007d"   # purple light→dark
+    elif info["has_f"]:
+        base_hex, max_hex = "#b2df8a", "#00441b"   # green
+    elif info["has_v"]:
+        base_hex, max_hex = "#fdbf6f", "#7f2704"   # orange
+    else:
+        base_hex, max_hex = "#a6cee3", "#08306b"   # blue
+
+    # Map additive amount 0–10 wt% to 0–1 fraction
+    frac = min(1.0, total_pct/10.0)
+    color = interpolate_color(base_hex, max_hex, frac)
+
+    # Marker to still reinforce identity
+    if info["has_f"] and info["has_v"]:
+        marker = "o"
+    elif info["has_f"]:
+        marker = "s"
+    elif info["has_v"]:
+        marker = "^"
+    else:
+        marker = "D"
+
+    lw = 1.8
+    markevery = 30
+
+    return {"color": color, "marker": marker, "lw": lw, "markevery": markevery}
+
+
 
 # Analysis parameters (unchanged from original script)
 CYCLE = 1                     # 0-based for Bio-Logic, 1-based for Arbin
@@ -281,17 +476,31 @@ def main():
         v_mid,y = (savgol_dqdv if DQDV_SMOOTH else raw_dqdv)(df_bin)
         if cell_id in MASS_MG:
             y /= (MASS_MG[cell_id]*1000)
-        label = f"{cell_id}: {electrolyte_lookup.get(cell_id, 'Unknown')}"
-        ax_dqdv.plot(v_mid,y,lw=1.3,label=label,
-                     color=cmap(idx%10))
+        sty = style_for_cell(cell_id, idx_hint=idx)
+
+        ax_dqdv.plot(
+            v_mid, y,
+            lw=sty["lw"],
+            label=sty["label"],
+            color=sty["color"],
+            linestyle=sty["linestyle"],
+            marker=sty["marker"],
+            markevery=sty["markevery"] if sty["marker"] else None,
+        )
 
         v_curve = df_bin["V"].to_numpy()
         q_curve = df_bin["QmAh"].to_numpy()
         if cell_id in MASS_MG:
             q_curve /= (MASS_MG[cell_id]*1000)
-        label = f"{cell_id}: {electrolyte_lookup.get(cell_id, 'Unknown')}"
-        ax_charge.plot(q_curve, v_curve,lw=1.3,label=label,
-                       color=cmap(idx%10))
+        ax_charge.plot(
+            q_curve, v_curve,
+            lw=sty["lw"],
+            label=sty["label"],
+            color=sty["color"],
+            linestyle=sty["linestyle"],
+            marker=sty["marker"],
+            markevery=sty["markevery"] if sty["marker"] else None,
+        )
 
     # -------------------- PCGA overlay (mAh g^-1 V^-1) ------------------
     pcga_files = pcga_files_in(DATA_DIR)
