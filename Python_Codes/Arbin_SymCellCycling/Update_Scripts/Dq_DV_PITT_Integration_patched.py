@@ -30,13 +30,16 @@ FILES: List[str] = [
     # ---------- your dQ/dV & charge-curve input files ----------
     "BL-LL-FZ01_RT_C_20_Charge_02_CP_C04.mpt",
     "BL-LL-GA01_RT_C_20_Charge_02_CP_C02.mpt",
-    #"BL-LL-GN01_RT_No_Formation_03_GCPL_C01.mpt",
+    "BL-LL-GN01_RT_No_Formation_03_GCPL_C01.mpt",
+    "BL-LL-GO01_RT_No_Formation_03_GCPL_C04.mpt",
     #"BL-LL-GX05_RT_No_Formation_02_CP_C04.mpt",
     "BL-LL-GW05_RT_No_Formation_02_CP_C03.mpt",#DTFV1411
     "BL-LL-GV05_RT_No_Formation_02_CP_C01.mpt",#DTV1410
     "BL-LL-GU05_RT_No_Formation_02_CP_C04.mpt",#DTV142
     "BL-LL-GT05_RT_No_Formation_02_CP_C03.mpt",#DTF1410
     "BL-LL-GS05_RT_No_Formation_02_CP_C01.mpt",#DTF142
+    "BL-LL-GY01_RT_No_Formation_02_CP_C01.mpt",#DT14
+    #"BL-LL-GY02_RT_No_Formation_02_CP_C03.mpt",#DT14
     #"BL-LL-GA02_RT_C_20_Form_HighFid_Channel_64_Wb_1.xlsx",
     #"BL-LL-FZ02_RT_C_20_Form_HighFid_Channel_63_Wb_1.xlsx",
     #"BL-LL-FW02_RT_C_20_Form_HighFid_Channel_60_Wb_1.xlsx",
@@ -47,7 +50,8 @@ FILES: List[str] = [
 MASS_MG = {id_: 0.02496886674 / 1000  # mg → g
            for id_ in ["FZ01","FY01","FX01","FW01","GA01",
                         "FZ02","FY02","FX02","FW02","GA02", "GN01",
-                       "GX05","GW05","GV05","GU05","GT05","GS05"]}
+                       "GX05","GW05","GV05","GU05","GT05","GS05", "GO01",
+                       "GY01", "GY02"]}
 MASS_G = {
     #"GD01": 0.02496886674,   # example masses
     #"GC01": 0.02496886674,
@@ -72,9 +76,12 @@ electrolyte_lookup = {
     "GW05": "DTFV1411 - C/20",
     "GV05": "DTV1410 - C/20",
     "GU05": "DTV142 - C/20",
-    "GA01": "DTFV1452 - C/20",
-    "GN01": "DTFV1411 - C/20",
+    "GA01": "DTFV1452 (old) - C/20",
+    "GN01": "DTFV1452 (new) - C/20",
+    "GO01": "DTFV1425 - C/20",
     "FZ01": "DTFV1422 - C/20",
+    "GY01": "DT14 - C/20",
+    "GY02": "DT14 - C/20",
 }
 
 # ── Consistent style mapping ─────────────────────────────────────────────
@@ -169,7 +176,7 @@ def style_for_cell(cell_id: str, idx_hint: int = 0) -> dict:
 
     leg = f"{cell_id}: {label}"
     return {
-        "color": color,
+        "color": code_style["color"],  # ← use tone-based color
         "linestyle": ls,
         "marker": code_style["marker"],
         "base": base,
@@ -239,11 +246,11 @@ def interpolate_color(base_hex, max_hex, fraction):
 
 def style_from_code(base_token: str):
     info = parse_electrolyte_code(base_token)
-    total_pct = info["f_pct"] + info["v_pct"]
+    total_pct = max(0, info["f_pct"] + info["v_pct"])  # total additive wt%
 
-    # Hue family
+    # --- choose color family (unchanged from your tone scheme) ---
     if info["has_f"] and info["has_v"]:
-        base_hex, max_hex = "#cab2d6", "#3f007d"   # purple light→dark
+        base_hex, max_hex = "#cab2d6", "#3f007d"   # purple
     elif info["has_f"]:
         base_hex, max_hex = "#b2df8a", "#00441b"   # green
     elif info["has_v"]:
@@ -251,11 +258,11 @@ def style_from_code(base_token: str):
     else:
         base_hex, max_hex = "#a6cee3", "#08306b"   # blue
 
-    # Map additive amount 0–10 wt% to 0–1 fraction
+    # tone by amount (map 0–10% to 0–1; clamp above 10)
     frac = min(1.0, total_pct/10.0)
     color = interpolate_color(base_hex, max_hex, frac)
 
-    # Marker to still reinforce identity
+    # marker by identity (optional but keeps redundancy)
     if info["has_f"] and info["has_v"]:
         marker = "o"
     elif info["has_f"]:
@@ -265,10 +272,17 @@ def style_from_code(base_token: str):
     else:
         marker = "D"
 
-    lw = 1.8
+    # --- NEW: line width by total additive ---
+    # baseline = 1.6; add 0.12 per wt% up to 10% => max ~2.8
+    lw = 1.6 + 0.12 * min(total_pct, 10)
+    # (optional) make zero-additive slightly lighter to de-emphasize
+    # alpha = 0.95 if total_pct > 0 else 0.85
+
+    # marker frequency can stay fixed or scale gently if you like:
     markevery = 30
 
     return {"color": color, "marker": marker, "lw": lw, "markevery": markevery}
+
 
 
 
@@ -443,11 +457,11 @@ def cell_short_id(fname: str) -> str:
 
 def main():
     fig, (ax_dqdv, ax_charge) = plt.subplots(
-        1, 2, figsize=(11, 4.5), constrained_layout=True)
-    cmap = plt.get_cmap("tab10")
+        1, 2, figsize=(11, 4.5), constrained_layout=True
+    )
 
     # --------------- dQ/dV & charge-curve processing --------------------
-    for idx,fname in enumerate(FILES):
+    for idx, fname in enumerate(FILES):
         fp = DATA_DIR / fname
         stem = Path(fname).stem
         m = re.search(r"LL-([A-Za-z0-9]{4})", stem, re.I)
@@ -456,28 +470,38 @@ def main():
 
         try:
             if fp.suffix.lower() == ".mpt":
+                # For GCPL files that contain multiple cycles, use 1st cycle explicitly
                 if "03_GCPL" in fname:
-                    df_raw = load_eclab(fp, cycle=1, charge=CHARGE)  # first cycle for GCPL
+                    df_raw = load_eclab(fp, cycle=1, charge=CHARGE)
                 else:
                     df_raw = load_eclab(fp, CYCLE, CHARGE)
-            elif fp.suffix.lower() in (".xls",".xlsx"):
+            elif fp.suffix.lower() in (".xls", ".xlsx"):
                 df_raw = load_arbin(fp, CYCLE, CHARGE)
+                # Harmonize to mAh like the EC-Lab loader above expects
                 df_raw["QmAh"] *= 1000
             else:
                 print("   (unknown format, skipped)")
                 continue
         except Exception as e:
-            print("   ✗",e); continue
+            print("   ✗", e)
+            continue
 
+        # Bin onto a fixed voltage lattice, then compute dQ/dV
         df_bin = fixed_bin(df_raw, BIN_W)
-        if len(df_bin) <= POLY_PRE+2:
-            print("   (too few points, skipped)"); continue
+        if len(df_bin) <= POLY_PRE + 2:
+            print("   (too few points, skipped)")
+            continue
 
-        v_mid,y = (savgol_dqdv if DQDV_SMOOTH else raw_dqdv)(df_bin)
+        v_mid, y = (savgol_dqdv if DQDV_SMOOTH else raw_dqdv)(df_bin)
+
+        # Normalize by mass if provided
         if cell_id in MASS_MG:
-            y /= (MASS_MG[cell_id]*1000)
+            y /= (MASS_MG[cell_id] * 1000)
+
+        # Style by electrolyte code (hue family = F/V/FV/none, tone = total wt%)
         sty = style_for_cell(cell_id, idx_hint=idx)
 
+        # dQ/dV plot
         ax_dqdv.plot(
             v_mid, y,
             lw=sty["lw"],
@@ -488,10 +512,12 @@ def main():
             markevery=sty["markevery"] if sty["marker"] else None,
         )
 
+        # Charge curve (Q vs V), with the same style for visual linking
         v_curve = df_bin["V"].to_numpy()
         q_curve = df_bin["QmAh"].to_numpy()
         if cell_id in MASS_MG:
-            q_curve /= (MASS_MG[cell_id]*1000)
+            q_curve /= (MASS_MG[cell_id] * 1000)
+
         ax_charge.plot(
             q_curve, v_curve,
             lw=sty["lw"],
@@ -524,35 +550,35 @@ def main():
             if cid not in MASS_G:
                 print(f" ⚠︎  MASS_G entry missing for '{cid}' – file skipped")
                 continue
+
             EPS_DV = 0.003
             V, dQdV = integrate_pcga_steps(df_pcga, MASS_G, cid, EPS_DV)
             print(f"   {p.name}  →  {len(V)} valid steps")
-
             if len(V) == 0:
-                continue  # nothing to plot
+                continue
 
-            # create one legend label per cell
-            label = electrolyte_lookup[cid]
-            if label in used_labels:
-                label = "_nolegend_"
+            # Build legend entry once per PCGA cell
+            leg = f"{cid}: {electrolyte_lookup.get(cid, 'Unknown')}"
+            if leg in used_labels:
+                leg = "_nolegend_"
             else:
-                used_labels.add(label)
-            #ax_pcga = ax_dqdv.twinx()  # secondary Y-axis for PCGA
-            # ax_dqdv.scatter(
-            #     V, dQdV,
-            #     marker="o",  # filled circle
-            #     s=48,  # bigger
-            #     linewidths=0.5,
-            #     edgecolors="black",
-            #     alpha=0.9,
-            #     zorder=10,  # sit on top of curves
-            #     label=label,
-            # )
-            label = f"{cell_id}: {electrolyte_lookup.get(cell_id, 'Unknown')}"
-            ax_dqdv.plot(V, dQdV,
-                         color=cmap(len(used_labels) % 10),
-                         linestyle= "-",  # dashed line
-                         label=label)
+                used_labels.add(leg)
+
+            # Use the SAME chemistry-driven style as cycling curves
+            sty = style_for_cell(cid)
+
+            # Scatter reads best for staircase steps; matches chemistry color/marker
+            ax_dqdv.scatter(
+                V, dQdV,
+                s=48,
+                color=sty["color"],
+                marker=sty["marker"],
+                linewidths=0.5,
+                edgecolors="black",
+                alpha=0.9,
+                zorder=10,
+                label=leg,
+            )
 
         except Exception as e:
             print(f"   ✗  {p.name}  →  {e}")
@@ -560,21 +586,20 @@ def main():
     # --------------- cosmetics ------------------------------------------
     ax_dqdv.set_xlabel("Voltage (V)")
     ax_dqdv.set_ylabel("dQ/dV (mAh g$^{-1}$ V$^{-1}$)")
-    #ax_pcga.set_ylabel("PCGA dQ/dV (mAh g$^{-1}$ V$^{-1}$)")
     tag = "smoothed" if DQDV_SMOOTH else "raw"
     ax_dqdv.set_title(f"dQ/dV ({tag}) – C{CYCLE}")
     ax_dqdv.set_ylim(0, 0.07)
     ax_dqdv.set_xlim(1.8, 3.6)
-    ax_charge.set_xlabel("Capacity (mAh g$^{-1}$)" if MASS_MG
-                         else "Capacity (mAh)")
+
+    ax_charge.set_xlabel("Capacity (mAh g$^{-1}$)" if MASS_MG else "Capacity (mAh)")
     ax_charge.set_ylabel("Voltage (V)")
     ax_charge.set_title(f"Charge curves – C{CYCLE}")
 
-    ax_dqdv.legend(loc="best", fontsize="x-small")
-    ax_charge.legend(loc="best", fontsize="x-small")
-    #plt.savefig(DATA_DIR / "dq_dv_pitt.png", dpi=300, bbox_inches="tight")
+    ax_dqdv.legend(loc="best", fontsize="x-small", frameon=True)
+    ax_charge.legend(loc="best", fontsize="x-small", frameon=True)
 
     plt.show()
+
 
 if __name__ == "__main__":
     main()
