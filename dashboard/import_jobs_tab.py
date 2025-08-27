@@ -92,13 +92,16 @@ def register_callbacks(app: dash.Dash) -> None:
     @app.callback(  # type: ignore[misc]
         Output(TABLE_CONTAINER, "children"),
         Input(REFRESH_INTERVAL, "n_intervals"),
-        # The import directory store may not exist until a job has started,
-        # so allow the callback to run even when it's missing.
-        Input("import-dir-job", "data", allow_missing=True),
+        # The import directory store may not exist until a job has started.
+        Input("import-dir-job", "data"),
     )
     def _refresh(
         _: int, active_id: str | None
     ) -> dbc.Table:  # pragma: no cover - callback
+        if active_id is None:
+            # Older Dash versions lack allow_missing, so the callback guards
+            # against a missing or empty store.
+            raise dash.exceptions.PreventUpdate
         return layout_components.import_jobs_table(_load_jobs(), active_id)
 
     @app.callback(  # type: ignore[misc]
