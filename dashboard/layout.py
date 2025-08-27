@@ -362,6 +362,11 @@ def export_modal() -> dbc.Modal:
     )
 
 
+def import_dir_job_store() -> dcc.Store:
+    """Store for tracking the active directory import job."""
+    return dcc.Store(id="import-dir-job")
+
+
 def data_import_layout() -> html.Div:
     """Layout for the Data Import tab with file upload and metadata form."""
     return html.Div(
@@ -428,7 +433,6 @@ def data_import_layout() -> html.Div:
                 id="import-dir-start",
                 color="primary",
             ),
-            dcc.Store(id="import-dir-job"),
             dcc.Store(id="upload-info"),
             html.Div(id="upload-status"),
             html.Ul(id="uploaded-files-list"),
