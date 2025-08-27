@@ -434,9 +434,22 @@ def register_callbacks(app: dash.Dash) -> None:
     )
     def _popout_matplotlib(n_clicks, fig_dict):
         import matplotlib
+        import importlib.util
 
         if not n_clicks or not fig_dict:
             raise dash.exceptions.PreventUpdate
+
+        if not (
+            importlib.util.find_spec("PyQt5")
+            or importlib.util.find_spec("PySide2")
+        ):
+            return (
+                0,
+                True,
+                "Qt bindings not available; install PyQt5/PySide2.",
+                "Error",
+                "danger",
+            )
 
         if matplotlib.get_backend().lower() == "agg":
             return (
