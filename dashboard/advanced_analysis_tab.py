@@ -902,7 +902,7 @@ def register_callbacks(app: dash.Dash) -> None:
             return (
                 0,
                 True,
-                "An interactive Matplotlib backend is required for pop-out plots.",
+                "Qt backend not available; install PyQt5/PySide2.",
                 "Error",
                 "danger",
             )
