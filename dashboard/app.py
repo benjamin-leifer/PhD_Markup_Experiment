@@ -318,6 +318,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                 sidebar_offcanvas,
                 layout_components.metadata_modal(),
                 layout_components.export_modal(),
+                layout_components.import_dir_job_store(),
                 dcc.Interval(id="refresh-interval", interval=60 * 1000, n_intervals=0),
                 layout_components.toast_container(),
                 status_bar,
