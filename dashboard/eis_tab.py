@@ -17,11 +17,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from dash import Input, Output, State, dcc, html
 from plotly.subplots import make_subplots
-
-try:  # pragma: no cover
-    from plotly.utils import PlotlyJSONDecoder
-except Exception:  # pragma: no cover
-    from json import JSONDecoder as PlotlyJSONDecoder  # type: ignore
+from plotly.utils import PlotlyJSONDecoder
 
 from dashboard.data_access import db_connected, get_db_error
 from Mongodb_implementation import find_samples, find_test_results

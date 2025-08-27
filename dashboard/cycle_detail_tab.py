@@ -11,16 +11,11 @@ from typing import Dict, List, Optional
 import dash
 import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
-
-try:  # pragma: no cover
-    from plotly.utils import PlotlyJSONDecoder
-except Exception:  # pragma: no cover
-    from json import JSONDecoder as PlotlyJSONDecoder  # type: ignore
-
 from battery_analysis.utils.detailed_data_manager import get_detailed_cycle_data
 from bson import ObjectId
 from bson.errors import InvalidId
 from dash import Input, Output, State, dcc, html
+from plotly.utils import PlotlyJSONDecoder
 
 from dashboard.data_access import db_connected, get_db_error
 from Mongodb_implementation import find_samples, find_test_results
