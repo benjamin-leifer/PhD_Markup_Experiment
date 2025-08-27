@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import io
-import json
 import logging
 from multiprocessing import Process
 from typing import Any, Dict, List, Optional, Tuple
@@ -16,7 +15,6 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from dash import Input, Output, State, dcc, html
-from plotly.utils import PlotlyJSONDecoder
 
 # Database helpers
 from dashboard.data_access import db_connected, get_db_error
@@ -429,7 +427,7 @@ def _render_matplotlib(fig_dict: Dict[str, Any]) -> None:
     """Render ``fig_dict`` using Matplotlib."""
     import matplotlib.pyplot as plt
 
-    fig = go.Figure(json.loads(json.dumps(fig_dict), cls=PlotlyJSONDecoder))
+    fig = go.Figure(fig_dict)
     try:
         plt.figure()
         for tr in fig.data:
