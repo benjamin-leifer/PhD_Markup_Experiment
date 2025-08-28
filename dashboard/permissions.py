@@ -39,6 +39,7 @@ ROLE_PERMISSIONS: Dict[str, Set[str]] = {
         "data-import",
         "export",
         "import-jobs",
+        "refactor-jobs",
         "import-stats",
         "comparison",
         "advanced-analysis",

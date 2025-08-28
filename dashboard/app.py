@@ -39,6 +39,7 @@ try:
         doe_tab,
         eis_tab,
         import_jobs_tab,
+        refactor_jobs_tab,
         import_stats_tab,
     )
     from . import layout as layout_components
@@ -67,6 +68,7 @@ except ImportError:  # pragma: no cover - allow running as script
     missing_data_tab = importlib.import_module("missing_data_tab")
     doe_tab = importlib.import_module("doe_tab")
     import_jobs_tab = importlib.import_module("import_jobs_tab")
+    refactor_jobs_tab = importlib.import_module("refactor_jobs_tab")
     import_stats_tab = importlib.import_module("import_stats_tab")
     watcher_tab = importlib.import_module("watcher_tab")
     raw_files_tab = importlib.import_module("raw_files_tab")
@@ -146,6 +148,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         "data-import": layout_components.data_import_layout,
         "export": layout_components.export_button,
         "import-jobs": import_jobs_tab.layout,
+        "refactor-jobs": refactor_jobs_tab.layout,
         "import-stats": import_stats_tab.layout,
         "watchers": watcher_tab.layout,
         "comparison": comparison_tab.layout,
@@ -230,6 +233,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
             "Import": [
                 nav_link("Data Import", "data-import", not can("data-import")),
                 nav_link("Import Jobs", "import-jobs", not can("import-jobs")),
+                nav_link("Refactor Jobs", "refactor-jobs", not can("refactor-jobs")),
                 nav_link("Import Stats", "import-stats", not can("import-stats")),
                 nav_link("Watchers", "watchers", not is_admin),
                 nav_link("Raw Files", "raw-files", not can("raw-files")),
@@ -1020,6 +1024,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
     missing_data_tab.register_callbacks(app)
     doe_tab.register_callbacks(app)
     import_jobs_tab.register_callbacks(app)
+    refactor_jobs_tab.register_callbacks(app)
     import_stats_tab.register_callbacks(app)
     watcher_tab.register_callbacks(app)
     raw_files_tab.register_callbacks(app)

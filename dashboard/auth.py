@@ -89,6 +89,12 @@ def can_manage_import_jobs(role: Role) -> bool:
     return has_permission(role, "import-jobs")
 
 
+def can_manage_refactor_jobs(role: Role) -> bool:
+    """Return ``True`` if ``role`` may manage refactor jobs."""
+
+    return has_permission(role, "refactor-jobs")
+
+
 def layout() -> html.Div:
     """Return a basic login form."""
     return dbc.Container(

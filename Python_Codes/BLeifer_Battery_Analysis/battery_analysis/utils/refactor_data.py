@@ -12,6 +12,8 @@ import argparse
 import datetime as dt
 import logging
 import os
+import time
+from pathlib import Path
 from typing import Iterable, List, Set
 
 from battery_analysis.models import RefactorJob, TestResult
@@ -21,6 +23,18 @@ from battery_analysis.utils.data_update import _normalize_identifier, update_tes
 from battery_analysis.utils.db import ensure_connection
 
 logger = logging.getLogger(__name__)
+
+CONTROL_FILE = Path(__file__).resolve().parents[4] / ".refactor_control"
+
+
+def _read_control_command() -> str | None:
+    """Return the current command from the control file if it exists."""
+
+    try:
+        cmd = CONTROL_FILE.read_text(encoding="utf-8").strip().lower()
+        return cmd or None
+    except FileNotFoundError:
+        return None
 
 
 def _cycle_dicts(test: TestResult) -> List[dict[str, object]]:
@@ -86,6 +100,27 @@ def refactor_tests(
             total,
         )
         for test in batch:
+            cmd = _read_control_command()
+            if cmd == "cancel":
+                logger.info("Refactor cancelled via control file")
+                job.status = "cancelled"
+                job.end_time = dt.datetime.utcnow()
+                job.save()
+                return job
+            if cmd == "pause":
+                logger.info("Refactor paused via control file")
+                while True:
+                    time.sleep(0.2)
+                    cmd = _read_control_command()
+                    if cmd == "cancel":
+                        logger.info("Refactor cancelled via control file")
+                        job.status = "cancelled"
+                        job.end_time = dt.datetime.utcnow()
+                        job.save()
+                        return job
+                    if cmd != "pause":
+                        logger.info("Refactor resumed")
+                        break
             try:
                 if getattr(test, "name", None):
                     test.base_test_name = _normalize_identifier(test.name)

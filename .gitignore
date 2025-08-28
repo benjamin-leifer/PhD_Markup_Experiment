@@ -5,3 +5,4 @@ __pycache__/
 *.zip
 *.log
 .import_control
+.refactor_control
