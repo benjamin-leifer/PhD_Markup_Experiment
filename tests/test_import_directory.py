@@ -202,6 +202,39 @@ def test_duplicate_across_samples_skipped(
     assert "Duplicate file hash" in caplog.text
 
 
+def test_arbin_filename_detects_sample(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import pandas as pd
+
+    root = tmp_path
+    file_path = root / "misc" / "AB12_Channel.xlsx"
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    with pd.ExcelWriter(file_path) as writer:
+        pd.DataFrame({"info": ["x"]}).to_excel(writer, sheet_name="Global_Info", index=False)
+        pd.DataFrame(
+            {
+                "Cycle": [1],
+                "Voltage": [3.5],
+                "Current": [0.1],
+                "Charge_Capacity": [0.1],
+                "Discharge_Capacity": [0.1],
+            }
+        ).to_excel(writer, sheet_name="Channel1_1", index=False)
+
+    def fake_process(path: str, sample: Sample) -> tuple[object, bool]:
+        return object(), False
+
+    monkeypatch.setattr(
+        import_directory.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(import_directory, "update_cell_dataset", lambda name: None)
+
+    import_directory.import_directory(root, workers=1)
+
+    assert Sample.get_by_name("AB12") is not None
+    assert Sample.get_by_name("AB12_Channel") is None
+    assert len(Sample._registry) == 1
+
+
 def test_process_file_archives_and_hashes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

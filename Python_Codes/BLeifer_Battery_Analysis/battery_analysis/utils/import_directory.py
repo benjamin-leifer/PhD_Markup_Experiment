@@ -63,6 +63,13 @@ except Exception:  # pragma: no cover - optional dependency
 from battery_analysis import parsers
 from battery_analysis.models import ImportJob, ImportJobSummary, Sample, TestResult
 from battery_analysis.utils import data_update, file_storage, notifications
+
+
+def update_cell_dataset(name: str) -> None:
+    """Lazy wrapper so tests can monkeypatch update_cell_dataset."""
+    from battery_analysis.utils.cell_dataset_builder import update_cell_dataset as _update
+
+    _update(name)
 from battery_analysis.utils.config import load_config
 from battery_analysis.utils.db import ensure_connection
 from battery_analysis.utils.logging import get_logger
@@ -415,13 +422,12 @@ def import_directory(
                     continue
 
             metadata = None
-            if sample_lookup or dry_run or preview_samples:
-                try:
-                    _, metadata = parsers.parse_file(abs_path)
-                except Exception as exc:  # pragma: no cover - defensive
-                    logger.error("Failed to parse %s: %s", abs_path, exc)
+            try:
+                _, metadata = parsers.parse_file(abs_path)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.error("Failed to parse %s: %s", abs_path, exc)
 
-            name = metadata.get("sample_code") if metadata and sample_lookup else None
+            name = metadata.get("sample_code") if metadata else None
             if not name:
                 name = os.path.basename(os.path.dirname(abs_path)) or "unknown"
             attrs: Dict[str, object] = {}
@@ -682,7 +688,6 @@ def import_directory(
         for name in processed:
             logger.info("Would refresh dataset for %s", name)
     else:
-        from battery_analysis.utils.cell_dataset_builder import update_cell_dataset
         for name in processed:
             try:
                 update_cell_dataset(name)
