@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from threading import Thread
 from typing import Dict, List
 
 import dash
@@ -21,6 +22,11 @@ try:  # pragma: no cover - optional dependency
 except Exception:  # pragma: no cover - allow running without models
     RefactorJob = None
 
+try:  # pragma: no cover - optional dependency
+    from battery_analysis.utils import refactor_data
+except Exception:  # pragma: no cover - allow running without utility
+    refactor_data = None
+
 
 CONTROL_FILE = Path(__file__).resolve().parent.parent / ".refactor_control"
 TABLE_CONTAINER = "refactor-jobs-table-container"
@@ -29,6 +35,8 @@ REFRESH_INTERVAL = "refactor-jobs-refresh"
 PAUSE_BTN = "refactor-jobs-pause"
 RESUME_BTN = "refactor-jobs-resume"
 CANCEL_BTN = "refactor-jobs-cancel"
+START_BTN = "refactor-jobs-start"
+JOB_STORE = "refactor-jobs-job"
 
 
 def _load_jobs() -> List[Dict[str, str]]:
@@ -68,6 +76,7 @@ def layout() -> html.Div:
     table = layout_components.refactor_jobs_table(_load_jobs())
     buttons = dbc.ButtonGroup(
         [
+            dbc.Button("Start", id=START_BTN, color="primary", size="sm"),
             dbc.Button("Pause", id=PAUSE_BTN, color="warning", size="sm"),
             dbc.Button("Resume", id=RESUME_BTN, color="success", size="sm"),
             dbc.Button("Cancel", id=CANCEL_BTN, color="danger", size="sm"),
@@ -81,6 +90,7 @@ def layout() -> html.Div:
             html.Div(id=STATUS_MESSAGE, className="mb-2"),
             html.Div(table, id=TABLE_CONTAINER),
             dcc.Interval(id=REFRESH_INTERVAL, interval=2000),
+            dcc.Store(id=JOB_STORE),
         ]
     )
 
@@ -91,9 +101,45 @@ def register_callbacks(app: dash.Dash) -> None:
     @app.callback(  # type: ignore[misc]
         Output(TABLE_CONTAINER, "children"),
         Input(REFRESH_INTERVAL, "n_intervals"),
+        Input(JOB_STORE, "data"),
     )
-    def _refresh(_: int) -> dbc.Table:  # pragma: no cover - callback
+    def _refresh(_: int, __: str | None) -> dbc.Table:  # pragma: no cover - callback
         return layout_components.refactor_jobs_table(_load_jobs())
+
+    @app.callback(  # type: ignore[misc]
+        Output(STATUS_MESSAGE, "children", allow_duplicate=True),
+        Output(JOB_STORE, "data"),
+        Input(START_BTN, "n_clicks"),
+        State("user-role", "data"),
+        prevent_initial_call=True,
+    )
+    def _start(n_clicks: int, role: str | None) -> tuple[html.Component, object]:
+        """Start a new refactor job in the background."""
+
+        if not auth.can_manage_refactor_jobs(role or ""):
+            raise dash.exceptions.PreventUpdate
+        if not RefactorJob or not refactor_data:
+            return (
+                dbc.Alert("Refactor not supported", color="danger", dismissable=True),
+                dash.no_update,
+            )
+        try:
+            job = RefactorJob().save()
+            Thread(
+                target=refactor_data.refactor_tests,
+                kwargs={"job_id": str(getattr(job, "id", ""))},
+                daemon=True,
+            ).start()
+            return (
+                dbc.Alert(
+                    f"Started job {getattr(job, 'id', '')}",
+                    color="success",
+                    dismissable=True,
+                ),
+                str(getattr(job, "id", "")),
+            )
+        except Exception as exc:  # pragma: no cover - best effort
+            return dbc.Alert(str(exc), color="danger", dismissable=True), dash.no_update
 
     @app.callback(  # type: ignore[misc]
         Output(STATUS_MESSAGE, "children"),
