@@ -375,6 +375,11 @@ def import_dir_job_store() -> dcc.Store:
     return dcc.Store(id="import-dir-job")
 
 
+def user_role_store(data: str | None = None) -> dcc.Store:
+    """Store for the currently authenticated user's role."""
+    return dcc.Store(id="user-role", data=data)
+
+
 def data_import_layout() -> html.Div:
     """Layout for the Data Import tab with file upload and metadata form."""
     return html.Div(

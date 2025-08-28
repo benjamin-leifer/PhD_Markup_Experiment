@@ -39,7 +39,6 @@ try:
         doe_tab,
         eis_tab,
         import_jobs_tab,
-        refactor_jobs_tab,
         import_stats_tab,
     )
     from . import layout as layout_components
@@ -47,6 +46,7 @@ try:
         missing_data_tab,
         preferences,
         raw_files_tab,
+        refactor_jobs_tab,
         similar_samples_tab,
         trait_filter_tab,
         watcher_tab,
@@ -345,7 +345,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
                 dcc.Location(
                     id="url", pathname=f"/{prefs.get('default_tab', 'overview')}"
                 ),
-                dcc.Store(id="user-role", data=test_role),
+                layout_components.user_role_store(test_role),
                 dcc.Store(id="preferences", storage_type="local", data=prefs),
                 dcc.Store(id="active-tab", data=prefs.get("default_tab", "overview")),
                 html.Link(rel="stylesheet", href=theme_href, id="theme"),
@@ -543,7 +543,6 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         Input("refresh-interval", "n_intervals"),
         prevent_initial_call=True,
     )
-
     def refresh_db_status(_):
         connected = data_access.db_connected()
         status = "Connected" if connected else "Not Connected"
@@ -767,9 +766,7 @@ def create_app(test_role: str | None = None, enable_login: bool = False) -> dash
         def _run() -> object | None:
             from battery_analysis.utils.import_directory import import_directory
 
-            return import_directory(
-                path, include=["*.csv", "*.xlsx", "*.xls", "*.mpt"]
-            )
+            return import_directory(path, include=["*.csv", "*.xlsx", "*.xls", "*.mpt"])
 
         try:
             executor = ThreadPoolExecutor(max_workers=1)
