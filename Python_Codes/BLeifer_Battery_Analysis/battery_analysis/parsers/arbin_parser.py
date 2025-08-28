@@ -53,20 +53,26 @@ def parse_arbin_excel(
         sheet_names = xl.sheet_names
         print(f"Available sheets: {sheet_names}")
 
-        # Find metadata in Global_Info sheet
+        # Look for sample code in Global_Info sheet if not present in filename
+        if "Global_Info" in sheet_names:
+            try:
+                gi_df = pd.read_excel(file_path, sheet_name="Global_Info", header=None)
+                if not sample_code:
+                    for val in gi_df.astype(str).to_numpy().flatten():
+                        match = re.search(r"([A-Z]{2,4}\d{2})", val)
+                        if match:
+                            sample_code = match.group(1)
+                            break
+            except Exception as e:
+                print(f"Error reading Global_Info sheet: {e}")
+
+        # Collect metadata
         metadata = {
             "tester": "Arbin",
             "name": os.path.splitext(filename)[0],
             "sample_code": sample_code,
             "file_path": file_path,
         }
-
-        if "Global_Info" in sheet_names:
-            try:
-                _ = pd.read_excel(file_path, sheet_name="Global_Info")
-                # Extract metadata - implementation depends on your specific format
-            except Exception as e:
-                print(f"Error reading Global_Info sheet: {e}")
 
         # Find data sheet - look for Channel sheets
         data_sheet = None
