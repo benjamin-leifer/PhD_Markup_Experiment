@@ -41,6 +41,7 @@ def refactor_tests(
     *,
     dry_run: bool = False,
     batch_size: int = 50,
+    job_id: str | None = None,
 ) -> RefactorJob:
     """Refresh ``TestResult`` documents matching ``filter``.
 
@@ -53,19 +54,29 @@ def refactor_tests(
         When ``True`` database writes are skipped.
     batch_size:
         Number of ``TestResult`` objects processed at once.
+    job_id:
+        Identifier of an existing :class:`RefactorJob` to resume.
     """
 
     ensure_connection()
-    job = RefactorJob(filter=filter or {}, dry_run=dry_run, status="running")
-    job.save()
+    if job_id:
+        job = RefactorJob.objects(id=job_id).first()
+        if not job:
+            raise ValueError(f"Unknown RefactorJob id {job_id}")
+    else:
+        job = RefactorJob(status="running")
+        job.save()
 
     qs = TestResult.objects(**(filter or {}))
     total = qs.count()
-    processed = 0
-    updated = 0
-    errors: List[str] = []
+    job.total_count = total
+    job.status = "running"
+    job.save()
 
-    for start in range(0, total, batch_size):
+    processed = job.processed_count
+    errors: List[str] = list(job.errors or [])
+
+    for start in range(processed, total, batch_size):
         batch = qs.skip(start).limit(batch_size)
         affected: Set[str] = set()
         logger.info(
@@ -92,10 +103,13 @@ def refactor_tests(
 
                 if getattr(test, "cell_code", None):
                     affected.add(test.cell_code)
-                updated += 1
             except Exception as exc:  # pragma: no cover - best effort
                 errors.append(str(exc))
             processed += 1
+            job.current_test = str(getattr(test, "id", ""))
+            job.processed_count = processed
+            job.errors = errors
+            job.save()
 
         if not dry_run:
             for code in affected:
@@ -103,11 +117,6 @@ def refactor_tests(
                     update_cell_dataset(code)
                 except Exception:  # pragma: no cover - best effort
                     pass
-
-        job.processed = processed
-        job.updated = updated
-        job.errors = errors
-        job.save()
 
     job.end_time = dt.datetime.utcnow()
     job.status = "completed"
@@ -125,6 +134,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dry-run", action="store_true", help="Run without saving changes"
     )
+    parser.add_argument("--job-id", help="Resume a previous refactor job")
     return parser
 
 
@@ -132,7 +142,7 @@ def main(argv: Iterable[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(list(argv) if argv is not None else None)
     filt = {"cell_code": args.sample} if args.sample else None
-    refactor_tests(filt, dry_run=args.dry_run)
+    refactor_tests(filt, dry_run=args.dry_run, job_id=args.job_id)
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry point
