@@ -377,10 +377,9 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
             default_factory=datetime.datetime.utcnow
         )
         end_time: datetime.datetime | None = None
-        filter: dict = dc_field(default_factory=dict)
-        dry_run: bool = False
-        processed: int = 0
-        updated: int = 0
+        current_test: str | None = None
+        processed_count: int = 0
+        total_count: int = 0
         errors: list[str] = dc_field(default_factory=list)
         status: str = "running"
 
@@ -403,6 +402,9 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
                 obj = cls._registry.get(str(query["id"]))
                 return _Q([obj] if obj else [])
             return _Q(cls._registry.values())
+
+        def delete(self) -> None:
+            self.__class__._registry.pop(self.id, None)
 
     # Convenience export to create or fetch samples by name
     get_or_create_sample = Sample.get_or_create
