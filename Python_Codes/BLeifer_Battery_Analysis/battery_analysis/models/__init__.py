@@ -30,6 +30,7 @@ try:  # pragma: no cover - behaviour depends on environment
         from .experiment_plan import ExperimentPlan  # type: ignore
         from .import_job import ImportJob, ImportJobSummary  # type: ignore
         from .raw_file import RawDataFile  # type: ignore
+        from .refactor_job import RefactorJob  # type: ignore
         from .stages import CathodeMaterial, Cell, Electrode, Slurry, inherit_metadata
         from .test_protocol import TestProtocol  # type: ignore
         from .testresult import CycleDetailData, TestResult  # type: ignore
@@ -48,6 +49,9 @@ try:  # pragma: no cover - behaviour depends on environment
         RawDataFile = importlib.import_module(
             ".raw_file", __name__
         ).RawDataFile  # type: ignore
+        RefactorJob = importlib.import_module(
+            ".refactor_job", __name__
+        ).RefactorJob  # type: ignore
         TestProtocol = importlib.import_module(
             ".test_protocol", __name__
         ).TestProtocol  # type: ignore
@@ -76,6 +80,7 @@ try:  # pragma: no cover - behaviour depends on environment
         "ExperimentPlan",
         "ImportJob",
         "ImportJobSummary",
+        "RefactorJob",
         "CathodeMaterial",
         "Slurry",
         "Electrode",
@@ -365,6 +370,40 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
                 return _Q([obj] if obj else [])
             return _Q(cls._registry.values())
 
+    @dataclass
+    class RefactorJob:  # type: ignore
+        id: str = dc_field(default_factory=lambda: str(uuid.uuid4()))
+        start_time: datetime.datetime = dc_field(
+            default_factory=datetime.datetime.utcnow
+        )
+        end_time: datetime.datetime | None = None
+        filter: dict = dc_field(default_factory=dict)
+        dry_run: bool = False
+        processed: int = 0
+        updated: int = 0
+        errors: list[str] = dc_field(default_factory=list)
+        status: str = "running"
+
+        _registry: ClassVar[dict[str, "RefactorJob"]] = {}
+
+        def save(self) -> "RefactorJob":
+            self.__class__._registry[self.id] = self
+            return self
+
+        @classmethod
+        def objects(cls, **query):
+            class _Q(list):
+                def first(self):
+                    return self[0] if self else None
+
+                def count(self):  # pragma: no cover - simple container
+                    return len(self)
+
+            if "id" in query:
+                obj = cls._registry.get(str(query["id"]))
+                return _Q([obj] if obj else [])
+            return _Q(cls._registry.values())
+
     # Convenience export to create or fetch samples by name
     get_or_create_sample = Sample.get_or_create
 
@@ -380,6 +419,7 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         "ExperimentPlan",
         "ImportJob",
         "ImportJobSummary",
+        "RefactorJob",
         "CathodeMaterial",
         "Slurry",
         "Electrode",
