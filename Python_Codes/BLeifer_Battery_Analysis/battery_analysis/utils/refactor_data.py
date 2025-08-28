@@ -9,7 +9,9 @@ summaries so they conform to the current schema.
 from __future__ import annotations
 
 import argparse
+import csv
 import datetime as dt
+import json
 import logging
 import os
 import time
@@ -56,6 +58,7 @@ def refactor_tests(
     dry_run: bool = False,
     batch_size: int = 50,
     job_id: str | None = None,
+    report_path: str | os.PathLike[str] | None = None,
 ) -> RefactorJob:
     """Refresh ``TestResult`` documents matching ``filter``.
 
@@ -70,6 +73,8 @@ def refactor_tests(
         Number of ``TestResult`` objects processed at once.
     job_id:
         Identifier of an existing :class:`RefactorJob` to resume.
+    report_path:
+        Optional path to write per-file processing status as CSV or JSON.
     """
 
     ensure_connection()
@@ -89,6 +94,7 @@ def refactor_tests(
 
     processed = job.processed_count
     errors: List[str] = list(job.errors or [])
+    report_entries: List[dict[str, str]] = []
 
     for start in range(processed, total, batch_size):
         batch = qs.skip(start).limit(batch_size)
@@ -138,8 +144,14 @@ def refactor_tests(
 
                 if getattr(test, "cell_code", None):
                     affected.add(test.cell_code)
+                status = "ok"
             except Exception as exc:  # pragma: no cover - best effort
                 errors.append(str(exc))
+                status = str(exc)
+            if report_path is not None:
+                report_entries.append(
+                    {"test": str(getattr(test, "id", "")), "status": status}
+                )
             processed += 1
             job.current_test = str(getattr(test, "id", ""))
             job.processed_count = processed
@@ -156,6 +168,15 @@ def refactor_tests(
     job.end_time = dt.datetime.utcnow()
     job.status = "completed"
     job.save()
+    if report_path is not None:
+        path = Path(report_path)
+        if path.suffix.lower() == ".csv":
+            with path.open("w", newline="", encoding="utf-8") as fh:
+                writer = csv.DictWriter(fh, ["test", "status"])
+                writer.writeheader()
+                writer.writerows(report_entries)
+        else:
+            path.write_text(json.dumps(report_entries, indent=2), encoding="utf-8")
     return job
 
 
@@ -169,7 +190,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dry-run", action="store_true", help="Run without saving changes"
     )
-    parser.add_argument("--job-id", help="Resume a previous refactor job")
+    parser.add_argument(
+        "--resume", metavar="JOB_ID", help="Resume a previous refactor job"
+    )
+    parser.add_argument("--report", metavar="PATH", help="Write per-file status report")
     return parser
 
 
@@ -177,7 +201,12 @@ def main(argv: Iterable[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(list(argv) if argv is not None else None)
     filt = {"cell_code": args.sample} if args.sample else None
-    refactor_tests(filt, dry_run=args.dry_run, job_id=args.job_id)
+    refactor_tests(
+        filt,
+        dry_run=args.dry_run,
+        job_id=args.resume,
+        report_path=args.report,
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry point
