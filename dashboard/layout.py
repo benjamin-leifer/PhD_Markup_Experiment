@@ -42,6 +42,14 @@ def import_jobs_layout() -> html.Div:
     return _layout()
 
 
+def refactor_jobs_layout() -> html.Div:
+    """Proxy to the refactor jobs tab layout."""
+
+    from .refactor_jobs_tab import layout as _layout
+
+    return _layout()
+
+
 def flagged_table(flags: List[Dict[str, str]]) -> dbc.Table:
     """Return a table of flagged samples."""
 
@@ -512,6 +520,42 @@ def import_jobs_table(
     return dbc.Table(
         [header, body],
         id="import-jobs-table",
+        bordered=True,
+        hover=True,
+        responsive=True,
+        striped=True,
+    )
+
+
+def refactor_jobs_table(jobs: List[Dict[str, str]]) -> dbc.Table:
+    """Return a table summarizing refactor jobs."""
+
+    header = html.Thead(
+        html.Tr(
+            [
+                html.Th("Start"),
+                html.Th("End"),
+                html.Th("Progress"),
+                html.Th("Errors"),
+            ]
+        )
+    )
+    rows = []
+    for job in jobs:
+        rows.append(
+            html.Tr(
+                [
+                    html.Td(job.get("start", "")),
+                    html.Td(job.get("end", "")),
+                    html.Td(job.get("progress", "")),
+                    html.Td(job.get("errors", "")),
+                ]
+            )
+        )
+    body = html.Tbody(rows)
+    return dbc.Table(
+        [header, body],
+        id="refactor-jobs-table",
         bordered=True,
         hover=True,
         responsive=True,
