@@ -239,11 +239,12 @@ def main() -> None:
             #['EU02', 'EU03'],
             #['FT02', 'FT03','FT04','FT05'],
             #['FU01','FU02', 'FU03','FU04','FU05','FS01', 'FS02',],
-            ['FU01', 'FU04', ],#MF91
+            #['FU01', 'FU04', ],#MF91
             ['GB01', 'GB02', ],#DTFV1411
-            ['FT04', 'FT05', ], #DTFV1422
-            ['GJ04', ], #DTFV1452
+            #['FT04', 'FT05', ], #DTFV1422
+            #['GJ04', ], #DTFV1452
             ['GK05',], #DTFV1425
+            ['FS05']
             #['GB01', 'GB02', 'GB03', 'GB04', 'GB06','GB07',],# Example default codes
             #["FM01", "FM02", "FM03"],  # Example default codes
             #["FM04", "FM05", "FM06"],
