@@ -62,23 +62,32 @@ ELECTROLYTE_MARKER: Dict[str, str] = {
     "MF91":     "o",
 }
 
-# Map ALPHA (two-letter) → electrolyte code
+# Map alpha codes (two-letter prefixes) to electrolyte formulations
 electrolyte_lookup: Dict[str, str] = {
     "AS": "DT14",
     "AT": "DTFV1425",
     "AU": "DT14",
-    "FZ": "DTFV1422",
+    "FT": "DTFV1422",
+    "FU": "MF91",
+    "GB": "DTFV1411",
     "GN": "DTFV1452",
     "GO": "DTFV1425",
     "GW": "DTFV1411",
+    "GX": "DTFV1422",
     "GV": "DTV1410",
     "GU": "DTV142",
     "GT": "DTF1410",
     "GS": "DTF142",
     "GY": "DT14",
-    "MF": "MF91",
-}
+    "GJ": "DTFV1452",
+    "GK": "DTFV1425",
+    "FR": "DTFV1422",
+    "FS": "MF91",
+    "GC": "DTFV1422",
+    "GD": "DTFV1452",
 
+    # extend as needed...
+}
 # Optional: manual overrides { "GN": "GN03", "AS": "AS05", ... }
 CELL_OVERRIDES: Dict[str, str] = {}
 
@@ -363,6 +372,262 @@ def plot_best_cells_from_csv(csv_path: Path, save_path: Optional[Path] = None, d
         logging.info("Saved figure to %s (dpi=%d)", save_path, dpi)
     plt.show()
 
+def plot_all_cells_per_alpha_from_csv(
+    csv_path: Path,
+    target_alphas: Optional[List[str]] = None,
+    save_dir: Optional[Path] = None,
+    dpi: int = 200,
+    exclude_last_cycle: bool = True,
+) -> None:
+    """
+    For each requested alpha (e.g., ["AS","GN"]), produce its own figure with
+    ALL cells of that alpha plotted together. Color is determined by the alpha's
+    electrolyte (same convention as the rest of the script), and linestyles
+    rotate per cell for readability.
+
+    Capacity (left y) and Coulombic Efficiency (right y).
+    """
+    # robust CSV read (handles mixed old/new rows if any linger)
+    try:
+        tab = pd.read_csv(csv_path)
+    except Exception:
+        tab = pd.read_csv(csv_path, engine="python", on_bad_lines="skip")
+
+    if tab.empty:
+        logging.error("CSV is empty; nothing to plot.")
+        return
+
+    # figure out which alphas to plot
+    all_alphas = sorted(a for a in tab["Alpha"].dropna().astype(str).str.upper().unique())
+    if target_alphas is None or len(target_alphas) == 0:
+        alphas = all_alphas
+    else:
+        alphas = [a.strip().upper() for a in target_alphas if a.strip()]
+        missing = [a for a in alphas if a not in all_alphas]
+        if missing:
+            logging.warning("Requested alphas not found in CSV: %s", ", ".join(missing))
+            alphas = [a for a in alphas if a in all_alphas]
+        if not alphas:
+            logging.error("No matching alphas to plot.")
+            return
+
+    # distinct linestyles per cell while keeping the color fixed per electrolyte
+    LS = ["-", "--", "-.", ":", (0, (5, 1)), (0, (3, 1, 1, 1)), (0, (1, 1))]
+    for alpha in alphas:
+        g_alpha = tab[tab["Alpha"].astype(str).str.upper() == alpha].copy()
+        if g_alpha.empty:
+            continue
+
+        electrolyte = electrolyte_lookup.get(alpha, "Unknown")
+        color = ELECTROLYTE_COLOR.get(electrolyte, "#7F7F7F")  # same palette; MF91 stays red
+        marker = ELECTROLYTE_MARKER.get(electrolyte, "o")
+
+        # one figure per alpha
+        fig, ax1 = plt.subplots(figsize=(9.0, 5.2))
+        ax2 = ax1.twinx()
+
+        # each cell gets its own linestyle
+        cells = sorted(g_alpha["Cell"].dropna().astype(str).unique())
+        for i, cell in enumerate(cells):
+            dfc = g_alpha[g_alpha["Cell"] == cell].sort_values("Cycle")
+            if exclude_last_cycle and len(dfc) > 1:
+                dfc = dfc.iloc[:-1]
+
+            # Capacity
+            ax1.plot(
+                dfc["Cycle"],
+                dfc["Qdis"],
+                color=color,
+                lw=2.0,
+                linestyle=LS[i % len(LS)],
+                marker=None,
+                label=cell,
+            )
+            # CE
+            ax2.plot(
+                dfc["Cycle"],
+                dfc["CE_pct"],
+                color=color,
+                lw=1.2,
+                linestyle=LS[i % len(LS)],
+            )
+
+        # labels & styling
+        ax1.set_xlabel("Cycle Number")
+        ax1.set_ylabel("Discharge Capacity (mAh)")
+        ax2.set_ylabel("Coulombic Efficiency (%)")
+        ax2.set_ylim(0, 110)
+        ax1.tick_params(axis="both", direction="in", bottom=True, top=True, left=True, right=True)
+        ax2.tick_params(axis="y", direction="in", right=True)
+        ax1.grid(True, alpha=0.22)
+
+        # legend lists cells; title shows alpha + electrolyte
+        ax1.legend(loc="best", fontsize="small", frameon=True, title="Cells")
+        ax1.set_title(f"Alpha {alpha}: Capacity & CE vs Cycle — {electrolyte}")
+
+        plt.tight_layout()
+
+        # optional save per alpha
+        if save_dir is not None:
+            save_dir.mkdir(parents=True, exist_ok=True)
+            out_png = save_dir / f"{alpha}_all_cells.png"
+            plt.savefig(out_png, dpi=dpi, bbox_inches="tight")
+            logging.info("Saved %s", out_png)
+
+        plt.show()
+
+def plot_electrolytes_subplots_from_csv(
+    csv_path: Path,
+    target_electrolytes: Optional[List[str]] = None,  # None => all present
+    exclude_alphas: Optional[List[str]] = None,       # e.g. ["EU","ZZ"]
+    exclude_cells: Optional[List[str]] = None,        # e.g. ["EU01","GN03"]
+    save_path: Optional[Path] = None,
+    dpi: int = 200,
+    exclude_last_cycle: bool = True,
+    min_capacity_mAh: float = 1.0,                    # drop cycles below this capacity
+) -> None:
+    """
+    Parent figure with one subplot per electrolyte. Each subplot contains every
+    cell (replicate) mapped to that electrolyte (via alpha → electrolyte lookup).
+    Color = electrolyte color (fixed), marker = varies by cell code.
+
+    Also excludes cycles where Qdis < min_capacity_mAh.
+    """
+    # robust read
+    try:
+        tab = pd.read_csv(csv_path)
+    except Exception:
+        tab = pd.read_csv(csv_path, engine="python", on_bad_lines="skip")
+
+    if tab.empty:
+        logging.error("CSV is empty; nothing to plot.")
+        return
+
+    # Normalize
+    tab["Alpha"] = tab["Alpha"].astype(str).str.upper()
+    tab["Cell"]  = tab["Cell"].astype(str).str.upper()
+
+    # Exclude by alpha
+    if exclude_alphas:
+        excl = {a.strip().upper() for a in exclude_alphas if a.strip()}
+        before = len(tab)
+        tab = tab[~tab["Alpha"].isin(excl)].copy()
+        logging.info("Excluded alphas %s (%d → %d rows)", sorted(excl), before, len(tab))
+
+    # Exclude by full cell code
+    if exclude_cells:
+        exclc = {c.strip().upper() for c in exclude_cells if c.strip()}
+        before = len(tab)
+        tab = tab[~tab["Cell"].isin(exclc)].copy()
+        logging.info("Excluded cells %s (%d → %d rows)", sorted(exclc), before, len(tab))
+
+    if tab.empty:
+        logging.error("No rows left after exclusion; nothing to plot.")
+        return
+
+    # Map each row to an electrolyte via alpha
+    tab["Electrolyte"] = tab["Alpha"].map(lambda a: electrolyte_lookup.get(a, "Unknown"))
+
+    # If target_electrolytes specified, filter
+    if target_electrolytes:
+        keep = {e.strip() for e in target_electrolytes if e.strip()}
+        before = len(tab)
+        tab = tab[tab["Electrolyte"].isin(keep)].copy()
+        logging.info("Filtered electrolytes %s (%d → %d rows)", sorted(keep), before, len(tab))
+        if tab.empty:
+            logging.error("No rows match requested electrolytes.")
+            return
+
+    # Determine electrolytes to plot (stable order)
+    electrolytes = sorted(tab["Electrolyte"].unique())
+    if not electrolytes:
+        logging.error("No electrolytes to plot.")
+        return
+
+    # Build per-electrolyte cell roster
+    per_elec_cells: Dict[str, List[str]] = {
+        e: sorted(tab.loc[tab["Electrolyte"] == e, "Cell"].unique())
+        for e in electrolytes
+    }
+
+    # Marker palette (rotates across cells in each subplot)
+    MARKERS = ["o", "s", "D", "^", "v", "P", "X", "h", "*", "<", ">", "8", "p"]
+
+    # Grid layout (up to 3 cols)
+    import math
+    n = len(electrolytes)
+    ncols = min(3, n)
+    nrows = math.ceil(n / ncols)
+
+    fig = plt.figure(figsize=(6.6 * ncols, 4.8 * nrows))
+    fig.suptitle("Capacity & CE vs Cycle — All Replicates per Electrolyte", y=0.995)
+
+    for idx, elec in enumerate(electrolytes, start=1):
+        ax1 = fig.add_subplot(nrows, ncols, idx)
+        ax2 = ax1.twinx()
+
+        color = ELECTROLYTE_COLOR.get(elec, "#7F7F7F")  # MF91 stays red via your map
+        cells = per_elec_cells[elec]
+        marker_map = {c: MARKERS[i % len(MARKERS)] for i, c in enumerate(cells)}
+
+        g_e = tab[tab["Electrolyte"] == elec]
+
+        for cell in cells:
+            dfc = g_e[g_e["Cell"] == cell].sort_values("Cycle")
+
+            # Exclude low-capacity cycles
+            if "Qdis" in dfc.columns:
+                dfc = dfc[dfc["Qdis"] >= float(min_capacity_mAh)]
+
+            # Exclude the last cycle
+            if exclude_last_cycle and len(dfc) > 1:
+                dfc = dfc.iloc[:-1]
+
+            if dfc.empty:
+                continue
+
+            # Capacity (left axis)
+            ax1.plot(
+                dfc["Cycle"], dfc["Qdis"],
+                color=color, marker=marker_map[cell], lw=1.9, ms=4.5, label=cell,
+            )
+            # CE (right axis)
+            ax2.plot(
+                dfc["Cycle"], dfc["CE_pct"],
+                color=color, linestyle=":", lw=1.2,
+            )
+
+        ax1.set_title(f"{elec}")
+        ax1.set_xlabel("Cycle Number")
+        ax1.set_ylabel("Discharge Capacity (mAh)")
+        ax2.set_ylabel("Coulombic Efficiency (%)")
+        ax2.set_ylim(0, 110)
+        ax1.grid(True, alpha=0.22)
+
+        # Legend beneath each subplot
+        ax1.legend(
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.18),
+            fontsize="small",
+            frameon=True,
+            ncol=3,
+            title="Cells"
+        )
+
+        ax1.tick_params(axis="both", direction="in", bottom=True, top=True, left=True, right=True)
+        ax2.tick_params(axis="y", direction="in", right=True)
+        ax1.set_ylim(bottom=0, top=5)
+        ax2.set_ylim(bottom=0, top=110)
+        #ax1.set_xlim(left=0, right=dfc["Cycle"].max() + 1)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    if save_path:
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(save_path, dpi=dpi, bbox_inches="tight")
+        logging.info("Saved multi-subplot figure to %s", save_path)
+    plt.show()
+
+
 
 # ========= Main =========
 
@@ -378,13 +643,71 @@ def main():
     ap.add_argument("--log-level", type=str, default="INFO")
     ap.add_argument("--workers", type=int, default=os.cpu_count() or 4,
                     help="Number of parallel worker processes.")
-    args = ap.parse_args([])  # force defaults in PyCharm
+
+    # Plotting controls
+    ap.add_argument("--per-electrolyte-plot", action="store_true",
+                    help="Produce the multi-subplot electrolytes figure (one subplot per electrolyte).")
+    ap.add_argument("--electrolytes", type=str, default="",
+                    help='Comma-separated electrolyte codes to include (e.g., "DTFV1452,MF91"). Blank = all.')
+    ap.add_argument("--exclude-alphas", type=str, default="EU",
+                    help='Comma-separated alpha prefixes to exclude (e.g., "EU,ZZ").')
+    ap.add_argument("--exclude-cells", type=str, default="FS07, FS06, FS05, FS04, FS03, FR07, FR06, FR05, FR04, FR03,",
+                    help='Comma-separated full cell codes to exclude (e.g., "EU01,GN03").')
+    ap.add_argument("--min-capacity", type=float, default=1.0,
+                    help="Drop cycles with Qdis below this capacity (mAh). Default: 1.0")
+
+    # New: skip ingestion and only plot
+    ap.add_argument("--csv-done", action="store_true", default=True,
+                    help="Skip ingestion; assume out-csv already exists and only run plotting.")
+
+    # Force defaults in PyCharm; switch to ap.parse_args() if you want CLI args
+    args = ap.parse_args([])
 
     setup_logging(args.log_level)
 
+    # Common paths / parsed list args
     root = Path(args.root)
     out_csv = Path(args.out_csv)
     parts_dir = out_csv.parent / (out_csv.stem + "_parts")
+    save_path = Path(args.save) if args.save else None
+
+    electrolytes = [s.strip() for s in args.electrolytes.split(",") if s.strip()] if args.electrolytes else None
+    exclude_alphas = [s.strip() for s in args.exclude_alphas.split(",") if s.strip()] if args.exclude_alphas else None
+    exclude_cells = [s.strip() for s in args.exclude_cells.split(",") if s.strip()] if args.exclude_cells else None
+
+    # === Fast path: CSV already built, just plot ===
+    if args.csv_done:
+        if not out_csv.exists():
+            logging.error("CSV does not exist at %s; cannot plot with --csv-done.", out_csv)
+            return
+
+        # Plot choice
+        if args.per_electrolyte_plot:
+            plot_electrolytes_subplots_from_csv(
+                out_csv,
+                target_electrolytes=electrolytes,
+                exclude_alphas=exclude_alphas,
+                exclude_cells=exclude_cells,
+                save_path=save_path.with_name("electrolytes_subplots.png") if save_path else None,
+                dpi=args.dpi,
+                exclude_last_cycle=True,
+                min_capacity_mAh=args.min_capacity,
+            )
+        else:
+            plot_electrolytes_subplots_from_csv(
+                out_csv,
+                target_electrolytes=electrolytes,
+                exclude_alphas=exclude_alphas,
+                exclude_cells=exclude_cells,
+                save_path=save_path.with_name("electrolytes_subplots.png") if save_path else None,
+                dpi=args.dpi,
+                exclude_last_cycle=True,
+                min_capacity_mAh=args.min_capacity,
+            )
+            plot_best_cells_from_csv(out_csv, save_path=save_path, dpi=args.dpi)
+        return  # ✅ skip ingestion entirely
+
+    # === Normal path: build/update CSV then plot ===
     parts_dir.mkdir(parents=True, exist_ok=True)
 
     if not root.exists():
@@ -409,9 +732,21 @@ def main():
     files = find_excel_files(root)
     if not files:
         logging.error("No Excel files found.")
-        # still attempt plotting if CSV exists
+        # Still attempt plotting if CSV exists
         if out_csv.exists():
-            plot_best_cells_from_csv(out_csv, save_path=Path(args.save) if args.save else None, dpi=args.dpi)
+            if args.per_electrolyte_plot:
+                plot_electrolytes_subplots_from_csv(
+                    out_csv,
+                    target_electrolytes=electrolytes,
+                    exclude_alphas=exclude_alphas,
+                    exclude_cells=exclude_cells,
+                    save_path=save_path.with_name("electrolytes_subplots.png") if save_path else None,
+                    dpi=args.dpi,
+                    exclude_last_cycle=True,
+                    min_capacity_mAh=args.min_capacity,
+                )
+            else:
+                plot_best_cells_from_csv(out_csv, save_path=save_path, dpi=args.dpi)
         return
 
     # Build task list with caching decisions
@@ -420,7 +755,6 @@ def main():
     for f in files:
         cell = cell_code_from_name(f.name)
         ds = dataset_id_from_name(f.name)
-        key = f"{cell}|{ds}"
         mtime = f.stat().st_mtime
         imported_cycles = imported_sets.get((cell, ds), set())
         imported_max_cycle = imported_max.get((cell, ds), -1)
@@ -442,22 +776,18 @@ def main():
     updates_for_cache: Dict[str, Dict] = {}
 
     if tasks:
+        from concurrent.futures import as_completed
         with ProcessPoolExecutor(max_workers=int(args.workers)) as ex:
             futs = [ex.submit(worker_process_file, t) for t in tasks]
             total = len(futs)
             for i, fut in enumerate(as_completed(futs), 1):
                 cell, ds, sourcefile, appended, file_cache_update = fut.result()
-
-                # 👇 progress log you’ll see while workers finish
-                logging.info("[%d/%d] Finished %s: %d new cycles",
-                             i, total, Path(sourcefile).name, appended)
-
+                logging.info("[%d/%d] Finished %s: %d new cycles", i, total, Path(sourcefile).name, appended)
                 appended_total += appended
 
                 # Update in-memory resume structures for subsequent tasks in SAME run
                 if appended > 0:
-                    # Extend sets cheaply (exact cycle IDs not needed here)
-                    s = imported_sets.setdefault((cell, ds), set())
+                    imported_sets.setdefault((cell, ds), set())
                     imported_max[(cell, ds)] = max(
                         imported_max.get((cell, ds), -1),
                         cache["datasets"].get(f"{cell}|{ds}", {}).get("max_cycle_imported", -1)
@@ -466,16 +796,16 @@ def main():
                 if file_cache_update is not None:
                     updates_for_cache[sourcefile] = file_cache_update
 
-
     t_all1 = perf_counter()
-    logging.info("Workers finished in %.2f s; total appended cycles (in parts): %d", (t_all1 - t_all0), appended_total)
+    logging.info("Workers finished in %.2f s; total appended cycles (in parts): %d",
+                 (t_all1 - t_all0), appended_total)
 
     # Append all parts into the main CSV once (much faster than per-row appends)
     part_files = sorted(parts_dir.glob("*.part.csv"))
     if part_files:
         header_needed = not out_csv.exists()
         with out_csv.open("a", newline="", encoding="utf-8") as outfh:
-            for i, pf in enumerate(part_files):
+            for pf in part_files:
                 with pf.open("r", encoding="utf-8") as infh:
                     if header_needed:
                         outfh.write(infh.read())
@@ -508,15 +838,26 @@ def main():
             cache["files"][src] = {"mtime": float(info["mtime"]), "max_cycle": int(info["max_cycle"])}
 
         save_cache(out_csv, cache)
-
     else:
         logging.info("No part files produced; nothing to append to CSV.")
 
-    # Plot
-    save_path = Path(args.save) if args.save else None
-    plot_best_cells_from_csv(out_csv, save_path=save_path, dpi=args.dpi)
+    # Plot (post-ingestion)
+    if args.per_electrolyte_plot:
+        plot_electrolytes_subplots_from_csv(
+            out_csv,
+            target_electrolytes=electrolytes,
+            exclude_alphas=exclude_alphas,
+            exclude_cells=exclude_cells,
+            save_path=save_path.with_name("electrolytes_subplots.png") if save_path else None,
+            dpi=args.dpi,
+            exclude_last_cycle=True,
+            min_capacity_mAh=args.min_capacity,
+        )
+    else:
+        plot_best_cells_from_csv(out_csv, save_path=save_path, dpi=args.dpi)
 
     logging.info("Done.")
+
 
 
 if __name__ == "__main__":
