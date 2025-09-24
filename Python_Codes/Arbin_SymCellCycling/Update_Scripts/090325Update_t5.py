@@ -649,7 +649,7 @@ def main():
                     help="Produce the multi-subplot electrolytes figure (one subplot per electrolyte).")
     ap.add_argument("--electrolytes", type=str, default="",
                     help='Comma-separated electrolyte codes to include (e.g., "DTFV1452,MF91"). Blank = all.')
-    ap.add_argument("--exclude-alphas", type=str, default="EU",
+    ap.add_argument("--exclude-alphas", type=str, default="EU, GY, GZ",
                     help='Comma-separated alpha prefixes to exclude (e.g., "EU,ZZ").')
     ap.add_argument("--exclude-cells", type=str, default="FS07, FS06, FS05, FS04, FS03, FR07, FR06, FR05, FR04, FR03,",
                     help='Comma-separated full cell codes to exclude (e.g., "EU01,GN03").')
