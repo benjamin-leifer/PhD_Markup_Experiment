@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 # -------- USER: set these before running locally --------
 lookup_table_path = r"C:\Users\benja\OneDrive - Northeastern University\Spring 2025 Cell List.xlsx"
-search_directory   = r"C:\Users\benja\OneDrive - Northeastern University\Gallaway Group\Gallaway Extreme SSD Drive\Equipment Data\Lab Arbin\Li-Ion\Low Temp Li Ion\2025\0915--51C Data\Arbin -51C"
+search_directory   = r"C:\Users\benja\OneDrive - Northeastern University\Gallaway Group\Gallaway Extreme SSD Drive\Equipment Data\Lab Arbin\Li-Ion\Low Temp Li Ion\2025\0915--51C Data\Arbin -51C\MF91\Good"
 snowflake_image_path = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Snowflake.png'  # optional image path
 
 out_dir = Path(search_directory) / "per_electrolyte_discharges_out"
@@ -276,7 +276,7 @@ def plot_per_electrolyte_discharge(
             label_text = f"{format_key(key)} ({temp_txt}) [{cell_ident}]"
 
             for cycle, _chg, dch in cycles_data:
-                if dch.empty:
+                if cycle != 1 or dch.empty:
                     continue
                 d = dch[dch["Voltage (V)"] > voltage_cutoff].copy()
                 if d.empty:
@@ -316,7 +316,6 @@ def plot_per_electrolyte_discharge(
 
         fig.suptitle(f"Discharge Curves — {elec}", y=0.98, fontsize=12)
         fig.tight_layout()
-
         out_png = out_dir / f"discharge_{elec.replace('/','-')}.png"
         plt.savefig(out_png, dpi=300, bbox_inches="tight")
         plt.close(fig)

@@ -17,6 +17,7 @@ search_directory = r'C:\Users\benja\OneDrive - Northeastern University\Gallaway 
 #search_directory = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Cycle Life Best Survivors'
 search_directory = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Cycle Life Best Survivors\Form Experiment'
 search_directory = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Cycle Life Best Survivors\Form Experiment\07152025'
+search_directory = r'C:\Users\benja\Downloads\Temp\C_10 Cycling\2025\08\C_10 Sept Update\Brookhaven Cells'
 # ==========================
 # 1. Set the working directory
 # ==========================
@@ -1208,6 +1209,8 @@ else:
 # josh_ask = [get_tuples_by_cell_code(file_paths_keys, r'EU03')[0],
 #             get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],
 #             get_tuples_by_cell_code(file_paths_keys, r'FF02')[0],]
+
+
 
 Forms_0716 =[
     get_tuples_by_cell_code(file_paths_keys, r'FR03')[0],
