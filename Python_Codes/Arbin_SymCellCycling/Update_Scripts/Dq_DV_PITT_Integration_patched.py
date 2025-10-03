@@ -28,22 +28,34 @@ DATA_DIR = Path(r"C:\Users\benja\Downloads\DQ_DV Work\Lab Arbin_DQ_DV_2025_07_15
 
 FILES: List[str] = [
     # ---------- your dQ/dV & charge-curve input files ----------
-    "BL-LL-FZ01_RT_C_20_Charge_02_CP_C04.mpt", #"DTFV1422"
+    #"BL-LL-FZ01_RT_C_20_Charge_02_CP_C04.mpt", #"DTFV1422"
     #"BL-LL-GA01_RT_C_20_Charge_02_CP_C02.mpt",#DTFV1452 - old
-    "BL-LL-GN01_RT_No_Formation_03_GCPL_C01.mpt",#DTFV1452 - new
-    "BL-LL-GO01_RT_No_Formation_03_GCPL_C04.mpt",#DTFV1425
+    #"BL-LL-GN01_RT_No_Formation_03_GCPL_C01.mpt",#DTFV1452 - new
+    #"BL-LL-GO01_RT_No_Formation_03_GCPL_C04.mpt",#DTFV1425
     #"BL-LL-GX05_RT_No_Formation_02_CP_C04.mpt",
-    "BL-LL-GW05_RT_No_Formation_02_CP_C03.mpt",#DTFV1411
-    "BL-LL-GV05_RT_No_Formation_02_CP_C01.mpt",#DTV1410
-    "BL-LL-GU05_RT_No_Formation_02_CP_C04.mpt",#DTV142
-    "BL-LL-GT05_RT_No_Formation_02_CP_C03.mpt",#DTF1410
-    "BL-LL-GS05_RT_No_Formation_02_CP_C01.mpt",#DTF142
+    #"BL-LL-GW05_RT_No_Formation_02_CP_C03.mpt",#DTFV1411
+    #"BL-LL-GV05_RT_No_Formation_02_CP_C01.mpt",#DTV1410
+    #"BL-LL-GU05_RT_No_Formation_02_CP_C04.mpt",#DTV142
+    #"BL-LL-GT05_RT_No_Formation_02_CP_C03.mpt",#DTF1410
+    #"BL-LL-GS05_RT_No_Formation_02_CP_C01.mpt",#DTF142
     #"BL-LL-GY01_RT_No_Formation_02_CP_C01.mpt",#DT14
-    "BL-LL-GY02_RT_No_Formation_02_CP_C03.mpt",#DT14
+    #"BL-LL-GY02_RT_No_Formation_02_CP_C03.mpt",#DT14
     #"BL-LL-GA02_RT_C_20_Form_HighFid_Channel_64_Wb_1.xlsx",
     #"BL-LL-FZ02_RT_C_20_Form_HighFid_Channel_63_Wb_1.xlsx",
     #"BL-LL-FW02_RT_C_20_Form_HighFid_Channel_60_Wb_1.xlsx",
     #"BL-LL-FX02_RT_C_20_Form_HighFid_Channel_61_Wb_1.xlsx",
+    # "BL-LL-GY01_RT_C3_Cycling_Channel_5_Wb_1.xlsx",#MF91
+    # "BL-LL-GY02_RT_C3_Cycling_Channel_8_Wb_1.xlsx",#MF91
+    # "BL-LL-GY03_RT_C3_Cycling_Channel_9_Wb_1.xlsx",#MF91
+    # "BL-LL-GY04_RT_C3_Cycling_Channel_21_Wb_1.xlsx",#MF91
+    # "BL-LL-GZ01_RT_C3_Cycling_Channel_29_Wb_1.xlsx",#DTFV1411
+    # "BL-LL-GZ02_RT_C3_Cycling_Channel_30_Wb_1.xlsx",#DTFV1411
+    # "BL-LL-GZ03_RT_C3_Cycling_Channel_31_Wb_1.xlsx",#DTFV1411
+    # "BL-LL-GZ04_RT_C3_Cycling_Channel_32_Wb_1.xlsx",#DTFV1411
+    #"BL-LL-GX01_RT_C10_Cycling_Channel_27_Wb_1.xslx",#
+    "BL-LL-GX02_RT_C10_Cycling_Channel_28_Wb_1.xlsx",
+    "BL-LL-GX03_RT_C10_Cycling_Channel_29_Wb_1.xlsx",
+    #"BL-LL-GX04_RT_C10_Cycling_Channel_30_Wb_1.xlsx",
 ]
 
 # ---- explicit color overrides for specific base tokens ----
@@ -65,7 +77,9 @@ MASS_MG = {id_: 0.02496886674 / 1000  # mg → g
            for id_ in ["FZ01","FY01","FX01","FW01","GA01",
                         "FZ02","FY02","FX02","FW02","GA02", "GN01",
                        "GX05","GW05","GV05","GU05","GT05","GS05", "GO01",
-                       "GY01", "GY02"]}
+                       "GY01", "GY02", "GY03","GY04",
+                       "GZ01", "GZ02", "GZ03","GZ04",
+                       "GX01", "GX02", "GX03","GX04",]}
 MASS_G = {
     #"GD01": 0.02496886674,   # example masses
     #"GC01": 0.02496886674,
@@ -94,8 +108,21 @@ electrolyte_lookup = {
     "GN01": "DTFV1452 (new) - C/20",
     "GO01": "DTFV1425 - C/20",
     "FZ01": "DTFV1422 - C/20",
-    "GY01": "DT14 - C/20",
-    "GY02": "DT14 - C/20",
+    "GX05": "DTFV1422 - C/20",
+    #"GY01": "DT14 - C/20",
+    #"GY02": "DT14 - C/20",
+    "GY01": "MF91 - C/10",
+    "GY02": "MF91 - C/10",
+    "GY03": "MF91 - C/10",
+    "GY04": "MF91 - C/10",
+    "GZ01": "DTFV1411 - C/10",
+    "GZ02": "DTFV1411 - C/10",
+    "GZ03": "DTFV1411 - C/10",
+    "GZ04": "DTFV1411 - C/10",
+    "GX01": "DTFV1422  - C/10",
+    "GX02": "DTFV1422  - C/10",
+    "GX03": "DTFV1422  - C/10",
+    "GX04": "DTFV1422  - C/10",
 }
 
 # ── Consistent style mapping ─────────────────────────────────────────────
@@ -132,6 +159,7 @@ TEST_LS = {
     "C/20": "-",
     "PITT": "--",
     "Unknown": "-.",
+    "C/10": '-.'
 }
 TEST_MK = {
     "C/20": None,     # lines only
@@ -139,6 +167,27 @@ TEST_MK = {
     "PCGA": "o",      # circles for PCGA overlays
     "Unknown": None,
 }
+# ── Color override option ───────────────────────────────────────────────
+# "chemistry" → keep your existing style_for_cell() colors
+# "per-curve" → assign each plotted curve a distinct color, cycling a palette
+COLOR_MODE = "chemistry"   # change to "per-curve" to force unique colors
+COLOR_MODE = "per-curve"
+COLOR_LIST = None          # or provide a list of hex/named colors to use
+                           # e.g., ["#1f77b4","#ff7f0e","#2ca02c","#d62728"]
+
+import matplotlib.pyplot as plt
+
+def pick_color_for_curve(i: int, n: int, fallback_hex):
+    """Return a color for curve i based on COLOR_MODE."""
+    if COLOR_MODE == "per-curve":
+        if isinstance(COLOR_LIST, (list, tuple)) and len(COLOR_LIST) > 0:
+            return COLOR_LIST[i % len(COLOR_LIST)]
+        # otherwise pull distinct colors from a colormap
+        cmap = plt.get_cmap("tab20")  # good for up to ~20 distinct colors
+        return cmap(i % 20)
+    # default: keep chemistry-driven color
+    return fallback_hex
+
 
 def split_base_and_test(elec_label: str) -> tuple[str, str]:
     """
@@ -385,20 +434,74 @@ def load_eclab(fp: Path, cycle: int, charge: bool) -> pd.DataFrame:
 
 # --- Arbin (.xlsx) utilities -------------------------------------------
 _clean = lambda s: re.sub(r"[^a-z]", "", s.lower())
+# python
 def load_arbin(fp: Path, cycle: int, charge: bool) -> pd.DataFrame:
-    df0 = pd.read_excel(fp, sheet_name=1, engine="openpyxl")
+    df0 = pd.read_excel(fp, sheet_name=1, engine="openpyxl")  # your sheet=1
+    # build a map from "simplified" -> original header
+    def _clean(s): return re.sub(r"[^a-z0-9]", "", str(s).lower())
     cmap = {_clean(c): c for c in df0.columns}
-    v_key  = next(k for k in cmap if k.startswith("voltage"))
-    q_key  = next(k for k in cmap if k.startswith(
-               "chargecapacity" if charge else "dischargecapacity"))
-    cyc_key  = next((k for k in cmap if k.startswith(("cycleindex","cyclenumber"))), None)
+
+    # column detection (robust)
+    v_key = next(k for k in cmap if k.startswith("voltage"))
+    # charge/discharge capacity column
+    q_key = next(
+        (k for k in cmap if k.startswith(
+            "chargecapacity" if charge else "dischargecapacity"
+        )),
+        None
+    )
+    if q_key is None:
+        # sometimes it's just "capacity"
+        q_key = next((k for k in cmap if k.startswith("capacity")), None)
+
+    # cycle column: accept cycle*, *cyclenumber*, *cycleindex*, etc.
+    cyc_key = None
+    for k in cmap:
+        if k.startswith("cycleindex") or k.startswith("cyclenumber") or k.startswith("cycle"):
+            cyc_key = k
+            break
+
+    # half-cycle column if present
     half_key = next((k for k in cmap if k.startswith("halfcycle")), None)
+
+    # current column (fallback half-cycle via sign)
+    cur_key = next((k for k in cmap if k.startswith("current")), None)
+
+    if DEBUG:
+        print(f"[ARBIN] using columns: V={cmap[v_key]!r} Q={cmap[q_key]!r} "
+              f"CYC={cmap[cyc_key] if cyc_key else None!r} "
+              f"HALF={cmap[half_key] if half_key else None!r} "
+              f"CUR={cmap[cur_key] if cur_key else None!r}")
+
     df = df0[[cmap[v_key], cmap[q_key]]].copy()
-    if cyc_key:  df = df[df0[cmap[cyc_key]] == cycle]
-    if half_key: df = df[df0[cmap[half_key]] == (0 if charge else 1)]
-    df.columns = ["V","QmAh"]; df.dropna(inplace=True)
-    _dbg(f"  Arbin rows {len(df)}")
-    return df.reset_index(drop=True).astype(float)
+    mask = pd.Series(True, index=df.index)
+
+    # cycle filter (Arbin is commonly 1-based; handle 0-based too)
+    if cyc_key:
+        cyc_series = df0[cmap[cyc_key]]
+        if (cyc_series == 0).any():   # 0-based
+            mask &= (cyc_series == (cycle - 1))
+        else:                          # 1-based
+            mask &= (cyc_series == cycle)
+
+    # half-cycle filter
+    if half_key is not None:
+        # convention: 0 = charge, 1 = discharge (matches your EC-Lab path)
+        target = 0 if charge else 1
+        mask &= (df0[cmap[half_key]] == target)
+    elif cur_key is not None:
+        # fallback by current sign
+        cur = pd.to_numeric(df0[cmap[cur_key]], errors="coerce")
+        mask &= (cur > 0 if charge else cur < 0)
+
+    df = df[mask].rename(columns={cmap[v_key]: "V", cmap[q_key]: "QmAh"})
+    df.dropna(inplace=True)
+
+    # ensure float types
+    df = df.astype(float).reset_index(drop=True)
+    return df
+
+
 
 # ═════════════════════ PCGA step-capacity helpers ═══════════════════════
 def read_mpt_header(path: Path) -> int:
@@ -518,11 +621,12 @@ def main():
         sty = style_for_cell(cell_id, idx_hint=idx)
 
         # dQ/dV plot
+        _curve_color = pick_color_for_curve(idx, len(FILES), sty["color"])
         ax_dqdv.plot(
             v_mid, y,
             lw=sty["lw"],
             label=sty["label"],
-            color=sty["color"],
+            color=_curve_color,
             linestyle=sty["linestyle"],
             marker=sty["marker"],
             markevery=sty["markevery"] if sty["marker"] else None,
@@ -538,7 +642,7 @@ def main():
             q_curve, v_curve,
             lw=sty["lw"],
             label=sty["label"],
-            color=sty["color"],
+            color=_curve_color,  # use the same per-curve color
             linestyle=sty["linestyle"],
             marker=sty["marker"],
             markevery=sty["markevery"] if sty["marker"] else None,

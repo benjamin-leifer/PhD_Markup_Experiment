@@ -146,26 +146,38 @@ def scan_excel_files(root: Path) -> List[Path]:
 # -----------------------------
 # Main
 # -----------------------------
+import pandas as pd
+
 def main():
-    file_list = scan_excel_files(ROOT_DIR)
-    if not file_list:
-        raise SystemExit(f"No Excel files found under {ROOT_DIR}")
-
-    rows = []
-    for f in file_list:
-        cell, alpha = parse_cell_alpha(f)
-        metrics = per_file_metrics(f)
-        for cyc, qdis_mAh, qchg_mAh, ce in metrics:
-            rows.append((cell, alpha, cyc, qdis_mAh, qchg_mAh, ce))
-
     out_csv = OUTDIR / "metrics_capacity_ce.csv"
-    with out_csv.open("w", newline="", encoding="utf-8") as fh:
-        w = csv.writer(fh)
-        w.writerow(["Cell", "Alpha", "Cycle", "Qdis_mAh", "Qchg_mAh", "CE_pct"])
-        for r in rows:
-            w.writerow(r)
+    if out_csv.exists():
+        # Load existing CSV
+        df = pd.read_csv(out_csv)
+        rows = [
+            (row["Cell"], row["Alpha"], row["Cycle"], row["Qdis_mAh"], row["Qchg_mAh"], row["CE_pct"])
+            for _, row in df.iterrows()
+            if row["Qdis_mAh"] >= 2
+        ]
+    else:
+        file_list = scan_excel_files(ROOT_DIR)
+        if not file_list:
+            raise SystemExit(f"No Excel files found under {ROOT_DIR}")
 
-    # Plot 1: all cells
+        rows = []
+        for f in file_list:
+            cell, alpha = parse_cell_alpha(f)
+            metrics = per_file_metrics(f)
+            for cyc, qdis_mAh, qchg_mAh, ce in metrics:
+                if qdis_mAh >= 2:
+                    rows.append((cell, alpha, cyc, qdis_mAh, qchg_mAh, ce))
+
+        with out_csv.open("w", newline="", encoding="utf-8") as fh:
+            w = csv.writer(fh)
+            w.writerow(["Cell", "Alpha", "Cycle", "Qdis_mAh", "Qchg_mAh", "CE_pct"])
+            for r in rows:
+                w.writerow(r)
+
+    # Plotting (same as before, but rows already filtered)
     by_cell = defaultdict(list)
     for cell, alpha, cyc, qdis, qchg, ce in rows:
         by_cell[cell].append((cyc, qdis, ce))
@@ -204,6 +216,10 @@ def main():
     plt.tight_layout(rect=[0, 0, 1, 0.96]);plt.show(); plt.savefig(OUTDIR / "split_by_alpha_capacity_ce.png", dpi=200, bbox_inches="tight"); plt.close(fig2)
 
     print(f"Done. Wrote CSV and plots to {OUTDIR}")
+
+if __name__ == "__main__":
+    main()
+
 
 
 if __name__ == "__main__":

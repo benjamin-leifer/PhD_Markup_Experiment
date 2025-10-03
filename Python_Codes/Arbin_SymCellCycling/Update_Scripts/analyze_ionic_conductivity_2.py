@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 
 # Constants
-thickness_cm = .002
-area_cm2 = 1.96
+thickness_cm = 1
+area_cm2 = 1.27
 R_gas = 8.314
 column_names = [
     "Frequency (Hz)", "Zmod (Ohm)", "Zre (Ohm)", "-Zim (Ohm)", "Phase(Z) (deg)", "Time (s)",
@@ -446,6 +446,6 @@ def main_2_best_cell_logS(root_dir):
     plt.close()
 
 if __name__ == "__main__":
-    root_dir = r"C:\Users\benja\Downloads\DQ_DV Work\Lab Arbin_DQ_DV_2025_07_15\07\Ionic Conductivity\2025_07_27"
+    root_dir = r"C:\Users\benja\Downloads\DQ_DV Work\Lab Arbin_DQ_DV_2025_07_15\07\Ionic Conductivity\HB_Data"
     main_2_best_cell_logS(root_dir)
     #main_2(root_dir)
