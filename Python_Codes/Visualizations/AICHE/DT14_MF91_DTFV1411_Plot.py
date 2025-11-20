@@ -340,7 +340,7 @@ for full_path, key, cell_code in file_paths_keys:
 # ]
 
 files_to_compare = []
-target_codes = ['DN06', 'DO06', 'DP06', 'DR06', 'DS06', 'DT06', 'DU06','DV06','DW06','DX06', 'DY06', 'DZ06', 'EA06', 'EB06', 'EC06']
+#target_codes = ['DN06', 'DO06', 'DP06', 'DR06', 'DS06', 'DT06', 'DU06','DV06','DW06','DX06', 'DY06', 'DZ06', 'EA06', 'EB06', 'EC06']
 target_codes = [ 'DU06','EJ05', 'EN04', 'EO05', 'ES05','EP04', 'EQ04','ER05','ET05','EC06' ]
 target_codes = [ 'EP04','ER05','ET05','EC06' ]
 target_codes = ['FA01','FA01']
@@ -351,18 +351,14 @@ target_codes = [ 'FA01','EN04','DU06','EO05','EJ05',
                  'FF05',
                  'FG05',
                  'ES05',
-                 'EC06',
-                 'HK02','HJ02','HI01']
-#target_codes = ['EM01','EC06','FO02','FO05',]#'EC01']#'FC04']
-#target_codes = ['FQ08', 'FQ01', 'FQ03', 'FF05']
+                 'EC06',]
+target_codes = ['EM01','EC06','FO02','FO05',]#'EC01']#'FC04']
+target_codes = ['FQ08', 'FQ01', 'FQ03', 'FF05']
+target_codes = ['DP06', ]
 #target_codes = ['EM01','FO02','FO05','EC06',]
 #target_codes = ['FQ08', 'FQ01', 'FQ03', 'FF05']
 #holder_codes = ['holder1','holder2']
 #holder_codes.extend(target_codes)
-#target_codes = ['DN06', 'DO06', 'DP06', 'DR06', 'DS06', 'DT06', 'DU06','DV06','DW06','DX06', 'DY06', 'DZ06', 'EA06', 'EB06', 'EC06',
-#               'HK02','HJ02','HI01']
-#target_codes = ['HK02','HJ02','HI01']
-
 cell_codes= [cell_code for cell_code in target_codes]
 custom_colors = assign_tol_colors(cell_codes)
 #target_codes = [ 'FA01','DU06','FC04', 'FD04', 'EB06', 'EC06', ]

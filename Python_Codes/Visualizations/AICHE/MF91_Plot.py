@@ -5,6 +5,14 @@ import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Qt5Agg')  # Or try 'QtAgg' if 'TkAgg' doesn't work
 import matplotlib.pyplot as plt
+plt.rcParams.update({
+    'font.size': 14,           # default font size
+    'axes.labelsize': 18,      # x/y label size
+    'axes.titlesize': 18,      # title size
+    'xtick.labelsize': 16,     # x tick label size
+    'ytick.labelsize': 16,     # y tick label size
+    'legend.fontsize': 14
+})
 plt.rcParams['toolbar'] = 'toolbar2'  # Enable the toolbar for interactive plots
 # Provide the path to your lookup table Excel file.
 lookup_table_path = r'C:\Users\benja\OneDrive - Northeastern University\Spring 2025 Cell List.xlsx'
@@ -14,6 +22,34 @@ search_directory = r'C:\Users\benja\OneDrive - Northeastern University\Gallaway 
 # 1. Set the working directory
 # ==========================
 os.chdir(search_directory)
+# --- Gold lightness utilities ---
+import re
+
+BASE_GOLD = "#C88A00"        # orange-gold base (tweak to taste)
+LIGHT_MIN = 0.00             # darkest at coldest
+LIGHT_MAX = 0.65             # lightest at warmest
+
+def _hex_to_rgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+def _rgb_to_hex(rgb):
+    return "#{:02x}{:02x}{:02x}".format(*rgb)
+
+def _mix_with_white(hex_color, frac):
+    """frac in [0,1] -> 0 = original color, 1 = white"""
+    r, g, b = _hex_to_rgb(hex_color)
+    r = int(r + (255 - r) * frac)
+    g = int(g + (255 - g) * frac)
+    b = int(b + (255 - b) * frac)
+    return _rgb_to_hex((r, g, b))
+
+def _temp_from_filename(path_or_name):
+    """Returns numeric °C; RT -> 20 by default."""
+    m = re.search(r'(-?\d+)\s*C', str(path_or_name))
+    if m:
+        return float(m.group(1))
+    return 20.0  # treat RT as ~20 °C
 
 # ==========================
 # 2. Helper: Extract cell identifier
@@ -208,6 +244,26 @@ def plot_last_cells_discharge_curves(file_tuples, normalized=False, color_dict=N
     The x-axis shows capacity (Ah, normalized by the norm factor) and y-axis shows voltage (V).
     """
     plt.figure(figsize=(6, 4))
+    # --- Build gold palette that lightens with temperature ---
+    temps = []
+    for (file_path, key, cell_code) in file_tuples:
+        # prefer filename temp; fallback to key if needed
+        t = _temp_from_filename(file_path)
+        if t == 20.0:  # if filename had no temp and key contains one
+            mk = re.search(r'(-?\d+)\s*°?C', key)
+            if mk:
+                t = float(mk.group(1))
+        temps.append(t)
+
+    t_min, t_max = min(temps), max(temps)
+    span = max(t_max - t_min, 1e-9)
+
+    series_colors = []
+    for t in temps:
+        # map cold->warm to LIGHT_MIN->LIGHT_MAX
+        frac = (t - t_min) / span
+        series_colors.append(_mix_with_white(BASE_GOLD, LIGHT_MIN + (LIGHT_MAX - LIGHT_MIN) * frac))
+
     ax = plt.gca()
     cmap = matplotlib.colormaps["tab20"].resampled(len(file_tuples))
     markers = ['o', 's', 'D', '^', 'v', '<', '>', 'p', '*', 'h', 'H', 'x', 'd', '|', '_', '+', '1', '2', '3', '4']
@@ -215,9 +271,9 @@ def plot_last_cells_discharge_curves(file_tuples, normalized=False, color_dict=N
         print(key)
         print(key[-5:-1])
         if color_dict is not None:
-            color = color_dict[str(key[-5:-1])]
+            color = series_colors[idx]
         else:
-            color = cmap(idx)
+            color = series_colors[idx]
         marker = markers[idx % len(markers)]
         print(color)
         try:
@@ -267,8 +323,8 @@ def plot_last_cells_discharge_curves(file_tuples, normalized=False, color_dict=N
                          label=label_text, linestyle='-', color=color, lw = 2)
     plt.xlabel('Capacity (mAh/g)')
     plt.ylabel('Voltage (V)')
-    plt.title('Discharge Curves for MF91 Cells at Low Temp')
-    plt.gca().set_ylim(0, 4.5)
+    #plt.title('Discharge Curves for MF91 Cells at Low Temp')
+    plt.gca().set_ylim(2.5, 4.5)
     plt.gca().set_xlim(-4, 160)
     # Only show legend if there are labeled artists
     # Updated legend placement
@@ -340,7 +396,7 @@ for full_path, key, cell_code in file_paths_keys:
 # ]
 
 files_to_compare = []
-target_codes = ['DN06', 'DO06', 'DP06', 'DR06', 'DS06', 'DT06', 'DU06','DV06','DW06','DX06', 'DY06', 'DZ06', 'EA06', 'EB06', 'EC06']
+#target_codes = ['DN06', 'DO06', 'DP06', 'DR06', 'DS06', 'DT06', 'DU06','DV06','DW06','DX06', 'DY06', 'DZ06', 'EA06', 'EB06', 'EC06']
 target_codes = [ 'DU06','EJ05', 'EN04', 'EO05', 'ES05','EP04', 'EQ04','ER05','ET05','EC06' ]
 target_codes = [ 'EP04','ER05','ET05','EC06' ]
 target_codes = ['FA01','FA01']
@@ -351,18 +407,13 @@ target_codes = [ 'FA01','EN04','DU06','EO05','EJ05',
                  'FF05',
                  'FG05',
                  'ES05',
-                 'EC06',
-                 'HK02','HJ02','HI01']
-#target_codes = ['EM01','EC06','FO02','FO05',]#'EC01']#'FC04']
-#target_codes = ['FQ08', 'FQ01', 'FQ03', 'FF05']
-#target_codes = ['EM01','FO02','FO05','EC06',]
+                 'EC06',]
+target_codes = ['EM01','EC06','FO02','FO05',]#'EC01']#'FC04']
+target_codes = ['FQ08', 'FQ01', 'FQ03', 'FF05']
+target_codes = ['EM01','FO02','FO05','EC06',]
 #target_codes = ['FQ08', 'FQ01', 'FQ03', 'FF05']
 #holder_codes = ['holder1','holder2']
 #holder_codes.extend(target_codes)
-#target_codes = ['DN06', 'DO06', 'DP06', 'DR06', 'DS06', 'DT06', 'DU06','DV06','DW06','DX06', 'DY06', 'DZ06', 'EA06', 'EB06', 'EC06',
-#               'HK02','HJ02','HI01']
-#target_codes = ['HK02','HJ02','HI01']
-
 cell_codes= [cell_code for cell_code in target_codes]
 custom_colors = assign_tol_colors(cell_codes)
 #target_codes = [ 'FA01','DU06','FC04', 'FD04', 'EB06', 'EC06', ]

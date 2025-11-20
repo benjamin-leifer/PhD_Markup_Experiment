@@ -54,7 +54,7 @@ FILES: List[str] = [
     # "BL-LL-GZ04_RT_C3_Cycling_Channel_32_Wb_1.xlsx",#DTFV1411
     #"BL-LL-GX01_RT_C10_Cycling_Channel_27_Wb_1.xslx",#
     "BL-LL-GX02_RT_C10_Cycling_Channel_28_Wb_1.xlsx",
-    "BL-LL-GX03_RT_C10_Cycling_Channel_29_Wb_1.xlsx",
+    #"BL-LL-GX03_RT_C10_Cycling_Channel_29_Wb_1.xlsx",
     #"BL-LL-GX04_RT_C10_Cycling_Channel_30_Wb_1.xlsx",
 ]
 
