@@ -476,10 +476,10 @@ def register_callbacks(app: dash.Dash) -> None:
 def _render_matplotlib(fig_dict):
     import json
     import matplotlib.pyplot as plt
-    from plotly import utils as putils
+    import plotly.graph_objects as go
+    from plotly.utils import PlotlyJSONDecoder
 
-    decoder = getattr(putils, "PlotlyJSONDecoder", json.JSONDecoder)
-    fig = go.Figure(json.loads(json.dumps(fig_dict), cls=decoder))
+    fig = go.Figure(json.loads(json.dumps(fig_dict), cls=PlotlyJSONDecoder))
     try:
         plt.figure()
         for tr in fig.data:
