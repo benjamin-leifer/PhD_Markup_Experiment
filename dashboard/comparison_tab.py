@@ -394,35 +394,35 @@ def register_callbacks(app: dash.Dash) -> None:
         prevent_initial_call=True,
     )
     def _popout_matplotlib(n_clicks, fig_dict):
-        import matplotlib
         import importlib.util
 
         if not n_clicks or not fig_dict:
             raise dash.exceptions.PreventUpdate
 
-        if not (
-            importlib.util.find_spec("PyQt5")
-            or importlib.util.find_spec("PySide2")
+        backend = None
+        for module, candidate in (
+            ("PyQt5", "Qt5Agg"),
+            ("PySide2", "Qt5Agg"),
+            ("PyQt6", "QtAgg"),
+            ("PySide6", "QtAgg"),
         ):
-            return (
-                0,
-                True,
-                "Qt bindings not available; install PyQt5/PySide2.",
-                "Error",
-                "danger",
-            )
+            if importlib.util.find_spec(module):
+                backend = candidate
+                break
 
-        if matplotlib.get_backend().lower() == "agg":
+        if backend is None:
             return (
                 0,
                 True,
-                "Qt backend not available; install PyQt5/PySide2.",
+                "Qt bindings not available; install PyQt5/PyQt6/PySide2/PySide6.",
                 "Error",
                 "danger",
             )
 
         try:
-            proc = Process(target=_render_matplotlib, args=(fig_dict,), daemon=True)
+            proc = Process(
+                target=_render_matplotlib, args=(fig_dict, backend), daemon=True
+            )
             proc.start()
             if not proc.is_alive():
                 raise OSError("Matplotlib process failed to start")
@@ -437,12 +437,19 @@ def register_callbacks(app: dash.Dash) -> None:
         return (0, dash.no_update, dash.no_update, dash.no_update, dash.no_update)
 
 
-def _render_matplotlib(fig_dict: Dict[str, Any]) -> None:
+def _render_matplotlib(fig_dict: Dict[str, Any], backend: str | None = None) -> None:
     """Render ``fig_dict`` using Matplotlib."""
     import json
-    import matplotlib.pyplot as plt
+    import matplotlib
     import plotly.graph_objects as go
     from plotly.utils import PlotlyJSONDecoder
+
+    if backend:
+        try:
+            matplotlib.use(backend, force=True)
+        except Exception:
+            logging.exception("Failed to set Matplotlib backend to %s", backend)
+    import matplotlib.pyplot as plt
 
     fig = go.Figure(json.loads(json.dumps(fig_dict), cls=PlotlyJSONDecoder))
     try:
