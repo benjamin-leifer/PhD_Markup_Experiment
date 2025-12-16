@@ -227,8 +227,8 @@ def main():
         for lbl in ROOT_DIRS:
             print(f"    {lbl}: {common_map[pot][lbl]['path']}")
 
-    plot_drt_comparison(common_map, common_potentials, ROOT_DIRS)
-    #plot_drt_single_cell(common_map, common_potentials, "HZ01")
+    #plot_drt_comparison(common_map, common_potentials, ROOT_DIRS)
+    plot_drt_single_cell(common_map, common_potentials, "HY01")
 
 
 if __name__ == "__main__":

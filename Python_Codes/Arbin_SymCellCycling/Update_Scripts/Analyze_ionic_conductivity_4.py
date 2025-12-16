@@ -19,6 +19,7 @@ Rb_LP30 = [8650, 2000, 295, 112, 85, 84]
 Rb_HP = [2700, 680, 290, 163, 111, 83]
 Rb_HM = [1030, 700, 293, 134, 112, 87]
 Rb_HS = [1580, 280, 222, 143, 101, 79]
+Rb_HT = [2100, 480, 250, 145, 100, 76]
 
 thickness_cm = 0.96
 area_cm2 = 1.2679
@@ -42,9 +43,12 @@ def process(Rb, T_C, label=None):
 
 datasets = [
     (Rb_LP30, "LP"),
-    #(Rb_HP, "DTFV1422"),
-    #(Rb_HM, "MF91"),
-    #(Rb_HS, "DTFV1411"),
+    (Rb_HT, "DT14"),
+    (Rb_HS, "DTFV1411"),
+    (Rb_HP, "DTFV1422"),
+    (Rb_HM, "MF91"),
+
+
 ]
 
 df_list = [process(Rb, T_C, label) for Rb, label in datasets]
