@@ -8,7 +8,7 @@ from collections import defaultdict
 base_dir = r"C:\Users\benja\Downloads\Dilute THF Data\11_25_25\-51C_Repeats"
 old_directory = r'C:\Users\benja\OneDrive - Northeastern University\Gallaway Group\Gallaway Extreme SSD Drive\Equipment Data\Lab Arbin\Li-Ion\Low Temp Li Ion\2025\-51C_discharges'
 lookup_table_path = r"C:\Users\benja\OneDrive - Northeastern University\Spring 2025 Cell List.xlsx"
-plots_dir = os.path.join(base_dir, "plots_t18")
+plots_dir = os.path.join(base_dir, "plots_t19")
 os.makedirs(plots_dir, exist_ok=True)
 
 # --- FEC x VC master-grid settings ---
@@ -1117,6 +1117,33 @@ def _capacity_at_voltage(Q_mAh_g, V, target_voltage=2.0):
 
     return np.nan
 
+def _voltage_at_capacity(Q_mAh_g, V, target_capacity):
+    '''
+    Return interpolated voltage V at a given discharge capacity Q (mAh/g).
+    If target_capacity is outside the available Q range, returns np.nan.
+    '''
+    if Q_mAh_g is None or V is None or len(Q_mAh_g) < 2 or len(V) < 2:
+        return np.nan
+
+    Q = np.asarray(Q_mAh_g, dtype=float)
+    VV = np.asarray(V, dtype=float)
+
+    # ensure increasing Q for interpolation
+    order = np.argsort(Q)
+    Q = Q[order]
+    VV = VV[order]
+
+    if not (np.isfinite(target_capacity) and np.isfinite(Q[0]) and np.isfinite(Q[-1])):
+        return np.nan
+    if target_capacity < Q[0] or target_capacity > Q[-1]:
+        return np.nan
+
+    try:
+        return float(np.interp(target_capacity, Q, VV))
+    except Exception:
+        return np.nan
+
+
 
 # ---------- single-figure master grid ----------
 def plot_fec_vc_master_grid(groups, lookup, out_dir, cell_meta, alpha_colors, max_additive,
@@ -1351,8 +1378,12 @@ def compute_cell_discharge_metrics(groups, lookup, cell_meta,
         dQ = float(Q[-1] - Q[0])
         if dQ > 0:
             avg_v = float(np.trapezoid(V, Q) / dQ)
+            mid_q = float(Q[0] + 0.5 * dQ)
+            mid_v = _voltage_at_capacity(Q, V, mid_q)
         else:
             avg_v = np.nan
+            mid_q = np.nan
+            mid_v = np.nan
 
         rows.append({
             "CellCode": cell_code,
@@ -1366,6 +1397,8 @@ def compute_cell_discharge_metrics(groups, lookup, cell_meta,
             f"Capacity_at_{capacity_voltage:.1f}V_mAh_g": cap_at_v,
             f"cap_at_{capacity_voltage:.1f}V": cap_at_v,
             "AvgDischargeV_V": avg_v,
+            "MidpointDischargeV_V": mid_v,
+            "MidpointDischargeQ_mAh_g": mid_q,
         })
 
     return pd.DataFrame(rows)
@@ -1919,6 +1952,144 @@ def plot_effect_of_vc_shift_with_curves(df, groups, lookup, alpha_colors, out_di
 
 
 
+
+def plot_effect_of_vc_shift_cap_and_midV_with_curves(df, groups, lookup, alpha_colors, out_dir,
+                                                    title_prefix="Effect of VC Shift",
+                                                    capacity_voltage=2.5,
+                                                    cap_col=None,
+                                                    cap_label=None,
+                                                    v_col="MidpointDischargeV_V",
+                                                    v_label="V @ 50% Q (V)",
+                                                    fec_levels=GRID_FEC_LEVELS,
+                                                    vc_levels=GRID_VC_LEVELS):
+    """
+    For each FEC panel, plot discharge capacity on the LEFT y-axis and a voltage
+    figure-of-merit on the RIGHT y-axis (top row), both vs VC.
+
+    Bottom row shows representative discharge curves (best by cap_col) for each VC.
+
+    Notes:
+      - cap_col defaults to cap_at_{capacity_voltage}V.
+      - v_col defaults to MidpointDischargeV_V (computed in compute_cell_discharge_metrics).
+      - v points are drawn as OPEN markers to visually separate from capacity points.
+    """
+    os.makedirs(out_dir, exist_ok=True)
+    if cap_col is None:
+        cap_col = f"cap_at_{capacity_voltage:.1f}V"
+    if cap_label is None:
+        cap_label = f"Cap @ {capacity_voltage:.1f} V (mAh/g)"
+
+    ncols = len(fec_levels)
+    fig, axes = plt.subplots(nrows=2, ncols=ncols, figsize=(5 * ncols, 9), sharex="row")
+    if ncols == 1:
+        axes = np.array(axes).reshape(2, 1)
+
+    for j, fec in enumerate(fec_levels):
+        col = df[df["FEC_wt"] == fec].copy()
+
+        # --- top row: dual-axis scatter + mean±sd ---
+        ax = axes[0, j]
+        axr = ax.twinx()
+        ax.set_title(f"FEC {fec} wt%")
+        ax.set_xlabel("VC (wt%)")
+        if j == 0:
+            ax.set_ylabel(cap_label)
+        if j == (ncols - 1):
+            axr.set_ylabel(v_label)
+
+        for _, r in col.iterrows():
+            vc = r.get("VC_wt", np.nan)
+            cap = r.get(cap_col, np.nan)
+            vv = r.get(v_col, np.nan)
+            if not np.isfinite(vc):
+                continue
+            alpha = r.get("Alpha", "")
+            cc = r.get("CellCode", "")
+            c = alpha_colors.get(alpha, "tab:gray")
+            mk = marker_for_cell_code(cc)
+
+            if np.isfinite(cap):
+                ax.scatter(vc, cap, color=c, marker=mk, s=35, alpha=0.85)
+
+            if np.isfinite(vv):
+                axr.scatter(vc, vv, facecolors="none", edgecolors=c,
+                            marker=mk, s=35, alpha=0.9, linewidths=1.5)
+
+        # mean±sd overlays (capacity: solid; voltage: dashed)
+        for vc in vc_levels:
+            g_cap = col[col["VC_wt"] == vc][cap_col].to_numpy(dtype=float)
+            g_cap = g_cap[np.isfinite(g_cap)]
+            if len(g_cap) >= 2:
+                ax.errorbar(vc, float(np.mean(g_cap)), yerr=float(np.std(g_cap, ddof=1)),
+                            fmt="k_", capsize=2, alpha=0.8)
+            elif len(g_cap) == 1:
+                ax.scatter([vc], [float(g_cap[0])], color="k", s=10)
+
+            g_v = col[col["VC_wt"] == vc][v_col].to_numpy(dtype=float)
+            g_v = g_v[np.isfinite(g_v)]
+            if len(g_v) >= 2:
+                axr.errorbar(vc, float(np.mean(g_v)), yerr=float(np.std(g_v, ddof=1)),
+                             color="k", linestyle="--", linewidth=1.5,
+                             marker="o", markersize=3, capsize=2, alpha=0.65)
+            elif len(g_v) == 1:
+                axr.scatter([vc], [float(g_v[0])], color="k", s=10, alpha=0.65)
+
+        ax.set_xticks(list(vc_levels))
+        ax.grid(True, alpha=0.2)
+
+        # --- bottom row: representative curves (best per VC) ---
+        axc = axes[1, j]
+        axc.set_xlabel("Discharge (mAh/g)")
+        if j == 0:
+            axc.set_ylabel("Voltage (V)")
+        axc.set_ylim(0, 4.5)
+        axc.set_xlim(-5, 180)
+        axc.grid(True, alpha=0.2)
+
+        for vc in vc_levels:
+            cand = col[(col["VC_wt"] == vc) & np.isfinite(col.get(cap_col))]
+            if cand.empty:
+                continue
+            best = cand.sort_values(by=cap_col, ascending=False).iloc[0]
+            cc = best["CellCode"]
+            alpha = best["Alpha"]
+            paths = groups.get(cc, [])
+            if not paths:
+                continue
+            try:
+                Q, V = aggregate_discharge_for_cell(paths, lookup)
+            except Exception:
+                continue
+            axc.plot(Q, V,
+                     color=alpha_colors.get(alpha, "tab:gray"),
+                     linestyle=get_line_style_for_trial_alpha(alpha),
+                     linewidth=2.0,
+                     label=f"VC {vc}: {cc}")
+
+    fig.suptitle(title_prefix, y=0.98)
+
+    # global legend from bottom row
+    seen = set()
+    handles, labels = [], []
+    for j in range(ncols):
+        h, l = axes[1, j].get_legend_handles_labels()
+        for hh, ll in zip(h, l):
+            if ll not in seen:
+                seen.add(ll)
+                handles.append(hh)
+                labels.append(ll)
+    if handles:
+        fig.legend(handles, labels, loc="lower center",
+                   bbox_to_anchor=(0.5, -0.03),
+                   ncol=min(max(1, ncols * 4), 12),
+                   fontsize="x-small", frameon=False)
+
+    plt.tight_layout()
+    out_path = os.path.join(out_dir, "vc_shift_cap_and_midV_byFEC.png")
+    fig.savefig(out_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved {out_path}")
+
 def main():
     files_with_source = find_discharge_files(base_dir, old_directory, temp_tag="-51")
     if not files_with_source:
@@ -2103,6 +2274,14 @@ def main():
                 y_col="AvgDischargeV_V", y_label="Avg discharge V (V)",
                 capacity_voltage=capacity_voltage
             )
+            plot_effect_of_vc_shift_cap_and_midV_with_curves(
+                dft, groups, lookup, alpha_colors, tdir,
+                title_prefix=f"Effect of VC Shift (Trial {trial}) — cap@{capacity_voltage:.1f}V (left) + Vmid (right)",
+                capacity_voltage=capacity_voltage,
+                cap_col=cap_col,  # e.g., "cap_at_2.5V"
+                v_col="MidpointDischargeV_V",
+                v_label="V @ 50% Q (V)",
+            )
     # by-alpha plots (if you want them, uncomment)
     # plot_groups_by_alpha(groups, lookup, plots_dir, cell_meta, electrolyte_colors, max_additive)
 
@@ -2113,14 +2292,14 @@ def main():
     #plot_old_vs_new_comparisons(groups, lookup, plots_dir, cell_meta, electrolyte_colors, max_additive)
 
     # CSV index summarizing which alphas/cells are in old vs new for each electrolyte
-    make_old_new_index(groups, lookup, cell_meta, plots_dir)
+    #make_old_new_index(groups, lookup, cell_meta, plots_dir)
 
     # summary table (unchanged)
-    make_dtf_dtfv_summary(groups, plots_dir)
+    #make_dtf_dtfv_summary(groups, plots_dir)
 
 
-    make_dtf_dtfv_summary(groups, plots_dir)
-    make_alpha_best_summary(groups, lookup, cell_meta, plots_dir, target_voltage=2.0)
+    #make_dtf_dtfv_summary(groups, plots_dir)
+    #make_alpha_best_summary(groups, lookup, cell_meta, plots_dir, target_voltage=2.0)
 
 
 
