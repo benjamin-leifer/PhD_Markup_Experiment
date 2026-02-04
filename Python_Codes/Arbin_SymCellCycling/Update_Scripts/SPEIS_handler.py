@@ -3,8 +3,8 @@ from pathlib import Path
 
 
 # ========= USER SETTINGS (EDIT THESE) =========
-INPUT_FILE = r"C:\Users\benja\Downloads\DRT EIS Stair 1\11\EIS Formation Stair\HZ01\BL-LL-HZ01_RT_EIS_Stair_Formation_Stair_03_SPEIS_C02.mpt"  # or .txt/.asc
-OUTPUT_DIR = r"C:\Users\benja\Downloads\DRT EIS Stair 1\11\EIS Formation Stair\HZ01\HZ01_RT_EIS_split"  # will be created if it doesn't exist
+INPUT_FILE = r"C:\Users\benja\Downloads\EIS Formation Stair\IZ05\BL-LL-IZ05_RT_EIS_Stair_Formation_Stair_03_SPEIS_C01.mpt"  # or .txt/.asc
+OUTPUT_DIR = r"C:\Users\benja\Downloads\EIS Formation Stair\IZ05\DRTools_output"  # will be created if it doesn't exist
 # =============================================
 
 
