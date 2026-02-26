@@ -18,3 +18,4 @@ pybamm
 scikit-learn
 psutil
 multiprocess
+impedance>=1.4.2

@@ -43,10 +43,10 @@ def process(Rb, T_C, label=None):
 
 datasets = [
     (Rb_LP30, "LP"),
-    (Rb_HT, "DT14"),
-    (Rb_HS, "DTFV1411"),
-    (Rb_HP, "DTFV1422"),
-    (Rb_HM, "MF91"),
+    (Rb_HS, "DT14"),
+    #(Rb_HT, "DTFV1411"),
+    #(Rb_HP, "DTFV1422"),
+    #(Rb_HM, "MF91"),
 
 
 ]

@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 import re
 import pandas as pd
@@ -6,7 +7,11 @@ from tkinter import filedialog
 import matplotlib
 import numpy as np
 from scipy.signal import savgol_filter      # pip install scipy if needed
+from electrolyte_style import clean_elyte_str, style_for_electrolyte, pretty_label
 
+
+
+from Python_Codes.Arbin_SymCellCycling.Update_Scripts.Scratch_t6 import DT14_control
 
 # Provide the path to your lookup table Excel file.
 lookup_table_path = r'C:\Users\benja\OneDrive - Northeastern University\Spring 2025 Cell List.xlsx'
@@ -15,6 +20,7 @@ lookup_table_path = r'C:\Users\benja\OneDrive - Northeastern University\Spring 2
 search_directory = r'C:\Users\benja\OneDrive - Northeastern University\Gallaway Group\Gallaway Extreme SSD Drive\Equipment Data\Lab Arbin\Li-Ion\Low Temp Li Ion\2025\03\Cycle Life Best Survivors'
 
 search_directory = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Cycle Life Best Survivors'
+search_directory = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Cycle Life Best Survivors\Proposal Figs'
 #search_directory = r'C:\Users\benja\OneDrive - Northeastern University\Gallaway Group\Gallaway Extreme SSD Drive\Equipment Data\Lab Arbin\Li-Ion\Low Temp Li Ion\2025\02'
 #search_directory = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Cycle Life Best Survivors\Form Experiment'
 #search_directory = r'C:\Users\benja\Downloads\Temp\Data_Work_4_19\Cycle Life Best Survivors\Form Experiment\07152025'
@@ -28,6 +34,53 @@ os.chdir(search_directory)
 # ==========================
 # 2. Helper functions
 # ==========================
+_LOOKUP_CACHE = {}
+_CHANNEL_SHEET_CACHE = {}
+
+
+def load_lookup_df(path):
+    abs_path = os.path.abspath(path)
+    df = _LOOKUP_CACHE.get(abs_path)
+    if df is None:
+        df = pd.read_excel(abs_path)
+        _LOOKUP_CACHE[abs_path] = df
+    return df
+
+
+def load_channel_sheet(file_path):
+    abs_path = os.path.abspath(file_path)
+    df = _CHANNEL_SHEET_CACHE.get(abs_path)
+    if df is None:
+        data = pd.ExcelFile(abs_path)
+        sheet_name = next((s for s in data.sheet_names if s.startswith('Channel')), None)
+        if sheet_name is None:
+            raise ValueError(f"No sheet starting with 'Channel' found in {file_path}")
+        df = data.parse(sheet_name)
+        _CHANNEL_SHEET_CACHE[abs_path] = df
+    return df
+
+
+def get_norm_factor(dataset_key, normalized, capacities, weights):
+    if normalized:
+        if 'LFP' in dataset_key:
+            return capacities['LFP']
+        if 'NMC' in dataset_key:
+            return capacities['NMC']
+        if '16mm' in dataset_key and '16mm' in capacities:
+            return capacities['16mm']
+        if 'Gr' in dataset_key:
+            return capacities['Gr']
+    else:
+        if 'LFP' in dataset_key:
+            return weights['LFP']
+        if 'NMC' in dataset_key:
+            return weights['NMC']
+        if '16mm' in dataset_key and '16mm' in weights:
+            return weights['16mm']
+        if 'Gr' in dataset_key:
+            return weights['Gr']
+    raise ValueError("Dataset key does not match known capacities")
+
 def sanitize_filename(name):
     """Sanitize a string to create a valid filename by replacing invalid characters."""
     invalid_chars = '<>:"/\\|?*'
@@ -64,7 +117,7 @@ def generate_gitt_file_paths_keys(directory, lookup_table_path):
       A list of tuples: (full_path, key, cell_code)
     """
     file_paths_keys = []
-    lookup_df = pd.read_excel(lookup_table_path)
+    lookup_df = load_lookup_df(lookup_table_path)
 
     for root, dirs, files in os.walk(directory):
         for file in files:
@@ -114,30 +167,8 @@ def process_all_cycles_for_voltage_vs_capacity(file_path, dataset_key, normalize
         'Gr': 6.61 / 1000 * 2.01 / 1000
     }
 
-    if normalized:
-        if 'LFP' in dataset_key:
-            norm_factor = capacities['LFP']
-        elif 'NMC' in dataset_key:
-            norm_factor = capacities['NMC']
-        elif 'Gr' in dataset_key:
-            norm_factor = capacities['Gr']
-        else:
-            raise ValueError("Dataset key does not match known capacities")
-    else:
-        if 'LFP' in dataset_key:
-            norm_factor = weights_g['LFP']
-        elif 'NMC' in dataset_key:
-            norm_factor = weights_g['NMC']
-        elif 'Gr' in dataset_key:
-            norm_factor = weights_g['Gr']
-        else:
-            raise ValueError("Dataset key does not match known capacities")
-
-    data = pd.ExcelFile(file_path)
-    data_sheets = [sheet for sheet in data.sheet_names if sheet.startswith('Channel')]
-    if not data_sheets:
-        raise ValueError(f"No sheet starting with 'Channel' found in {file_path}")
-    sheet_data = data.parse(data_sheets[0])
+    norm_factor = get_norm_factor(dataset_key, normalized, capacities, weights_g)
+    sheet_data = load_channel_sheet(file_path)
     # Filter out rows where Current equals zero
     filtered_data = sheet_data[sheet_data['Current (A)'] != 0]
 
@@ -185,30 +216,8 @@ def process_all_cycles_for_voltage_vs_time(file_path, dataset_key, normalized=Fa
         'Gr': 6.61 / 1000 * 2.01 / 1000
     }
 
-    if normalized:
-        if 'LFP' in dataset_key:
-            norm_factor = capacities['LFP']
-        elif 'NMC' in dataset_key:
-            norm_factor = capacities['NMC']
-        elif 'Gr' in dataset_key:
-            norm_factor = capacities['Gr']
-        else:
-            raise ValueError("Dataset key does not match known capacities")
-    else:
-        if 'LFP' in dataset_key:
-            norm_factor = weights_g['LFP']
-        elif 'NMC' in dataset_key:
-            norm_factor = weights_g['NMC']
-        elif 'Gr' in dataset_key:
-            norm_factor = weights_g['Gr']
-        else:
-            raise ValueError("Dataset key does not match known capacities")
-
-    data = pd.ExcelFile(file_path)
-    data_sheets = [sheet for sheet in data.sheet_names if sheet.startswith('Channel')]
-    if not data_sheets:
-        raise ValueError(f"No sheet starting with 'Channel' found in {file_path}")
-    sheet_data = data.parse(data_sheets[0])
+    norm_factor = get_norm_factor(dataset_key, normalized, capacities, weights_g)
+    sheet_data = load_channel_sheet(file_path)
 
     # Do NOT filter out any rows, so that all steps are included.
     cycles_data = []
@@ -257,7 +266,7 @@ def generate_file_paths_keys(directory, lookup_table_path):
     Returns a list of tuples: (full_path, key, cell_code)
     """
     file_paths_keys = []
-    lookup_df = pd.read_excel(lookup_table_path)
+    lookup_df = load_lookup_df(lookup_table_path)
     for root, dirs, files in os.walk(directory):
         for file in files:
             if file.endswith('.xlsx') and ('Rate_Test' in file or 'RateTest' in file):
@@ -303,34 +312,8 @@ def process_cycle_data(file_path, dataset_key, normalized=False):
         'Gr': 6.61 / 1000 * 2.01 / 1000
     }
 
-    if normalized:
-        if 'LFP' in dataset_key:
-            norm_factor = capacities['LFP']
-        elif '16mm' in dataset_key:
-            norm_factor = capacities['16mm']
-        elif 'NMC' in dataset_key:
-            norm_factor = capacities['NMC']
-        elif 'Gr' in dataset_key:
-            norm_factor = capacities['Gr']
-        else:
-            raise ValueError("Dataset key does not match known capacities")
-    else:
-        if 'LFP' in dataset_key:
-            norm_factor = weights_g['LFP']
-        elif '16mm' in dataset_key:
-            norm_factor = capacities['16mm']
-        elif 'NMC' in dataset_key:
-            norm_factor = weights_g['NMC']
-        elif 'Gr' in dataset_key:
-            norm_factor = weights_g['Gr']
-        else:
-            raise ValueError("Dataset key does not match known capacities")
-
-    data = pd.ExcelFile(file_path)
-    data_sheets = [sheet for sheet in data.sheet_names if sheet.startswith('Channel')]
-    if not data_sheets:
-        raise ValueError(f"No sheet starting with 'Channel' found in {file_path}")
-    sheet_data = data.parse(data_sheets[0])
+    norm_factor = get_norm_factor(dataset_key, normalized, capacities, weights_g)
+    sheet_data = load_channel_sheet(file_path)
     # Filter out rows where Current equals zero
     filtered_data = sheet_data[sheet_data['Current (A)'] != 0]
 
@@ -485,15 +468,11 @@ def plot_voltage_vs_time(group, normalized=False):
 def plot_gitt_file(file_path, dataset_key, normalized=False):
     """
     Plots a GITT experiment file individually using Voltage vs. Test Time.
-    This function assumes the file contains columns 'Test Time (s)' and 'Voltage (V)'.
+    This function assumes the file contains columns 'Test Time (s)' and 'Voltage (V'.
     It does not group by cycle; it simply plots the entire time series.
     """
     try:
-        data = pd.ExcelFile(file_path)
-        data_sheets = [sheet for sheet in data.sheet_names if sheet.startswith('Channel')]
-        if not data_sheets:
-            raise ValueError(f"No sheet starting with 'Channel' found in {file_path}")
-        sheet_data = data.parse(data_sheets[0])
+        sheet_data = load_channel_sheet(file_path)
     except Exception as e:
         print(f"Error loading {file_path}: {e}")
         return
@@ -546,8 +525,14 @@ def compare_cells_on_same_plot(file_tuples, normalized=False, x_bounds=(0, 100),
     if not flattened:
         raise ValueError("No valid (file_path, key, cell_code) tuples found for comparison.")
 
+    def electrolyte_label(key):
+        if ' - ' in key:
+            tail = key.split(' - ', 1)[1]
+            return tail.replace(' Elyte', '').split(' (', 1)[0].strip()
+        return key
+
     fig, ax1 = plt.subplots(figsize=(10, 6))
-    ax2 = ax1.twinx()
+    #ax2 = ax1.twinx()
 
     # Define C-Rate annotations for specific cycles
     c_rate_labels = {
@@ -563,12 +548,17 @@ def compare_cells_on_same_plot(file_tuples, normalized=False, x_bounds=(0, 100),
     # Track annotated cycles
     annotated_cycles = set()
 
+    all_cycles = []
+    all_ce = []
+
     for i, (file_path, key, cell_code) in enumerate(flattened):
         try:
             cycles, charge_caps, discharge_caps, ce = process_cycle_data(file_path, key, normalized)
         except Exception as e:
             print(f"Error processing {file_path}: {e}")
             continue
+        all_cycles.extend(cycles)
+        all_ce.extend(ce)
 
         # === Custom Plot Appearance ===
         is_gr = 'Gr' in key
@@ -610,45 +600,55 @@ def compare_cells_on_same_plot(file_tuples, normalized=False, x_bounds=(0, 100),
         #             label=f'{format_key(key)} (CE)')
         if color_scheme == None:
             ax1.scatter(cycles, charge_caps, marker=base_marker,
-                        label=f'{format_key(key)}')
+                        label=electrolyte_label(key))
             # ax1.scatter(cycles, discharge_caps, marker=base_marker,
             #             facecolors=color, edgecolors=color,
             #             label=f'{key} (Discharge)', linestyle='--')
 
-            ax2.scatter(cycles, ce, marker=ce_marker,
-                        label=f'{format_key(key)} (CE)')
+            #ax2.scatter(cycles, ce, marker=ce_marker,
+                        #label='_nolegend_')
 
-        # Add C-Rate annotations
-        if x_bounds[1]<20:
-            for cycle, label in c_rate_labels.items():
-                if cycle in cycles and cycle not in annotated_cycles:
-                    x = cycle-1
-                    y = 200
-                    ax1.text(x, y + 5, label, fontsize=10, ha='center', color='black')
-                    annotated_cycles.add(cycle)
+        # Add C-Rate annotations (handled after data is plotted)
 
     # Formatting
     ax1.grid(False)
-    ax2.grid(False)
+    #ax2.grid(False)
 
-    for cycle in [1.5, 4.5, 7.5, 10.5, 13.5, 16.5, 19.5]:
+    for cycle in [4.5, 7.5, 10.5, 13.5, 16.5, 19.5]:
         ax1.axvline(x=cycle, color='black', linestyle='--')
 
-    ax1.set_xlabel('Cycle Number')
+    ax1.set_xlabel('Cycle Number', fontsize=14)
     ax1.set_xlim(x_bounds)
     ax1.set_ylim(0, 220)
-    ax1.set_ylabel('Capacity (%)' if normalized else 'Capacity (mAh/g)')
-    ax2.set_ylabel('Coulombic Efficiency (%)')
-    ax2.set_ylim(0, 120)
+    ax1.set_ylabel('Capacity (%)' if normalized else 'Capacity (mAh/g)', fontsize=14)
+    #ax2.set_ylabel('Coulombic Efficiency (%)', fontsize=14)
+    #ax2.set_ylim(0, 120)
 
     lines1, labels1 = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax2.legend(lines1 + lines2, labels1 + labels2, loc='upper center', bbox_to_anchor=(0.5, -0.15), fontsize='small',
-               ncol=2)
+    unique = {}
+    for line, label in zip(lines1, labels1):
+        unique.setdefault(label, line)
+    ax1.legend(list(unique.values()), list(unique.keys()), loc='upper center', bbox_to_anchor=(0.5, -0.15),
+               fontsize=12, ncol=2)
 
-    plt.title('Capacity and Coulombic Efficiency vs. Cycle Number')
-    # 1) Force specific integer ticks on the bottom x‐axis
-    ax1.set_xticks([ 25, 30, 35, 40, 45])
+    plt.title('Capacity and Coulombic Efficiency vs. Cycle Number', fontsize=16)
+    # C-rate labels above cycling regimes.
+    c_rate_segments = [
+        (3, 4, "C/10"),
+        (5, 7, "C/8"),
+        (8, 10, "C/4"),
+        (11, 13, "C/2"),
+        (14, 16, "1C"),
+        (17, 19, "2C"),
+        (20, x_bounds[1], "C/2"),
+    ]
+    y_top = ax1.get_ylim()[1]
+    for start, end, label in c_rate_segments:
+        seg_start = max(start, x_bounds[0])
+        seg_end = min(end, x_bounds[1])
+        if seg_start <= seg_end:
+            x = (seg_start + seg_end) / 2
+            ax1.text(x, y_top * 0.99, label, fontsize=10, ha='center', va='top', color='black')
 
     # 2) Mirror those ticks on the top, and move all tick‐marks inward
     ax1.tick_params(
@@ -658,8 +658,8 @@ def compare_cells_on_same_plot(file_tuples, normalized=False, x_bounds=(0, 100),
         bottom=True, top=True,
         left=True, right=True
     )
-    ax2.set_yticks([])  # no ticks
-    ax2.set_yticklabels([])  # no tick labels
+    ax1.tick_params(axis='both', labelsize=12)
+    #ax2.tick_params(which='both', axis='y', direction='in', right=True, labelright=True, labelsize=12)
     #plt.tick_params(which='both', axis='both', direction='in', bottom=True, left=True, top=True, right=True)
     plt.tight_layout()
     if save_str:
@@ -1157,6 +1157,228 @@ else:
 # #Best of each set
 # python
 import sys
+def plot_rate_curves_formatted(comparison_set,
+                               normalized=False,
+                               color_scheme=None,
+                               figsize=(10, 6)):
+    """
+    Publication-style rate plot.
+
+    Features
+    --------
+    - Uses comparison_set (list of lists of tuples)
+    - Cycles: 3,6,9,12,15,18
+    - Solid = charge, dashed = discharge
+    - Rate labels written once per cycle
+    - Labels aligned at top/bottom bands
+    - Optional color_scheme (cell_code -> color)
+    """
+
+    # ---------- Flatten comparison_set ----------
+    flattened = []
+    for item in comparison_set:
+        if isinstance(item, list):
+            flattened.extend(item)
+        else:
+            flattened.append(item)
+
+    if not flattened:
+        raise ValueError("comparison_set is empty")
+
+    # ---------- Cycle → rate mapping ----------
+    cycle_map = {
+        3: "C/10",
+        6: "C/8",
+        9: "C/4",
+        12: "C/2",
+        15: "1C",
+        18: "2C"
+    }
+    selected_cycles = list(cycle_map.keys())
+
+    # ---------- Colors ----------
+    if color_scheme:
+        colors = [color_scheme.get(cell_code, 'black')
+                  for _, _, cell_code in flattened]
+    else:
+        cmap = matplotlib.colormaps["tab10"].resampled(len(flattened))
+        colors = [cmap(i) for i in range(len(flattened))]
+
+    plt.figure(figsize=figsize)
+
+    # Store x-positions for labels (use first cell as reference)
+    label_positions = {}
+
+    # ---------- Plot curves ----------
+    for i, (file_path, key, cell_code) in enumerate(flattened):
+
+        try:
+            cycles_data, norm_factor = process_all_cycles_for_voltage_vs_capacity(
+                file_path, key, normalized
+            )
+        except Exception as e:
+            print(f"Error processing {file_path}: {e}")
+            continue
+
+        color = colors[i]
+
+        for cycle, charge, discharge in cycles_data:
+            if cycle not in selected_cycles:
+                continue
+
+            # --- Charge ---
+            if not charge.empty:
+                x = charge['Charge Capacity (Ah)'] / norm_factor
+                y = charge['Voltage (V)']
+                plt.plot(x, y, '-', color=color, lw=1.5)
+
+                # Save median x for label placement (first cell only)
+                if cycle not in label_positions:
+                    label_positions[cycle] = np.nanmedian(x)
+
+            # --- Discharge ---
+            if not discharge.empty:
+                x = discharge['Discharge Capacity (Ah)'] / norm_factor
+                y = discharge['Voltage (V)']
+                plt.plot(x, y, '--', color=color, lw=1.5)
+
+    # ---------- Axis formatting ----------
+    ax = plt.gca()
+    ax.set_xlabel('Capacity (Ah)' if not normalized else 'Capacity (%)', fontsize=14)
+    ax.set_ylabel('Voltage (V)', fontsize=14)
+
+    ax.tick_params(which='both', direction='in',
+                   top=True, right=True, labelsize=12)
+
+    # Add headroom for labels
+    y_min, y_max = ax.get_ylim()
+    y_range = y_max - y_min
+    ax.set_ylim(y_min - 0.05*y_range, y_max + 0.05*y_range)
+
+    # ---------- Rate labels (clean, once only) ----------
+    y_min, y_max = ax.get_ylim()
+
+    y_top = y_max - 0.02 * (y_max - y_min)
+    y_bot = y_min + 0.02 * (y_max - y_min)
+
+    for cycle, label in cycle_map.items():
+        if cycle in label_positions:
+            x_pos = label_positions[cycle]
+
+            # Top (charge)
+            ax.text(x_pos, y_top, label,
+                    ha='center', va='top',
+                    fontsize=11, color='black')
+
+            # Bottom (discharge)
+            ax.text(x_pos, y_bot, label,
+                    ha='center', va='bottom',
+                    fontsize=11, color='black')
+
+    plt.title('Rate Capability', fontsize=16)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_rate_curves_from_comparison_set(comparison_set, normalized=False):
+    """
+    Plot charge/discharge curves for cycles [3,6,9,12,15,18]
+    using a comparison_set structure (list of lists of tuples).
+
+    C-rate labels are written directly on the curves:
+        3  -> C/10
+        6  -> C/8
+        9  -> C/4
+        12 -> C/2
+        15 -> 1C
+        18 -> 2C
+    """
+
+    # Flatten comparison_set if nested
+    flattened = []
+    for item in comparison_set:
+        if isinstance(item, list):
+            flattened.extend(item)
+        else:
+            flattened.append(item)
+
+    if not flattened:
+        raise ValueError("comparison_set is empty")
+
+    # Cycle → label mapping
+    cycle_map = {
+        3: "C/10",
+        6: "C/8",
+        9: "C/4",
+        12: "C/2",
+        15: "1C",
+        18: "2C"
+    }
+    selected_cycles = list(cycle_map.keys())
+
+    plt.figure(figsize=(10, 6))
+    cmap = matplotlib.colormaps["tab10"].resampled(len(flattened))
+
+    for i, (file_path, key, cell_code) in enumerate(flattened):
+        try:
+            cycles_data, norm_factor = process_all_cycles_for_voltage_vs_capacity(
+                file_path, key, normalized
+            )
+        except Exception as e:
+            print(f"Error processing {file_path}: {e}")
+            continue
+
+        color = cmap(i)
+
+        for cycle, charge, discharge in cycles_data:
+            if cycle not in selected_cycles:
+                continue
+
+            label_text = cycle_map[cycle]
+
+            # ---- Charge (solid) ----
+            if not charge.empty:
+                x = charge['Charge Capacity (Ah)'] / norm_factor
+                y = charge['Voltage (V)']
+                plt.plot(x, y, linestyle='-', color=color)
+
+                # Place label at top of charge
+                idx = np.argmax(y)
+                plt.text(
+                    x.iloc[idx],
+                    y.iloc[idx],
+                    label_text,
+                    fontsize=10,
+                    ha='center',
+                    va='bottom',
+                    color=color
+                )
+
+            # ---- Discharge (dashed) ----
+            if not discharge.empty:
+                x = discharge['Discharge Capacity (Ah)'] / norm_factor
+                y = discharge['Voltage (V)']
+                plt.plot(x, y, linestyle='--', color=color)
+
+                # Place label at bottom of discharge
+                idx = np.argmin(y)
+                plt.text(
+                    x.iloc[idx],
+                    y.iloc[idx],
+                    label_text,
+                    fontsize=10,
+                    ha='center',
+                    va='top',
+                    color=color
+                )
+
+    plt.xlabel('Capacity (Ah)' if not normalized else 'Capacity (%)', fontsize=14)
+    plt.ylabel('Voltage (V)', fontsize=14)
+    plt.title('Rate Capability Curves', fontsize=16)
+
+    plt.grid(False)
+    plt.tight_layout()
+    plt.show()
 
 def first_or_warn(matches, desc=None):
     """Return first item of matches or print a warning and return None."""
@@ -1179,6 +1401,925 @@ if not files_to_compare:
     print("No files selected for comparison — check `search_directory` and filename filters.")
     # Optionally exit gracefully
     # sys.exit(0)
+import os
+from pathlib import Path
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib
+
+# ------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------
+def _flatten_comparison_set(comparison_set):
+    flattened = []
+    for item in comparison_set:
+        if isinstance(item, list):
+            flattened.extend(item)
+        else:
+            flattened.append(item)
+    return flattened
+
+def _electrolyte_label(key: str) -> str:
+    # Matches the helper you already used in compare_cells_on_same_plot
+    if ' - ' in key:
+        tail = key.split(' - ', 1)[1]
+        return tail.replace(' Elyte', '').split(' (', 1)[0].strip()
+    return key
+
+def _ensure_dir(p: str | Path):
+    p = Path(p)
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+def _save_fig_and_legend(fig, ax, out_png: Path, out_legend_png: Path,
+                         legend_loc='upper center', legend_ncol=2,
+                         legend_fontsize=12, legend_bbox=(0.5, -0.15)):
+    """
+    Save main figure and a separate legend-only figure.
+    """
+    # --- Main legend (for on-plot figure) ---
+    handles, labels = ax.get_legend_handles_labels()
+
+    # de-duplicate labels while preserving order
+    unique = {}
+    for h, lab in zip(handles, labels):
+        if lab not in unique and lab not in ("_nolegend_", ""):
+            unique[lab] = h
+    handles_u = list(unique.values())
+    labels_u = list(unique.keys())
+
+    if handles_u:
+        ax.legend(handles_u, labels_u,
+                  loc=legend_loc,
+                  bbox_to_anchor=legend_bbox,
+                  fontsize=legend_fontsize,
+                  ncol=legend_ncol,
+                  frameon=False)
+
+    fig.tight_layout()
+    fig.savefig(out_png, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+
+    # --- Legend-only figure ---
+    if handles_u:
+        fig_leg = plt.figure(figsize=(10, 2))
+        fig_leg.legend(handles_u, labels_u,
+                       loc='center',
+                       ncol=legend_ncol,
+                       frameon=False,
+                       fontsize=legend_fontsize)
+        fig_leg.tight_layout()
+        fig_leg.savefig(out_legend_png, dpi=300, bbox_inches='tight')
+        plt.close(fig_leg)
+
+def _apply_axes_formatting(ax, xlabel, ylabel, title=None):
+    ax.set_xlabel(xlabel, fontsize=14)
+    ax.set_ylabel(ylabel, fontsize=14)
+    if title:
+        ax.set_title(title, fontsize=16)
+
+    # "Josh style" ticks: inward, mirror top/right
+    ax.tick_params(which='both',
+                   direction='in',
+                   bottom=True, top=True,
+                   left=True, right=True,
+                   labelsize=12)
+
+    ax.grid(False)
+
+# ------------------------------------------------------------
+# 1) Representative (dis)charge curves (cycles 3,6,9,12,15,18)
+# ------------------------------------------------------------
+def plot_representative_rate_curves_export(comparison_set,
+                                          out_dir,
+                                          save_stem="Representative_Rate_Curves",
+                                          normalized=False,
+                                          color_scheme=None,
+                                          figsize=(10, 6)):
+    """
+    Plots voltage vs capacity for cycles [3,6,9,12,15,18] for each cell in comparison_set.
+    Writes C-rate labels ONCE per cycle at top (charge) and bottom (discharge).
+    Exports main + legend-only.
+    """
+    flattened = _flatten_comparison_set(comparison_set)
+    if not flattened:
+        raise ValueError("comparison_set is empty")
+
+    out_dir = _ensure_dir(out_dir)
+
+    cycle_map = {3: "C/10", 6: "C/8", 9: "C/4", 12: "C/2", 15: "1C", 18: "2C"}
+    selected_cycles = list(cycle_map.keys())
+
+    # Colors
+    if color_scheme:
+        colors = [color_scheme.get(cell_code, 'black') for _, _, cell_code in flattened]
+    else:
+        cmap = matplotlib.colormaps["tab10"].resampled(len(flattened))
+        colors = [cmap(i) for i in range(len(flattened))]
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    # Use first cell that has data to define label x positions
+    label_positions = {}  # cycle -> x median (capacity)
+    plotted_any = False
+
+    for i, (file_path, key, cell_code) in enumerate(flattened):
+        try:
+            cycles_data, norm_factor = process_all_cycles_for_voltage_vs_capacity(file_path, key, normalized)
+        except Exception as e:
+            print(f"[Representative curves] Error processing {file_path}: {e}")
+            continue
+
+        color = colors[i]
+        lab = _electrolyte_label(key)
+
+        for cycle, charge, discharge in cycles_data:
+            if cycle not in selected_cycles:
+                continue
+
+            # Charge
+            if not charge.empty:
+                x = charge['Charge Capacity (Ah)'] / norm_factor
+                y = charge['Voltage (V)']
+                ax.plot(x, y, '-', color=color, lw=1.6, label=lab)
+                plotted_any = True
+
+                if cycle not in label_positions:
+                    label_positions[cycle] = float(np.nanmedian(x))
+
+            # Discharge
+            if not discharge.empty:
+                x = discharge['Discharge Capacity (Ah)'] / norm_factor
+                y = discharge['Voltage (V)']
+                ax.plot(x, y, '--', color=color, lw=1.6)
+                plotted_any = True
+
+                if cycle not in label_positions:
+                    label_positions[cycle] = float(np.nanmedian(x))
+
+    if not plotted_any:
+        raise RuntimeError("No curves were plotted — check that the files contain the requested cycles.")
+
+    _apply_axes_formatting(
+        ax,
+        xlabel=('Capacity (Ah)' if not normalized else 'Capacity (%)'),
+        ylabel='Voltage (V)',
+        title='Representative (Dis)charge Curves (Rate Steps)'
+    )
+
+    # Add headroom for labels
+    y_min, y_max = ax.get_ylim()
+    y_rng = y_max - y_min
+    ax.set_ylim(y_min - 0.05*y_rng, y_max + 0.08*y_rng)
+
+    # Label band positions
+    y_min, y_max = ax.get_ylim()
+    y_top = y_max - 0.02*(y_max - y_min)
+    y_bot = y_min + 0.02*(y_max - y_min)
+
+    for cycle, rate_lab in cycle_map.items():
+        if cycle in label_positions:
+            x_pos = label_positions[cycle]
+            ax.text(x_pos, y_top, rate_lab, ha='center', va='top', fontsize=11, color='black')
+            ax.text(x_pos, y_bot, rate_lab, ha='center', va='bottom', fontsize=11, color='black')
+
+    out_png = out_dir / f"{save_stem}.png"
+    out_leg = out_dir / f"{save_stem}_LEGEND.png"
+    _save_fig_and_legend(fig, ax, out_png, out_leg, legend_ncol=2, legend_bbox=(0.5, -0.15))
+
+
+# ------------------------------------------------------------
+# 2–4) Capacity vs Cycle exports (full / rate / life-cut)
+# ------------------------------------------------------------
+def plot_capacity_vs_cycle_exports(comparison_set,
+                                  out_dir,
+                                  save_prefix="Capacity_vs_Cycle",
+                                  normalized=False,
+                                  color_scheme=None,
+                                  figsize=(10, 6),
+                                  use_charge=False):
+    """
+    Exports:
+      A) full cycling (all cycles)
+      B) rate-only (1–19)
+      C) cycle-life (20–end), where end is cut to the LOWEST max cycle in the set
+
+    By default it plots CHARGE capacity vs cycle (to match your compare_cells_on_same_plot behavior).
+    Set use_charge=False to plot discharge instead.
+    """
+    flattened = _flatten_comparison_set(comparison_set)
+    if not flattened:
+        raise ValueError("comparison_set is empty")
+
+    out_dir = _ensure_dir(out_dir)
+
+    # Determine "cycle life end" = min(max_cycle) across cells that have cycles >= 20
+    maxes = []
+    for file_path, key, cell_code in flattened:
+        try:
+            cycles, charge_caps, discharge_caps, ce = process_cycle_data(file_path, key, normalized)
+        except Exception:
+            continue
+        cyc = np.array(cycles)
+        if np.any(cyc >= 20):
+            maxes.append(int(np.max(cyc)))
+    life_end = min(maxes) if maxes else None
+    if life_end is None:
+        print("[Capacity plots] No cells had cycles >= 20; cycle-life plot will be skipped.")
+
+    # Colors
+    if color_scheme:
+        colors = [color_scheme.get(cell_code, 'black') for _, _, cell_code in flattened]
+    else:
+        cmap = matplotlib.colormaps["tab10"].resampled(len(flattened))
+        colors = [cmap(i) for i in range(len(flattened))]
+
+    def _plot_one(xlim, title, save_stem):
+        fig, ax = plt.subplots(figsize=figsize)
+        plotted_any = False
+
+        for i, (file_path, key, cell_code) in enumerate(flattened):
+            try:
+                cycles, charge_caps, discharge_caps, ce = process_cycle_data(file_path, key, normalized)
+            except Exception as e:
+                print(f"[{save_stem}] Error processing {file_path}: {e}")
+                continue
+
+            cyc = np.array(cycles)
+            y = np.array(charge_caps if use_charge else discharge_caps)
+
+            # Filter to xlim window
+            if xlim is not None:
+                m = (cyc >= xlim[0]) & (cyc <= xlim[1])
+                cyc = cyc[m]
+                y = y[m]
+
+            if len(cyc) == 0:
+                continue
+
+            color = colors[i]
+            lab = _electrolyte_label(key)
+
+            # line + markers (clean but readable)
+            #ax.plot(cyc, y, '-', lw=1.6, color=color, label=lab)
+            ax.scatter(cyc, y, s=22, label=lab)
+            plotted_any = True
+
+        if not plotted_any:
+            raise RuntimeError(f"No data plotted for {save_stem} — check bounds and inputs.")
+
+        _apply_axes_formatting(
+            ax,
+            xlabel="Cycle Number",
+            ylabel=("Capacity (%)" if normalized else "Capacity (mAh/g)"),
+            title=title
+        )
+
+        if xlim is not None:
+            ax.set_xlim(xlim)
+
+        # Save
+        out_png = out_dir / f"{save_stem}.png"
+        out_leg = out_dir / f"{save_stem}_LEGEND.png"
+        _save_fig_and_legend(fig, ax, out_png, out_leg, legend_ncol=2, legend_bbox=(0.5, -0.15))
+
+    # A) Full
+    _plot_one(
+        xlim=None,
+        title="Capacity vs Cycle (Full)",
+        save_stem=f"{save_prefix}_FULL"
+    )
+
+    # B) Rate portion: 1–19
+    _plot_one(
+        xlim=(1, 19),
+        title="Capacity vs Cycle (Rate Portion: 1–19)",
+        save_stem=f"{save_prefix}_RATE_1to19"
+    )
+
+    # C) Cycle life: 20–life_end (cut to lowest max cycle)
+    if life_end is not None and life_end >= 20:
+        _plot_one(
+            xlim=(20, life_end),
+            title=f"Capacity vs Cycle (Cycle Life: 20–{life_end})",
+            save_stem=f"{save_prefix}_LIFE_20to{life_end}"
+        )
+
+
+import os
+import re
+from dataclasses import dataclass
+from typing import Dict, Optional, Tuple, List
+
+import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
+
+# ============================
+# 1) STYLE ENCODING CONSTANTS
+# ============================
+
+# Additive package -> base hue (projector-safe)
+BASE_COLOR = {
+    "NONE": "#2B2B2B",  # baseline (no additives)
+    "F":    "#E68600",  # FEC-only
+    "V":    "#2C7FB8",  # VC-only
+    "FV":   "#6A3D9A",  # FEC+VC
+    "WHITE":"#FFFFFF",
+}
+
+# System -> linestyle
+SYSTEM_LS = {
+    "DT":  "-",    # DME:THF
+    "TPT": "--",   # TFSI - DPE:THF
+}
+
+# “More wt% = darker/more saturated” blending strength (t=0 -> white, t=1 -> base hue)
+WT_TO_T = {1: 0.45, 2: 0.60, 5: 0.82, 10: 1.00}
+ALLOWED_WT = {1, 2, 5, 10}
+
+# VC amount -> marker encoding (so VC is obvious without extra colors)
+# marker, fillmode, mew, ms
+VC_MARKER = {
+    0: (None, None, None, None),
+    1: ("o", "filled", 0.0, 4.8),
+    2: ("s", "open",   1.2, 5.2),
+}
+
+# ============================
+# 2) COLOR UTILITIES
+# ============================
+
+def _hex_to_rgb01(h: str) -> Tuple[float, float, float]:
+    h = h.lstrip("#")
+    r = int(h[0:2], 16) / 255.0
+    g = int(h[2:4], 16) / 255.0
+    b = int(h[4:6], 16) / 255.0
+    return r, g, b
+
+def _rgb01_to_hex(rgb: Tuple[float, float, float]) -> str:
+    r, g, b = rgb
+    r = max(0, min(255, int(round(r * 255))))
+    g = max(0, min(255, int(round(g * 255))))
+    b = max(0, min(255, int(round(b * 255))))
+    return f"#{r:02X}{g:02X}{b:02X}"
+
+def blend_hex(base_hex: str, mix_hex: str, t: float) -> str:
+    """t=0 -> mix_hex, t=1 -> base_hex"""
+    t = max(0.0, min(1.0, float(t)))
+    br, bg, bb = _hex_to_rgb01(base_hex)
+    mr, mg, mb = _hex_to_rgb01(mix_hex)
+    r = mr * (1 - t) + br * t
+    g = mg * (1 - t) + bg * t
+    b = mb * (1 - t) + bb * t
+    return _rgb01_to_hex((r, g, b))
+
+def _t_from_wt(wt: int) -> float:
+    if wt in WT_TO_T:
+        return WT_TO_T[wt]
+    # fallback for odd values (shouldn't happen given your constraint)
+    if wt <= 1:
+        return WT_TO_T[1]
+    if wt >= 10:
+        return WT_TO_T[10]
+    # interpolate
+    if 2 < wt < 5:
+        return WT_TO_T[2] + (WT_TO_T[5] - WT_TO_T[2]) * (wt - 2) / 3.0
+    if 5 < wt < 10:
+        return WT_TO_T[5] + (WT_TO_T[10] - WT_TO_T[5]) * (wt - 5) / 5.0
+    return WT_TO_T[2]
+
+# ============================
+# 3) PARSING YOUR ELECTROLYTE CODES
+# ============================
+
+@dataclass(frozen=True)
+class ElectrolyteSpec:
+    raw: str
+    system: str        # "DT" or "TPT"
+    additives: str     # "NONE", "F", "V", "FV"
+    ratio: str         # e.g., "14"
+    fec_wt: int        # 0 if absent
+    vc_wt: int         # 0 if absent
+
+def _clean_code(s: str) -> str:
+    s = str(s).strip().upper()
+
+    # Remove " - DATE..." suffixes (space-dash-space)
+    s = re.sub(r"\s*-\s*\d.*$", "", s)
+
+    # Remove hyphen-date patterns like "...-7_18_25" (underscore signals a date)
+    s = re.sub(r"-(?=\d+_)\d.*$", "", s)
+
+    # Remove spaces/underscores
+    s = s.replace(" ", "").replace("_", "")
+
+    # Convert dashed additive notation: DTF14-5 -> DTF145; DTF14-10 -> DTF1410
+    s = s.replace("-", "")
+
+    # Tolerate common typo: DFTV -> DTFV
+    s = s.replace("DFTV", "DTFV")
+
+    return s
+
+def _split_fv_amounts(nums: str) -> Tuple[int, int]:
+    """
+    Parse FV amounts from concatenated digits.
+    Examples:
+      "11"  -> (1,1)
+      "52"  -> (5,2)
+      "102" -> (10,2)
+    """
+    if not nums:
+        return 0, 0
+
+    # Prefer FEC=10 if it matches
+    if nums.startswith("10"):
+        fec = 10
+        rest = nums[2:]
+        if rest.isdigit():
+            vc = int(rest)
+            return fec, vc
+
+    # Otherwise FEC is first digit (1/2/5), VC is remaining
+    fec = int(nums[0])
+    rest = nums[1:]
+    vc = int(rest) if rest else 0
+    return fec, vc
+
+def parse_electrolyte(code: str) -> ElectrolyteSpec:
+    """
+    Your convention:
+      - DT... refers to DME:THF (ratio digits next, e.g. 14)
+      - TPT... refers to TFSI-DPE-THF (T = salt convention), then PT solvents
+      - Additives are appended after base letters: F, V, or FV
+      - After ratio (two digits), numbers encode additive wt%:
+          DTF145   -> FEC 5%
+          DTFV1452 -> FEC 5%, VC 2%
+      - Additive wt% are whole numbers: 1,2,5,10.
+    """
+    raw = str(code)
+    s = _clean_code(raw)
+
+    # Identify system
+    if s.startswith("TPT"):
+        system = "TPT"
+        rest = s[3:]
+    elif s.startswith("DT"):
+        system = "DT"
+        rest = s[2:]
+    else:
+        raise ValueError(f"Not a DT/TPT electrolyte code after cleaning: '{raw}' -> '{s}'")
+
+    # Additives token
+    additives = "NONE"
+    if rest.startswith("FV"):
+        additives = "FV"
+        rest = rest[2:]
+    elif rest.startswith("F"):
+        additives = "F"
+        rest = rest[1:]
+    elif rest.startswith("V"):
+        additives = "V"
+        rest = rest[1:]
+
+    # ratio is next two digits, then optional amount digits
+    m = re.match(r"(?P<ratio>\d{2})(?P<num>\d*)$", rest)
+    if not m:
+        raise ValueError(f"Could not parse ratio/amount from '{raw}' -> '{s}' (rest='{rest}')")
+
+    ratio = m.group("ratio")
+    nums = m.group("num") or ""
+
+    fec_wt, vc_wt = 0, 0
+    if additives == "F":
+        fec_wt = int(nums) if nums else 0
+    elif additives == "V":
+        vc_wt = int(nums) if nums else 0
+    elif additives == "FV":
+        fec_wt, vc_wt = _split_fv_amounts(nums)
+
+    return ElectrolyteSpec(raw=raw, system=system, additives=additives, ratio=ratio, fec_wt=fec_wt, vc_wt=vc_wt)
+
+def ratio_to_text(ratio: str) -> str:
+    """'14' -> '1:4'"""
+    if len(ratio) == 2 and ratio.isdigit():
+        return f"{ratio[0]}:{ratio[1]}"
+    return ratio
+
+def pretty_label(code: str) -> str:
+    """Compact slide-friendly label."""
+    spec = parse_electrolyte(code)
+    base = f"{spec.system} {ratio_to_text(spec.ratio)}"
+    if spec.additives == "NONE":
+        return base
+    if spec.additives == "F":
+        return f"{base} + FEC {spec.fec_wt}%"
+    if spec.additives == "V":
+        return f"{base} + VC {spec.vc_wt}%"
+    return f"{base} + FEC {spec.fec_wt}% + VC {spec.vc_wt}%"
+
+# ============================
+# 4) STYLE FOR A CURVE
+# ============================
+
+def style_for_electrolyte(
+    code: str,
+    *,
+    lw_base: float = 3.2,
+    lw: float = 2.6,
+    markevery: Optional[int] = 20,
+) -> Dict:
+    """
+    Returns Matplotlib kwargs for ax.plot(...).
+    Encoding:
+      - Hue = additive package (NONE/F/V/FV)
+      - Shade = wt% (higher = darker)
+      - Marker = VC wt% (1 filled circle, 2 open square)
+      - Linestyle = DT solid, TPT dashed
+    """
+    spec = parse_electrolyte(code)
+
+    linestyle = SYSTEM_LS.get(spec.system, "-")
+
+    # Color + shade
+    if spec.additives == "NONE":
+        color = BASE_COLOR["NONE"]
+        linewidth = lw_base
+    else:
+        hue = BASE_COLOR[spec.additives]
+        # Shade by the relevant wt%
+        if spec.additives in ("F", "FV"):
+            wt = spec.fec_wt
+        else:
+            wt = spec.vc_wt
+        t = _t_from_wt(wt) if wt else _t_from_wt(1)
+        color = blend_hex(hue, BASE_COLOR["WHITE"], t=t)
+        linewidth = lw
+
+    # VC markers only for V / FV packages
+    marker = None
+    mfc = None
+    mec = None
+    mew = None
+    ms = None
+
+    if spec.additives in ("V", "FV"):
+        marker, fillmode, mew, ms = VC_MARKER.get(spec.vc_wt, (None, None, None, None))
+        if marker is not None:
+            if fillmode == "filled":
+                mfc = color
+                mec = color
+                mew = 0.0
+            else:
+                mfc = "none"
+                mec = color
+
+    out = dict(
+        color=color,
+        linestyle=linestyle,
+        linewidth=linewidth,
+        marker=marker,
+        markersize=ms,
+        markerfacecolor=mfc,
+        markeredgecolor=mec,
+        markeredgewidth=mew,
+    )
+    if marker is not None and markevery is not None:
+        out["markevery"] = markevery
+
+    return {k: v for k, v in out.items() if v is not None}
+
+# ============================
+# 5) TWO-BLOCK "ENCODING" LEGEND HANDLES
+# ============================
+
+def legend_handles_system_additives() -> List[mlines.Line2D]:
+    """Colors = additive package; linestyle = system."""
+    h = [
+        mlines.Line2D([], [], color=BASE_COLOR["NONE"], lw=3.2, linestyle="-",  label="NONE (baseline)"),
+        mlines.Line2D([], [], color=BASE_COLOR["F"],    lw=3.0, linestyle="-",  label="FEC package (F)"),
+        mlines.Line2D([], [], color=BASE_COLOR["V"],    lw=3.0, linestyle="-",  label="VC package (V)"),
+        mlines.Line2D([], [], color=BASE_COLOR["FV"],   lw=3.0, linestyle="-",  label="FEC+VC package (FV)"),
+        mlines.Line2D([], [], color="#4A4A4A", lw=2.6, linestyle=SYSTEM_LS["DT"],  label="DT system (solid)"),
+        mlines.Line2D([], [], color="#4A4A4A", lw=2.6, linestyle=SYSTEM_LS["TPT"], label="TPT system (dashed)"),
+    ]
+    return h
+
+def legend_handles_vc_markers() -> List[mlines.Line2D]:
+    """Markers = VC wt%."""
+    h = [
+        mlines.Line2D([], [], color="#4A4A4A", lw=2.6, linestyle="-", marker=None, label="VC 0% (no marker)"),
+        mlines.Line2D([], [], color="#4A4A4A", lw=2.6, linestyle="-",
+                      marker="o", markersize=6, markerfacecolor="#4A4A4A",
+                      markeredgecolor="#4A4A4A", markeredgewidth=0.0, label="VC 1%"),
+        mlines.Line2D([], [], color="#4A4A4A", lw=2.6, linestyle="-",
+                      marker="s", markersize=6, markerfacecolor="none",
+                      markeredgecolor="#4A4A4A", markeredgewidth=1.2, label="VC 2%"),
+    ]
+    return h
+
+def add_two_block_legend(
+    ax,
+    *,
+    loc_colors: str = "upper left",
+    loc_vc: str = "lower left",
+    frameon: bool = False,
+    fontsize: int = 10,
+):
+    """Adds two separate legends inside the axis."""
+    leg1 = ax.legend(
+        handles=legend_handles_system_additives(),
+        loc=loc_colors,
+        frameon=frameon,
+        fontsize=fontsize,
+        title="Encoding",
+        title_fontsize=fontsize,
+        borderaxespad=0.0,
+        handlelength=2.8,
+        handletextpad=0.8,
+        labelspacing=0.6,
+    )
+    ax.add_artist(leg1)
+
+    leg2 = ax.legend(
+        handles=legend_handles_vc_markers(),
+        loc=loc_vc,
+        frameon=frameon,
+        fontsize=fontsize,
+        title="VC markers",
+        title_fontsize=fontsize,
+        borderaxespad=0.0,
+        handlelength=2.8,
+        handletextpad=0.8,
+        labelspacing=0.6,
+    )
+    ax.add_artist(leg2)
+
+    return leg1, leg2
+
+# ============================
+# 6) SAVE LEGENDS AS SEPARATE PNGs
+# ============================
+
+def save_encoding_legend_png(
+    out_png: str,
+    *,
+    dpi: int = 600,
+    fontsize: int = 11,
+    transparent: bool = True,
+    pad_in: float = 0.02,
+) -> None:
+    """Standalone PNG with both encoding legends (no curve list)."""
+    fig = plt.figure(figsize=(6.5, 2.4))
+    fig.patch.set_alpha(0.0 if transparent else 1.0)
+    ax = fig.add_subplot(111)
+    ax.axis("off")
+
+    leg1 = ax.legend(
+        handles=legend_handles_system_additives(),
+        loc="upper left",
+        frameon=False,
+        fontsize=fontsize,
+        title="Encoding",
+        title_fontsize=fontsize,
+        borderaxespad=0.0,
+        handlelength=2.8,
+        handletextpad=0.8,
+        labelspacing=0.6,
+    )
+    ax.add_artist(leg1)
+
+    leg2 = ax.legend(
+        handles=legend_handles_vc_markers(),
+        loc="lower left",
+        frameon=False,
+        fontsize=fontsize,
+        title="VC markers",
+        title_fontsize=fontsize,
+        borderaxespad=0.0,
+        handlelength=2.8,
+        handletextpad=0.8,
+        labelspacing=0.6,
+    )
+    ax.add_artist(leg2)
+
+    fig.savefig(out_png, dpi=dpi, transparent=transparent, bbox_inches="tight", pad_inches=pad_in)
+    plt.close(fig)
+
+def save_ax_legend_png(
+    ax,
+    out_png: str,
+    *,
+    title: Optional[str] = None,
+    fontsize: int = 11,
+    ncol: int = 1,
+    dpi: int = 600,
+    transparent: bool = True,
+    pad_in: float = 0.02,
+) -> None:
+    """
+    One-axis-per-plot: save EXACT legend handles/labels from the axis as a standalone PNG.
+    """
+    handles, labels = ax.get_legend_handles_labels()
+    if not handles:
+        raise ValueError("Axis has no legend handles/labels. Did you set label=... in ax.plot(...) ?")
+
+    fig_h = max(1.0, 0.32 * (len(labels) / max(1, ncol)))
+    fig_w = 6.0 if ncol == 1 else 9.0
+    fig = plt.figure(figsize=(fig_w, fig_h))
+    fig.patch.set_alpha(0.0 if transparent else 1.0)
+
+    ax_leg = fig.add_subplot(111)
+    ax_leg.axis("off")
+
+    ax_leg.legend(
+        handles=handles,
+        labels=labels,
+        loc="center left",
+        frameon=False,
+        fontsize=fontsize,
+        ncol=ncol,
+        title=title,
+        title_fontsize=fontsize,
+        borderaxespad=0.0,
+        handlelength=2.8,
+        handletextpad=0.8,
+        labelspacing=0.6,
+    )
+
+    fig.savefig(out_png, dpi=dpi, transparent=transparent, bbox_inches="tight", pad_inches=pad_in)
+    plt.close(fig)
+
+
+
+
+# ------------------------------------------------------------
+# One-call driver: makes the whole figure set
+# ------------------------------------------------------------
+def export_proposal_cycling_figures(comparison_set,
+                                   out_dir=r"C:\Users\benja\Downloads\Final Countdown\Proposal Slide Figures - Cycling Plots",
+                                   tag="JoshAsk",
+                                   normalized=False,
+                                   color_scheme=None):
+    """
+    Exports:
+      1) Representative rate curves (V-Q) + legend-only
+      2) Capacity vs cycle FULL + legend-only
+      3) Capacity vs cycle RATE (1–19) + legend-only
+      4) Capacity vs cycle LIFE (20–cut) + legend-only
+    """
+    out_dir = _ensure_dir(out_dir)
+
+    plot_representative_rate_curves_export(
+        comparison_set,
+        out_dir=out_dir,
+        save_stem=f"{tag}_Representative_Rate_Curves",
+        normalized=normalized,
+        color_scheme=color_scheme,
+        figsize=(10, 6),
+    )
+
+    plot_capacity_vs_cycle_exports(
+        comparison_set,
+        out_dir=out_dir,
+        save_prefix=f"{tag}_Capacity_vs_Cycle",
+        normalized=normalized,
+        color_scheme=color_scheme,
+        figsize=(10, 6),
+        use_charge=False  # matches your existing capacity-vs-cycle convention
+    )
+
+    print(f"Export complete → {out_dir}")
+import numpy as np
+import matplotlib.pyplot as plt
+
+def plot_capacity_rate_and_life_like_example(
+        file_tuples,                     # list of (file_path, key, cell_code) OR nested list (comparison_set)
+        normalized=False,
+        x_bounds=(1, 200),
+        save_path=None,
+        color_scheme=None,
+        title='Capacity vs. Cycle Number (Rate + Cycle Life)'
+    ):
+    """
+    Capacity vs cycle (DISCHARGE capacity only), formatted like your example:
+    - points only
+    - vertical dashed lines separating rate steps
+    - C-rate labels at the top
+    - Labels aligned at top/bottom bands
+    - Optional color_scheme (cell_code -> color)
+    """
+
+    # ---------- Flatten comparison_set ----------
+    flattened = []
+    for item in file_tuples:
+        if isinstance(item, (list, tuple)) and len(item) == 3 and isinstance(item[0], str):
+            flattened.append(item)
+        elif isinstance(item, list):
+            for sub in item:
+                if isinstance(sub, (list, tuple)) and len(sub) == 3:
+                    flattened.append(sub)
+
+    if not flattened:
+        raise ValueError("No valid (file_path, key, cell_code) tuples found.")
+
+    # DEBUG: show what was flattened so we can see whether LPV_controls/DT14_control/DTF_set made it
+    try:
+        dbg_list = [(os.path.basename(fp), key, cell_code) for (fp, key, cell_code) in flattened]
+        print("[DEBUG] Flattened tuples count:", len(flattened))
+        for idx, (fn, key, code) in enumerate(dbg_list):
+            print(f"[DEBUG] {idx}: file={fn}, key={key}, cell_code={code}")
+    except Exception as e:
+        print("[DEBUG] Could not print flattened list:", e)
+
+    def electrolyte_label(key):
+        if ' - ' in key:
+            tail = key.split(' - ', 1)[1]
+            return tail.replace(' Elyte', '').split(' (', 1)[0].strip()
+        return key
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # ---- plot discharge capacity (points only) ----
+    for i, (file_path, key, cell_code) in enumerate(flattened):
+        print(f"[DEBUG] Processing index {i}: file_path={os.path.basename(file_path)}, key={key}, cell_code={cell_code}")
+        cycles, charge_caps, discharge_caps, ce = process_cycle_data(file_path, key, normalized)
+
+        print(f"[DEBUG] Raw cycles found: {len(cycles)}, discharge_caps: {len(discharge_caps)}")
+
+        cyc = np.array(cycles)
+        cap = np.array(discharge_caps)  # DISCHARGE capacity
+
+        # apply x bounds
+        m = (cyc >= x_bounds[0]) & (cyc <= x_bounds[1])
+        cyc = cyc[m]
+        cap = cap[m]
+        print(f"[DEBUG] After x_bounds {x_bounds}: cycles_in_range={len(cyc)}, caps_in_range={len(cap)}")
+        if len(cyc) == 0:
+            print(f"[DEBUG] Skipping {os.path.basename(file_path)} ({cell_code}): no cycles in x_bounds {x_bounds}")
+            continue
+
+        lab = electrolyte_label(key)
+
+        if color_scheme and cell_code in color_scheme:
+            col = color_scheme[cell_code]
+            ax.scatter(cyc, cap, s=38, color=col, label=lab)
+        else:
+            ax.scatter(cyc, cap, s=38, label=lab)
+
+    # ---- vertical dashed lines for rate windows (match your example) ----
+    # boundaries at 4.5, 7.5, 10.5, 13.5, 16.5, 19.5
+    for x in [4.5, 7.5, 10.5, 13.5, 16.5, 19.5]:
+        if x_bounds[0] <= x <= x_bounds[1]:
+            ax.axvline(x=x, color='black', linestyle='--', linewidth=2.6)
+
+    # ---- axis formatting (Josh style) ----
+    ax.set_xlabel('Cycle Number', fontsize=14)
+    ax.set_ylabel('Capacity (%)' if normalized else 'Capacity (mAh/g)', fontsize=24)
+    ax.set_xlim(x_bounds)
+
+    # tick formatting like your other plot
+    ax.tick_params(which='both', direction='in', bottom=True, top=True, left=True, right=True)
+    ax.tick_params(axis='both', labelsize=24)
+    ax.grid(False)
+
+    # ---- C-rate labels across the top (same segment logic you used) ----
+    # rate test is cycles 1–19, then cycle life continues (you can rename last label)
+    c_rate_segments = [
+        (3, 4, "C/10"),
+        (5, 7, "C/8"),
+        (8, 10, "C/4"),
+        (11, 13, "C/2"),
+        (14, 16, "1C"),
+        (17, 19, "2C"),
+        (20, x_bounds[1], "Cycle life"),  # or "C/2" if that’s what you want
+    ]
+
+    y_top = ax.get_ylim()[1]
+    for start, end, label in c_rate_segments:
+        seg_start = max(start, x_bounds[0])
+        seg_end = min(end, x_bounds[1])
+        if seg_start <= seg_end:
+            x_mid = 0.5 * (seg_start + seg_end)
+            ax.text(x_mid, y_top * 0.99, label, fontsize=20, ha='center', va='top', color='black')
+
+    # ---- legend (dedupe) ----
+    handles, labels = ax.get_legend_handles_labels()
+    unique = {}
+    for h, l in zip(handles, labels):
+        unique.setdefault(l, h)
+    ax.legend(list(unique.values()), list(unique.keys()),
+              loc='upper center', bbox_to_anchor=(0.5, -0.15),
+              fontsize=16, ncol=2, frameon=False)
+
+    ax.set_title(title, fontsize=16)
+    plt.tight_layout()
+    plt.show()
+
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.close(fig)
+    else:
+        plt.show()
 
 # Continue with plotting only if list is non-empty
 # if files_to_compare:
@@ -1213,30 +2354,41 @@ DTFV_set = [get_tuples_by_cell_code(file_paths_keys, r'FC03')[0],
         get_tuples_by_cell_code(file_paths_keys, r'FG03')[0],
             get_tuples_by_cell_code(file_paths_keys, r'ES03')[0],
 ]
-DTFV_set = [get_tuples_by_cell_code(file_paths_keys, r'FC03')[0],
-            get_tuples_by_cell_code(file_paths_keys, r'FF02')[0],
-            get_tuples_by_cell_code(file_paths_keys, r'ES03')[0],
-            ]
+# DTFV_set = [get_tuples_by_cell_code(file_paths_keys, r'FC03')[0],
+#             get_tuples_by_cell_code(file_paths_keys, r'FF02')[0],
+#             get_tuples_by_cell_code(file_paths_keys, r'FG03')[0],
+#         ]
+
 DTF_set = [get_tuples_by_cell_code(file_paths_keys, r'EN02')[0],
            get_tuples_by_cell_code(file_paths_keys, r'DU02')[0],
         get_tuples_by_cell_code(file_paths_keys, r'EO02')[0],
         get_tuples_by_cell_code(file_paths_keys, r'EJ03')[0],
 ]
-DTF_set = [
-           get_tuples_by_cell_code(file_paths_keys, r'DU02')[0],
-
-        get_tuples_by_cell_code(file_paths_keys, r'EJ03')[0],
-]
+# DTF_set = [
+#            get_tuples_by_cell_code(file_paths_keys, r'DU02')[0],
+#
+#         get_tuples_by_cell_code(file_paths_keys, r'EJ03')[0],
+# ]
 LPV_controls = [get_tuples_by_cell_code(file_paths_keys, r'EU03')[0],
     #get_tuples_by_cell_code(file_paths_keys, r'EV03')[0],
     ]
+DT14_control_2 = [get_tuples_by_cell_code(file_paths_keys, r'DQ01')[0],]
+TPT_set = [get_tuples_by_cell_code(file_paths_keys, r'IM01')[0],
+           get_tuples_by_cell_code(file_paths_keys, r'IN01')[0],
+           get_tuples_by_cell_code(file_paths_keys, r'IO01')[0]]
+# #tuple_control_gr = [get_tuples_by_cell_code(file_paths_keys, r'EV03')[0],
+#     ]
+# DT14_control = [get_tuples_by_cell_code(file_paths_keys, r'DP01')[0],]
+#
+# MF_set = [get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],]
+comparison_set = [LPV_controls, DT14_control_2, DTF_set, ]#DTFV_set]
+plot_capacity_rate_and_life_like_example(
+    comparison_set,
+    normalized=False,
+    x_bounds=(1, 70),   # set to your full cycling range
+    save_path='comp_'+str(comparison_set)       # or a full png path
+)
 
-tuple_control_gr = [get_tuples_by_cell_code(file_paths_keys, r'EV03')[0],
-    ]
-DT14_control = [get_tuples_by_cell_code(file_paths_keys, r'DP01')[0],]
-
-MF_set = [get_tuples_by_cell_code(file_paths_keys, r'EC01')[0],]
-comparison_set = [LPV_controls, DT14_control, DTF_set, DTFV_set]
 # import pprint as pp
 # #pp.pprint(DT14_control)
 #form_set_DTF2 = [get_tuples_by_cell_code(file_paths_keys, r'DU02')[0],
@@ -1287,11 +2439,19 @@ comparison_set = [LPV_controls, DT14_control, DTF_set, DTFV_set]
 # Many cells → mean trace (+1 σ) of first-cycle charge dQ/dV
 #plot_mean_dq_dv(files_to_compare, segment='charge', smooth='savgol')
 
+export_proposal_cycling_figures(
+    comparison_set,
+    tag="JoshAsk",
+    normalized=False,
+    color_scheme=None  # or your Tol/Josh mapping dict
+)
+
+
 
 cycle_str = 'CycleLife_JoshColors'
 rate_str = 'Rate_JoshColors'
 rate_bounds = (0, 19.5)
-cycle_life_bounds = (21.5, 45)
+cycle_life_bounds = (0, 70)
 # Full_set = []
 # Full_set.extend(form_set_DTF2)
 # Full_set.extend(form_set_DTV)
@@ -1343,7 +2503,7 @@ compare_cells_on_same_plot(DT_Set, normalized=False, x_bounds=(0, 19.5), save_st
 
 
 # Now extract cell codes
-#cell_codes = [cell_code for _, _, cell_code in files_to_compare]
+#cell_codes = [cell_code for cell_path, key, cell_code in files_to_compare]
 
 
 compare_cells_on_same_plot(files_to_compare, normalized=False, x_bounds=(0, 20), save_str='CycleLife_TolColors', color_scheme=custom_colors)
@@ -1513,7 +2673,7 @@ def generate_file_paths_keys_low_temp(directory, lookup_table_path):
     Returns a list of tuples: (full_path, key, cell_code)
     """
     file_paths_keys = []
-    lookup_df = pd.read_excel(lookup_table_path)
+    lookup_df = load_lookup_df(lookup_table_path)
     for root, dirs, files in os.walk(directory):
         for file in files:
             if file.endswith('.xlsx') and '-51C' in file:

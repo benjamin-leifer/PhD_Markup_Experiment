@@ -25,23 +25,25 @@ warnings.filterwarnings("ignore", category=FutureWarning, module="pandas")
 DATA_DIR = Path(r"C:\Users\benja\Downloads\DQ_DV Work\Lab Arbin_DQ_DV_2025_07_15\07\Dq_DV")
 
 FILES: List[str] = [
-    "BL-LL-FZ01_RT_C_20_Charge_02_CP_C04.mpt",
+    #"BL-LL-FZ01_RT_C_20_Charge_02_CP_C04.mpt",
     #"BL-LL-FY01_RT_C_20_Charge_02_CP_C04.mpt",
     #"BL-LL-FX01_RT_C_20_Charge_02_CP_C02.mpt",
     #"BL-LL-FW01_RT_C_20_Charge_02_CP_C01.mpt",
-    "BL-LL-GA01_RT_C_20_Charge_02_CP_C02.mpt",
-    "BL-LL-GA02_RT_C_20_Form_HighFid_Channel_64_Wb_1.xlsx",
-    "BL-LL-FZ02_RT_C_20_Form_HighFid_Channel_63_Wb_1.xlsx",
+    #"BL-LL-GA01_RT_C_20_Charge_02_CP_C02.mpt",
+    #"BL-LL-GA02_RT_C_20_Form_HighFid_Channel_64_Wb_1.xlsx",
+    #"BL-LL-FZ02_RT_C_20_Form_HighFid_Channel_63_Wb_1.xlsx",
     #"BL-LL-FY02_RT_C_20_Form_HighFid_Channel_62_Wb_1.xlsx",
-    "BL-LL-FW02_RT_C_20_Form_HighFid_Channel_60_Wb_1.xlsx",
-    "BL-LL-FX02_RT_C_20_Form_HighFid_Channel_61_Wb_1.xlsx",
+    #"BL-LL-FW02_RT_C_20_Form_HighFid_Channel_60_Wb_1.xlsx",
+    #"BL-LL-FX02_RT_C_20_Form_HighFid_Channel_61_Wb_1.xlsx",
+    "BL-LL-IF03_RT_FormCharge_Channel_23_Wb_1.xlsx",
+
 ]
 
 # Active-material mass **mg**
 _mass_each_mg = 0.02496886674/1000
 MASS_MG = {id_: _mass_each_mg for id_ in
            ["FZ01","FY01","FX01","FW01","GA01",
-            "FZ02","FY02","FX02","FW02","GA02"]}
+            "FZ02","FY02","FX02","FW02","GA02",'IF03']}
 
 # Script parameters
 CYCLE    = 1          # 0-based

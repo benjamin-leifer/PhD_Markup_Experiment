@@ -1411,7 +1411,7 @@ def compute_cell_discharge_metrics(groups, lookup, cell_meta,
 
         dQ = float(Q[-1] - Q[0])
         if dQ > 0:
-            avg_v = float(np.trapezoid(V, Q) / dQ)
+            avg_v = float(np.trapz(V, Q) / dQ)
             mid_q = float(Q[0] + 0.5 * dQ)
             mid_v = _voltage_at_capacity(Q, V, mid_q)
         else:
@@ -4366,58 +4366,82 @@ def main_6():
 
 def main_7():
     """
-    Update of main_6 per latest tweaks:
-      - Bottom row: keep the SAME blue gradient scheme as main_5 (darker with higher additive level)
-      - Top row y-axis *tick label values* (SWITCHED):
-          * Y1 (left axis, Cap)  tick labels ONLY on LEFTMOST panel
-          * Y2 (right axis, Vmid) tick labels ONLY on RIGHTMOST panel
-        …and ylabel TEXT the same way:
-          * Cap ylabel only LEFTMOST (left axis)
-          * Vmid ylabel only RIGHTMOST (right axis)
-      - Top row points + errorbars:
-          * Cap = Blues (by additive level)
-          * Vmid = Oranges (by additive level)
-      - Std-dev bars recolored to match
-      - Discharge curves solid; legends inside each bottom subplot; legend text only additive wt% (no cell codes)
-      - No fit lines; print fit params + R^2 to console
-      - Drop figure suptitle
+    Word-friendly export (6.5" x 4.5") for BOTH VC-shift and FEC-shift combined figures.
+
+    Updates per latest feedback:
+      - Put BOTH top legends (Replicate + Cap/V metrics) on subplot (b) (top-middle),
+        in the bottom-right (user said that's the emptiest region).
+        * Replicate legend sits LOWER.
+        * Metric legend stacks ABOVE it (so it doesn't fall off-axis).
+      - Bottom row uses ONE shared legend on subplot (e) (bottom-middle),
+        nudged slightly LEFT vs prior.
+      - Add a snowflake label to denote extreme cold temperature.
+      - Save with exact physical size (SAVE_BBOX_TIGHT=False).
     """
+    import os
     import re
     import numpy as np
     import pandas as pd
     import matplotlib.pyplot as plt
     from matplotlib.figure import Figure
     from matplotlib.container import ErrorbarContainer
+    from matplotlib.lines import Line2D
 
     # ---------------- styling knobs ----------------
-    FONT_TITLE = 18
-    FONT_LABEL = 16
-    FONT_TICK = 13
-    FONT_LEGEND = 12
+    FONT_TITLE  = 12
+    FONT_LABEL  = 10
+    FONT_TICK   = 10
+    FONT_LEGEND = 10
 
-    Y1_COLOR = "tab:blue"    # capacity axis
-    Y2_COLOR = "tab:orange"  # voltage axis
+    Y1_COLOR = "tab:blue"
+    Y2_COLOR = "tab:orange"
 
-    # ----------- NEW: subplot letter + contrast knobs -----------
-    SUBPLOT_LETTER_FONT = FONT_LABEL
+    SUBPLOT_LETTER_FONT = 10
     SUBPLOT_LETTER_X = 0.02
     SUBPLOT_LETTER_Y = 0.98
 
-    # Bottom (V vs Q) curve contrast: spread across more of the colormap
-    BOTTOM_BLUE_LO = 0.12
-    BOTTOM_BLUE_HI = 0.98
     CURVE_LW = 2.4
 
-    import os
-
-    # ----------- NEW: output + sizing knobs -----------
+    # ---------------- Word export sizing knobs ----------------
+    WORD_FIGSIZE = (6.5, 5.0)   # inches
     SAVE_DIR = r"C:\Users\benja\Downloads\Dilute THF Data\11_25_25\-51C_Repeats\plots_t19\_exports"
     os.makedirs(SAVE_DIR, exist_ok=True)
+    SAVE_DPI = 300
 
-    SAVE_DPI = 150  # used for screen->inch conversion and for file export
-    USE_SCREEN_SIZE = True  # True = use monitor size; False = use FIGSIZE_OVERRIDE
-    SCREEN_FRAC = 0.95  # 0.95 fills most of the screen (avoid taskbar)
-    FIGSIZE_OVERRIDE = None  # e.g. (18, 10) in inches, if you want manual control
+    # IMPORTANT: "tight" changes physical inch size. Keep False for Word.
+    SAVE_BBOX_TIGHT = False
+
+    SUBPLOT_ADJUST = dict(
+        left=0.10,  # a touch more for the left ylabel
+        right=0.90,  # IMPORTANT: more space for the right orange ylabel
+        top=0.90,
+        bottom=0.17,
+        wspace=0.26,
+        hspace=0.30
+    )
+
+    # ---------------- Snowflake (extreme cold marker) ----------------
+    SNOWFLAKE_TEXT = "❄  −51°C"
+    SNOWFLAKE_POS  = (0.012, 0.985)   # figure coords (x,y)
+    SNOWFLAKE_FONT = 13
+
+    # ---------------- legend placement knobs ----------------
+    # Top legends host panel: subplot (b) == top-middle
+    TOPLEG_PANEL_INDEX = 1
+    TOPLEG_LOC  = "lower right"
+    TOPLEG_BBOX = (0.985, 0.03)     # (x,y) in axes coords of panel (b), bottom-right
+    TOPLEG_STACK_UP_DY = 0.18       # metric legend stacks ABOVE replicate legend
+
+    REP_LEGEND_FONT = max(8, FONT_LEGEND - 3)
+    REP_MARKERSIZE  = 7
+
+    METRIC_FONT = max(8, FONT_LEGEND - 3)
+    METRIC_MARKERSIZE = 6
+
+    # Bottom single legend goes in subplot (e) (bottom-middle) — nudged left
+    BOTTOM_LEGEND_LOC  = "center right"
+    BOTTOM_LEGEND_BBOX = (0.92, 0.50)   # moved left from 0.98 -> 0.92
+    BOTTOM_LEGEND_FONT = max(8, FONT_LEGEND - 3)
 
     rc = {
         "figure.titlesize": FONT_TITLE,
@@ -4427,11 +4451,45 @@ def main_7():
         "ytick.labelsize": FONT_TICK,
         "legend.fontsize": FONT_LEGEND,
     }
-    # --- enforce replicate marker mapping for top plots (CellNumber == replicate) ---
-    # Replicate 1 = triangle, Replicate 2 = square, Replicate 3 = diamond
-    # Enforce replicate marker mapping (make sure all are unique)
-    # Rep 1 triangle, Rep 2 square, Rep 3 diamond, Rep 4 circle (or pick another)
-    CELLNUM_MARKERS.update({1: "^", 2: "s", 3: "D", 4: "o"})
+    TOP_LEFT_YLABEL = "Discharge Capacity\n(mAh/g)"
+    TOP_RIGHT_YLABEL = "Voltage at 1/2 Discharge Capacity\n(V)"
+    BOTTOM_XLABEL = "Discharge Capacity\n(mAh/g)"
+    BOTTOM_XLIM = (0, 100)
+    BOTTOM_XTICKS = [0, 50, 100]
+
+    BOTTOM_XLABEL_FONT = 14  # bump down if it still feels big (try 13)
+    BOTTOM_XLABEL_PAD = 6
+
+    def _format_bottom_row(fig):
+        groups = _group_axes_by_position(fig)
+        bot_keys = _row_keys(groups, "bottom")
+        if len(bot_keys) < 2:
+            return
+
+        mid_key = bot_keys[len(bot_keys) // 2]  # subplot (e)
+
+        for key in bot_keys:
+            ax_list = groups.get(key, [])
+            if len(ax_list) != 1:
+                continue
+            ax = ax_list[0]
+
+            # axis limits/ticks for all bottom panels
+            ax.set_xlim(*BOTTOM_XLIM)
+            ax.set_xticks(BOTTOM_XTICKS)
+
+            # only subplot (e) gets the 2-line xlabel
+            if key == mid_key:
+                ax.set_xlabel(BOTTOM_XLABEL, fontsize=BOTTOM_XLABEL_FONT, labelpad=BOTTOM_XLABEL_PAD)
+            else:
+                ax.set_xlabel("")
+
+    # --- replicate marker mapping ---
+    rep_marker_map = {1: "^", 2: "s", 3: "D", 4: "o"}
+    try:
+        CELLNUM_MARKERS.update(rep_marker_map)
+    except Exception:
+        CELLNUM_MARKERS = dict(rep_marker_map)
 
     # ---------------- helpers ----------------
     def _get_new_fig_id(before_ids):
@@ -4439,287 +4497,13 @@ def main_7():
         new = sorted(list(after - set(before_ids)))
         return new[-1] if new else None
 
-    def _get_screen_figsize_inches(dpi=100, frac=0.95, fallback=(18, 10)):
-        """
-        Returns (w_in, h_in) sized to your primary display.
-        Uses tkinter to query screen pixel dims, then converts to inches using dpi.
-        """
-        try:
-            import tkinter as tk
-            root = tk.Tk()
-            root.withdraw()
-            w_px = root.winfo_screenwidth()
-            h_px = root.winfo_screenheight()
-            root.destroy()
-            return (max(6.0, (w_px * frac) / float(dpi)),
-                    max(4.0, (h_px * frac) / float(dpi)))
-        except Exception:
-            return fallback
-
-    def add_top_left_legends(fig, dfm_trial, rep_loc="lower center", rep_bbox=(0.5, 0.10)):
-        """
-        Single-call legend builder for the TOP-LEFT top-row panel:
-          - Replicate legend (top of the stack) using your existing placement style
-          - Metric legend (filled vs hollow) directly BELOW replicate legend
-        """
-        from matplotlib.lines import Line2D
-
-        groups = _group_axes_by_position(fig)
-        top_keys = _row_keys(groups, "top")
-        if not top_keys:
-            return
-
-        # top-left panel = first key (row_keys sorts left->right)
-        key = top_keys[0]
-        ax_pair = groups.get(key, [])
-        if len(ax_pair) != 2:
-            return
-
-        axL, axR = _pick_left_right_axes(ax_pair)
-        if axL is None or axR is None:
-            return
-
-        # ---------- replicate legend handles ----------
-        d = dfm_trial.copy()
-        if "CellNumber" not in d.columns:
-            d["CellNumber"] = d["CellCode"].apply(get_cell_number)
-
-        present = sorted(set(d["CellNumber"].dropna().astype(int).tolist()))
-        rep_marker_map = {1: "^", 2: "s", 3: "D", 4: "o"}  # keep in sync with CELLNUM_MARKERS.update(...)
-        present = [r for r in present if r in rep_marker_map]
-
-        rep_handles = [
-            Line2D([0], [0],
-                   marker=rep_marker_map[r], linestyle="None",
-                   color="black", markersize=8, label=f"Rep {r}")
-            for r in present
-        ]
-
-        # ---------- metric legend handles (filled vs hollow) ----------
-        cap_lab = (axL.get_ylabel() or "Cap @2.5V").strip()
-        v_lab = (axR.get_ylabel() or "V@50%Q").strip()
-
-        metric_handles = [
-            Line2D([0], [0],
-                   marker="o", linestyle="None",
-                   markerfacecolor="black", markeredgecolor="black",
-                   markersize=7, label=cap_lab),
-            Line2D([0], [0],
-                   marker="o", linestyle="None",
-                   markerfacecolor="none", markeredgecolor="black",
-                   markersize=7, label=v_lab),
-        ]
-
-        # Remove any existing legends on this axis (avoid duplicates)
-        try:
-            old = axL.get_legend()
-            if old is not None:
-                old.remove()
-        except Exception:
-            pass
-
-        # ---------- 1) Replicate legend (top of stack) ----------
-        # Keep YOUR replicate placement (same style), but a bit higher so room exists below.
-        # You can tweak rep_bbox y if needed.
-        rep_leg = None
-        if rep_handles:
-            rep_leg = axL.legend(
-                handles=rep_handles,
-                loc=rep_loc,
-                bbox_to_anchor=rep_bbox,  # <-- replicate placement anchor
-                ncol=2,  # two rows for 3–4 entries
-                frameon=False,
-                title="Replicate",
-                borderaxespad=0.0,
-                handletextpad=0.6,
-                columnspacing=1.0,
-            )
-
-        # ---------- 2) Metric legend (below replicate) ----------
-        # Place it just below replicate. Use the same anchor x, smaller y.
-        # If you change rep_bbox, metric y should stay a bit smaller.
-        metric_bbox = (rep_bbox[0], rep_bbox[1] - 0.075)  # <-- stack below
-        metric_leg = axL.legend(
-            handles=metric_handles,
-            loc=rep_loc,
-            bbox_to_anchor=metric_bbox,
-            ncol=1,
-            frameon=False,
-            title=None,
-            borderaxespad=0.0,
-            handletextpad=0.6,
-            columnspacing=0.8,
-        )
-
-        # Add replicate legend back on top (so both show)
-        if rep_leg is not None:
-            axL.add_artist(rep_leg)
-
-    def add_metric_fill_legend_to_top_left(fig):
-        """
-        Add a small legend INSIDE the TOP-LEFT top-row panel that explains:
-          - filled marker = Y1 metric (uses left-axis ylabel text)
-          - hollow marker = Y2 metric (uses right-axis ylabel text)
-
-        This keeps any existing legend(s) on that axis by re-adding them.
-        """
-        from matplotlib.lines import Line2D
-
-        groups = _group_axes_by_position(fig)
-        top_keys = _row_keys(groups, "top")
-        if not top_keys:
-            return
-
-        # top-left panel = first key (row_keys sorts left->right)
-        key = top_keys[0]
-        ax_pair = groups.get(key, [])
-        if len(ax_pair) != 2:
-            return
-
-        axL, axR = _pick_left_right_axes(ax_pair)
-        if axL is None or axR is None:
-            return
-
-        # Use the *actual* axis label text (fallbacks if empty)
-        cap_lab = (axL.get_ylabel() or "Cap @2.5V").strip()
-        v_lab = (axR.get_ylabel() or "V@50%Q").strip()
-
-        handles = [
-            Line2D([0], [0],
-                   marker="o", linestyle="None",
-                   markerfacecolor="black", markeredgecolor="black",
-                   markersize=7, label=cap_lab),
-            Line2D([0], [0],
-                   marker="o", linestyle="None",
-                   markerfacecolor="none", markeredgecolor="black",
-                   markersize=7, label=v_lab),
-        ]
-
-        # Preserve any existing legend on axL
-        leg_existing = axL.get_legend()
-
-        # Slightly left-shifted placement
-        metric_leg = axL.legend(
-            handles=handles,
-            loc="lower left",
-            bbox_to_anchor=(0.01, 0.02),  # <-- move left (more negative = more left)
-            ncol=1,
-            frameon=False,
-            borderaxespad=0.0,
-            handletextpad=0.6,
-            columnspacing=0.8,
-        )
-
-        if leg_existing is not None:
-            axL.add_artist(leg_existing)
-
-    def _add_subplot_letters(fig, start_letter="a"):
-        """
-        Adds a), b), c)... to each PANEL:
-          - top row panels: label only the LEFT axis of each twin-axes pair
-          - bottom row panels: label the single axis
-        Order: top row L->R then bottom row L->R
-        """
-        import string
-        letters = string.ascii_lowercase
-
-        groups = _group_axes_by_position(fig)
-
-        panel_axes = []
-
-        # top row panels (use left axis of twin pair)
-        for key in _row_keys(groups, "top"):
-            ax_pair = groups.get(key, [])
-            if len(ax_pair) != 2:
-                continue
-            axL, _axR = _pick_left_right_axes(ax_pair)
-            if axL is not None:
-                panel_axes.append(axL)
-
-        # bottom row panels (single axis)
-        for key in _row_keys(groups, "bottom"):
-            ax_list = groups.get(key, [])
-            if len(ax_list) == 1:
-                panel_axes.append(ax_list[0])
-
-        if not panel_axes:
-            return
-
-        start_idx = letters.index(start_letter)
-        for i, ax in enumerate(panel_axes):
-            if start_idx + i >= len(letters):
-                break  # unlikely you exceed 26 panels here
-            lab = f"{letters[start_idx + i]})"
-            ax.text(
-                SUBPLOT_LETTER_X, SUBPLOT_LETTER_Y, lab,
-                transform=ax.transAxes,
-                ha="left", va="top",
-                fontsize=SUBPLOT_LETTER_FONT,
-                fontweight="bold",
-                bbox=dict(facecolor="white", alpha=0.6, edgecolor="none", pad=1.0),
-                clip_on=False,
-            )
-
     def _group_axes_by_position(fig):
         groups = {}
         for ax in fig.get_axes():
-            b = ax.get_position().bounds  # (x0, y0, w, h)
+            b = ax.get_position().bounds  # (x0,y0,w,h)
             key = tuple(round(v, 4) for v in b)
             groups.setdefault(key, []).append(ax)
         return groups
-
-    def _bold_top_panel_titles(fig):
-        """Bold the top-row panel titles like 'VC 0 wt%' or 'FEC 1 wt%'."""
-        groups = _group_axes_by_position(fig)
-        for key in _row_keys(groups, "top"):
-            ax_pair = groups.get(key, [])
-            if len(ax_pair) != 2:
-                continue
-            axL, _axR = _pick_left_right_axes(ax_pair)
-            if axL is None:
-                continue
-            t = axL.get_title() or ""
-            if t.strip():
-                axL.set_title(t, fontweight="bold")
-
-    def _add_replicate_symbol_legend(fig, dfm_trial):
-        from matplotlib.lines import Line2D
-
-        # ensure CellNumber exists
-        if "CellNumber" not in dfm_trial.columns:
-            dfm_trial = dfm_trial.copy()
-            dfm_trial["CellNumber"] = dfm_trial["CellCode"].apply(get_cell_number)
-
-        present_reps = sorted(set(dfm_trial["CellNumber"].dropna().astype(int).tolist()))
-
-        rep_marker_map = {1: "^", 2: "s", 3: "D", 4: "o"}  # keep in sync with update above
-        handles = []
-        for r in present_reps:
-            if r in rep_marker_map:
-                handles.append(
-                    Line2D([0], [0], marker=rep_marker_map[r], linestyle="None",
-                           color="black", markersize=8, label=f"Replicate {r}")
-                )
-
-        if not handles:
-            return
-
-        fig.legend(
-            handles=handles,
-            loc="upper center",
-            bbox_to_anchor=(0.75, 0.995),
-            ncol=min(4, len(handles)),
-            frameon=False,
-            title="Replicate (marker)",
-            fontsize=FONT_LEGEND,
-            title_fontsize=FONT_LEGEND,
-        )
-
-    def set_all_ticks_inward(fig):
-        for ax in fig.get_axes():
-            ax.tick_params(axis="both", which="both",
-                           direction="in",
-                           top=True, right=True)
 
     def _row_keys(groups, which="top"):
         if not groups:
@@ -4739,18 +4523,6 @@ def main_7():
             return a0, a1
         return a0, a1
 
-    def _nearest_level(x, levels):
-        levels = np.asarray(levels, dtype=float)
-        return float(levels[np.argmin(np.abs(levels - float(x)))])
-
-    def _palette(levels, cmap_name, lo=0.35, hi=0.90):
-        lv = list(sorted([float(v) for v in levels]))
-        cmap = plt.get_cmap(cmap_name)
-        if len(lv) == 1:
-            return {lv[0]: cmap(hi)}
-        vals = np.linspace(lo, hi, len(lv))
-        return {lv[i]: cmap(vals[i]) for i in range(len(lv))}
-
     def _remove_global_fig_legends(fig):
         for leg in list(getattr(fig, "legends", [])):
             try:
@@ -4766,87 +4538,110 @@ def main_7():
         except Exception:
             pass
 
-    def add_replicate_marker_legend_to_top_left(fig, dfm_trial):
-        """
-        Put replicate marker legend onto the TOP-LEFT top-row subplot (the (1,1) panel),
-        in TWO ROWS at the BOTTOM of that subplot.
-        """
-        from matplotlib.lines import Line2D
-
-        groups = _group_axes_by_position(fig)
-        top_keys = _row_keys(groups, "top")
-        if not top_keys:
-            return
-
-        # top-left panel = first key (row_keys sorts left->right)
-        key = top_keys[0]
-        ax_pair = groups.get(key, [])
-        if len(ax_pair) != 2:
-            return
-        axL, _axR = _pick_left_right_axes(ax_pair)
-        if axL is None:
-            return
-
-        d = dfm_trial.copy()
-        if "CellNumber" not in d.columns:
-            d["CellNumber"] = d["CellCode"].apply(get_cell_number)
-
-        present = sorted(set(d["CellNumber"].dropna().astype(int).tolist()))
-        rep_marker_map = {1: "^", 2: "s", 3: "D", 4: "o"}  # keep in sync with CELLNUM_MARKERS.update(...)
-        present = [r for r in present if r in rep_marker_map]
-        if not present:
-            return
-
-        handles = [
-            Line2D([0], [0], marker=rep_marker_map[r], linestyle="None",
-                   color="black", markersize=8, label=f"Rep {r}")
-            for r in present
-        ]
-
-        # Keep any existing legend
-        leg1 = axL.get_legend()
-
-        # Two rows: ncol=2 gives 2 rows for 3–4 entries
-        rep_leg = axL.legend(
-            handles=handles,
-            loc="lower center",
-            bbox_to_anchor=(0.5, 0.02),
-            ncol=2,
-            frameon=False,
-            title="Replicate",
-            borderaxespad=0.0,
-            handletextpad=0.6,
-            columnspacing=1.0,
-        )
-
-        if leg1 is not None:
-            axL.add_artist(leg1)
-
-    def _legend_inside(ax):
-        h, l = ax.get_legend_handles_labels()
-        if h:
-            ax.legend(loc="best", frameon=False, fontsize=FONT_LEGEND)
-
-    def _bump_tick_fonts(fig):
+    def set_all_ticks_inward(fig):
         for ax in fig.get_axes():
-            ax.tick_params(axis="both", which="both", labelsize=FONT_TICK)
+            ax.tick_params(axis="both", which="both", direction="in", top=True, right=True)
+
+    def _bold_top_panel_titles(fig):
+        groups = _group_axes_by_position(fig)
+        for key in _row_keys(groups, "top"):
+            ax_pair = groups.get(key, [])
+            if len(ax_pair) != 2:
+                continue
+            axL, _ = _pick_left_right_axes(ax_pair)
+            if axL is None:
+                continue
+            t = axL.get_title() or ""
+            if t.strip():
+                axL.set_title(t, fontweight="bold")
+
+    def _add_subplot_letters(fig, start_letter="a"):
+        import string
+        letters = string.ascii_lowercase
+        groups = _group_axes_by_position(fig)
+        panel_axes = []
+
+        for key in _row_keys(groups, "top"):
+            ax_pair = groups.get(key, [])
+            if len(ax_pair) != 2:
+                continue
+            axL, _ = _pick_left_right_axes(ax_pair)
+            if axL is not None:
+                panel_axes.append(axL)
+
+        for key in _row_keys(groups, "bottom"):
+            ax_list = groups.get(key, [])
+            if len(ax_list) == 1:
+                panel_axes.append(ax_list[0])
+
+        if not panel_axes:
+            return
+
+        start_idx = letters.index(start_letter)
+        for i, ax in enumerate(panel_axes):
+            if start_idx + i >= len(letters):
+                break
+            lab = f"{letters[start_idx + i]})"
+            ax.text(
+                SUBPLOT_LETTER_X, SUBPLOT_LETTER_Y, lab,
+                transform=ax.transAxes,
+                ha="left", va="top",
+                fontsize=SUBPLOT_LETTER_FONT,
+                fontweight="bold",
+                bbox=dict(facecolor="white", alpha=0.55, edgecolor="none", pad=1.0),
+                clip_on=False,
+            )
+
+    def _nearest_level(x, levels):
+        levels = np.asarray(levels, dtype=float)
+        return float(levels[np.argmin(np.abs(levels - float(x)))])
+
+    def _palette(levels, cmap_name, lo=0.35, hi=0.90):
+        lv = list(sorted([float(v) for v in levels]))
+        cmap = plt.get_cmap(cmap_name)
+        if len(lv) == 1:
+            return {lv[0]: cmap(hi)}
+        vals = np.linspace(lo, hi, len(lv))
+        return {lv[i]: cmap(vals[i]) for i in range(len(lv))}
+
+    LEVEL_COLORS_5 = {
+        0.0:  "#1f77b4",
+        1.0:  "#2ca02c",
+        2.0:  "#9467bd",
+        5.0:  "#d62728",
+        10.0: "#8c564b",
+    }
+
+    def _level_color_map(levels):
+        lv = list(sorted([float(v) for v in levels]))
+        tab = plt.get_cmap("tab10")
+        out = {}
+        for i, v in enumerate(lv):
+            out[v] = LEVEL_COLORS_5.get(float(v), tab(i % 10))
+        return out
 
     def _style_y_axes(axL, axR):
-        # left axis styling (capacity)
         axL.spines["left"].set_color(Y1_COLOR)
         axL.tick_params(axis="y", colors=Y1_COLOR)
         axL.yaxis.label.set_color(Y1_COLOR)
-        # right axis styling (voltage)
+
         axR.spines["right"].set_color(Y2_COLOR)
         axR.tick_params(axis="y", colors=Y2_COLOR)
         axR.yaxis.label.set_color(Y2_COLOR)
 
+    def _format_bottom_row(fig):
+        groups = _group_axes_by_position(fig)
+        bot_keys = _row_keys(groups, "bottom")
+        for key in bot_keys:
+            ax_list = groups.get(key, [])
+            if len(ax_list) != 1:
+                continue
+            ax = ax_list[0]
+            ax.set_xlim(*BOTTOM_XLIM)
+            ax.set_xticks(BOTTOM_XTICKS)
+            ax.set_xlabel(BOTTOM_XLABEL, labelpad=6)  # labelpad keeps it off the panels
+
     def _set_toprow_ticks_and_ylabels_switched(fig):
-        """
-        Top row only (SWITCHED vs main_6):
-          - Show Y1 (left-axis) tick labels + ylabel ONLY on LEFTMOST panel
-          - Show Y2 (right-axis) tick labels + ylabel ONLY on RIGHTMOST panel
-        """
         groups = _group_axes_by_position(fig)
         top_keys = _row_keys(groups, "top")
         if not top_keys:
@@ -4855,19 +4650,9 @@ def main_7():
         leftmost = top_keys[0]
         rightmost = top_keys[-1]
 
-        cap_ylabel = None
-        vmid_ylabel = None
-        for key in top_keys:
-            ax_pair = groups.get(key, [])
-            if len(ax_pair) != 2:
-                continue
-            axL, axR = _pick_left_right_axes(ax_pair)
-            if axL is None:
-                continue
-            cap_ylabel = cap_ylabel or (axL.get_ylabel() or "")
-            vmid_ylabel = vmid_ylabel or (axR.get_ylabel() or "")
-        cap_ylabel = cap_ylabel or "Capacity"
-        vmid_ylabel = vmid_ylabel or "Voltage"
+        # FORCE your preferred y-labels
+        cap_ylabel = TOP_LEFT_YLABEL
+        vmid_ylabel = TOP_RIGHT_YLABEL
 
         for key in top_keys:
             ax_pair = groups.get(key, [])
@@ -4877,20 +4662,32 @@ def main_7():
             if axL is None:
                 continue
 
-            axL.tick_params(labelleft=(key == leftmost))    # Y1 ticks only leftmost
-            axR.tick_params(labelright=(key == rightmost))  # Y2 ticks only rightmost
+            axL.tick_params(labelleft=(key == leftmost))
+            axR.tick_params(labelright=(key == rightmost))
 
-            axL.set_ylabel(cap_ylabel if key == leftmost else "")
-            axR.set_ylabel(vmid_ylabel if key == rightmost else "")
+            axL.set_ylabel(cap_ylabel if key == leftmost else "", labelpad=6)
+            axR.set_ylabel(vmid_ylabel if key == rightmost else "", labelpad=6)
 
             _style_y_axes(axL, axR)
+
+    def _shrink_shift_xlabels(fig, fontsize=10, labelpad=1):
+        groups = _group_axes_by_position(fig)
+        for key in _row_keys(groups, "top"):
+            ax_pair = groups.get(key, [])
+            if len(ax_pair) != 2:
+                continue
+            axL, _ = _pick_left_right_axes(ax_pair)
+            if axL is None:
+                continue
+            xl = (axL.get_xlabel() or "").strip()
+            if ("FEC" in xl) or ("VC" in xl) or ("wt" in xl):
+                axL.set_xlabel(xl, fontsize=fontsize, labelpad=labelpad)
 
     def _fit_stats(x, y, use_level_means=True):
         x = np.asarray(x, dtype=float)
         y = np.asarray(y, dtype=float)
         m = np.isfinite(x) & np.isfinite(y)
-        x = x[m]
-        y = y[m]
+        x = x[m]; y = y[m]
         if x.size < 2:
             return np.nan, np.nan, np.nan
 
@@ -4923,21 +4720,19 @@ def main_7():
             ax_pair = groups.get(key, [])
             if len(ax_pair) != 2:
                 continue
-            axL, _axR = _pick_left_right_axes(ax_pair)
+            axL, _ = _pick_left_right_axes(ax_pair)
             title = axL.get_title() or ""
             m = re.search(r"FEC\s*([0-9.]+)", title)
             if not m:
                 continue
             fec = float(m.group(1))
-
             sub = df_use.copy()
             sub["FEC_wt"] = pd.to_numeric(sub["FEC_wt"], errors="coerce")
-            sub["VC_wt"] = pd.to_numeric(sub["VC_wt"], errors="coerce")
+            sub["VC_wt"]  = pd.to_numeric(sub["VC_wt"], errors="coerce")
             sub = sub[sub["FEC_wt"] == fec]
 
             s1, b1, r1 = _fit_stats(sub["VC_wt"].to_numpy(float), sub[cap_col].to_numpy(float), use_level_means=True)
             s2, b2, r2 = _fit_stats(sub["VC_wt"].to_numpy(float), sub[v_col].to_numpy(float), use_level_means=True)
-
             print(f"[VC-shift | Trial 3] FEC={fec:g} wt%")
             print(f"  Cap  (mean-per-VC):   slope={s1:.6g}, intercept={b1:.6g}, R^2={r1:.4f}")
             print(f"  Vmid (mean-per-VC):   slope={s2:.6g}, intercept={b2:.6g}, R^2={r2:.4f}")
@@ -4948,33 +4743,25 @@ def main_7():
             ax_pair = groups.get(key, [])
             if len(ax_pair) != 2:
                 continue
-            axL, _axR = _pick_left_right_axes(ax_pair)
+            axL, _ = _pick_left_right_axes(ax_pair)
             title = axL.get_title() or ""
             m = re.search(r"VC\s*([0-9.]+)", title)
             if not m:
                 continue
             vc = float(m.group(1))
-
             sub = df_use.copy()
             sub["FEC_wt"] = pd.to_numeric(sub["FEC_wt"], errors="coerce")
-            sub["VC_wt"] = pd.to_numeric(sub["VC_wt"], errors="coerce")
+            sub["VC_wt"]  = pd.to_numeric(sub["VC_wt"], errors="coerce")
             sub = sub[sub["VC_wt"] == vc]
 
             s1, b1, r1 = _fit_stats(sub["FEC_wt"].to_numpy(float), sub[cap_col].to_numpy(float), use_level_means=True)
             s2, b2, r2 = _fit_stats(sub["FEC_wt"].to_numpy(float), sub[v_col].to_numpy(float), use_level_means=True)
-
             print(f"[FEC-shift | Trial 3] VC={vc:g} wt%")
             print(f"  Cap  (mean-per-FEC):  slope={s1:.6g}, intercept={b1:.6g}, R^2={r1:.4f}")
             print(f"  Vmid (mean-per-FEC):  slope={s2:.6g}, intercept={b2:.6g}, R^2={r2:.4f}")
 
     def _recolor_toprow_points_and_errorbars(fig, levels):
-        """
-        Top row:
-          - Capacity points + errorbars: BLUE shades (by x level)
-          - Voltage points + errorbars: ORANGE shades (by x level)
-        """
-        cap_map = _level_color_map(levels)  # categorical per wt%
-
+        cap_map = _level_color_map(levels)
         v_map = _palette(levels, "Oranges", lo=0.35, hi=0.90)
 
         groups = _group_axes_by_position(fig)
@@ -4988,8 +4775,7 @@ def main_7():
             if axL is None:
                 continue
 
-            # raw scatter collections
-            for coll in list(axL.collections):  # cap (filled blue)
+            for coll in list(axL.collections):  # Cap (filled)
                 try:
                     off = coll.get_offsets()
                     if off is None or len(off) == 0:
@@ -5002,7 +4788,7 @@ def main_7():
                 except Exception:
                     pass
 
-            for coll in list(axR.collections):  # v (hollow orange edge)
+            for coll in list(axR.collections):  # V (hollow)
                 try:
                     off = coll.get_offsets()
                     if off is None or len(off) == 0:
@@ -5015,7 +4801,6 @@ def main_7():
                 except Exception:
                     pass
 
-            # errorbar containers (means + SD bars)
             for cont in list(getattr(axL, "containers", [])):
                 if isinstance(cont, ErrorbarContainer):
                     try:
@@ -5025,7 +4810,6 @@ def main_7():
                             continue
                         lvl = _nearest_level(float(xdat[0]), levels)
                         c = cap_map.get(lvl, Y1_COLOR)
-
                         data_line.set_color(c)
                         data_line.set_markerfacecolor(c)
                         data_line.set_markeredgecolor(c)
@@ -5045,7 +4829,6 @@ def main_7():
                             continue
                         lvl = _nearest_level(float(xdat[0]), levels)
                         c = v_map.get(lvl, Y2_COLOR)
-
                         data_line.set_color(c)
                         data_line.set_markerfacecolor("none")
                         data_line.set_markeredgecolor(c)
@@ -5055,40 +4838,11 @@ def main_7():
                             blc.set_color(c)
                     except Exception:
                         pass
-    # --- NEW: categorical colors for wt% levels (Y1 + discharge curves) ---
-    LEVEL_COLORS_5 = {
-        0.0:  "#1f77b4",  # blue
-        1.0:  "#2ca02c",  # green
-        2.0:  "#9467bd",  # purple
-        5.0:  "#d62728",  # red
-        10.0: "#8c564b",  # brown
-    }
 
-    def _level_color_map(levels):
-        """
-        Discrete high-contrast mapping for additive wt% levels.
-        If a level isn't in LEVEL_COLORS_5 (unlikely), falls back to tab10 cycling.
-        """
-        lv = list(sorted([float(v) for v in levels]))
-        tab = plt.get_cmap("tab10")
-        out = {}
-        for i, v in enumerate(lv):
-            out[v] = LEVEL_COLORS_5.get(float(v), tab(i % 10))
-        return out
-
-    def _recolor_and_relabel_bottom_vc_blue(fig, vc_levels):
-        """
-        Bottom row curves for VC-shift:
-          - blue gradient by VC level
-          - solid lines
-          - legend labels ONLY: "{vc} wt%"
-        """
-        blue_map = _level_color_map(vc_levels)  # categorical per wt%
-
+    def _recolor_and_relabel_bottom_vc(fig, vc_levels):
+        blue_map = _level_color_map(vc_levels)
         groups = _group_axes_by_position(fig)
-        bot_keys = _row_keys(groups, "bottom")
-
-        for key in bot_keys:
+        for key in _row_keys(groups, "bottom"):
             ax_list = groups.get(key, [])
             if len(ax_list) != 1:
                 continue
@@ -5111,21 +4865,11 @@ def main_7():
                         seen.add(new_lab)
                 else:
                     ln.set_label("_nolegend_")
-            _legend_inside(ax)
 
-    def _recolor_and_relabel_bottom_fec_blue(fig, fec_levels):
-        """
-        Bottom row curves for FEC-shift:
-          - blue gradient by FEC level
-          - solid lines
-          - legend labels ONLY: "{fec} wt%"
-        """
-        blue_map = _level_color_map(fec_levels)  # categorical per wt%
-
+    def _recolor_and_relabel_bottom_fec(fig, fec_levels):
+        blue_map = _level_color_map(fec_levels)
         groups = _group_axes_by_position(fig)
-        bot_keys = _row_keys(groups, "bottom")
-
-        for key in bot_keys:
+        for key in _row_keys(groups, "bottom"):
             ax_list = groups.get(key, [])
             if len(ax_list) != 1:
                 continue
@@ -5148,7 +4892,173 @@ def main_7():
                         seen.add(new_lab)
                 else:
                     ln.set_label("_nolegend_")
-            _legend_inside(ax)
+
+    def add_top_legends_to_panel_b(fig, dfm_trial):
+        """
+        Put BOTH legends on top-middle subplot (b), bottom-right:
+          - Replicate legend is LOWER
+          - Metric legend stacks ABOVE it (TOPLEG_STACK_UP_DY)
+        """
+        groups = _group_axes_by_position(fig)
+        top_keys = _row_keys(groups, "top")
+        if len(top_keys) < 2:
+            return
+
+        # Reference labels from subplot (a) twin axes (for cap/v labels)
+        ax_pair_a = groups.get(top_keys[0], [])
+        if len(ax_pair_a) != 2:
+            return
+        axL_a, axR_a = _pick_left_right_axes(ax_pair_a)
+
+        # Host legends on subplot (b)
+        host_key = top_keys[TOPLEG_PANEL_INDEX]
+        ax_pair_b = groups.get(host_key, [])
+        if len(ax_pair_b) != 2:
+            return
+        axL_b, _axR_b = _pick_left_right_axes(ax_pair_b)
+
+        # Remove any existing legends on (a) and (b)
+        for ax in (axL_a, axL_b):
+            leg = ax.get_legend()
+            if leg is not None:
+                try:
+                    leg.remove()
+                except Exception:
+                    pass
+
+        d = dfm_trial.copy()
+        if "CellNumber" not in d.columns:
+            d["CellNumber"] = d["CellCode"].apply(get_cell_number)
+
+        present = sorted(set(d["CellNumber"].dropna().astype(int).tolist()))
+        present = [r for r in present if r in rep_marker_map]
+
+        rep_handles = [
+            Line2D([0], [0],
+                   marker=rep_marker_map[r], linestyle="None",
+                   color="black", markersize=REP_MARKERSIZE, label=f"Rep {r}")
+            for r in present
+        ]
+
+        cap_lab = (axL_a.get_ylabel() or "Cap @2.5 V (mAh/g)").strip()
+        v_lab   = (axR_a.get_ylabel() or "V @ 50%Q (V)").strip()
+
+        metric_handles = [
+            Line2D([0], [0], marker="o", linestyle="None",
+                   markerfacecolor="black", markeredgecolor="black",
+                   markersize=METRIC_MARKERSIZE, label=cap_lab),
+            Line2D([0], [0], marker="o", linestyle="None",
+                   markerfacecolor="none", markeredgecolor="black",
+                   markersize=METRIC_MARKERSIZE, label=v_lab),
+        ]
+
+        # Replicate legend (lower)
+        rep_leg = axL_b.legend(
+            handles=rep_handles,
+            loc=TOPLEG_LOC,
+            bbox_to_anchor=TOPLEG_BBOX,
+            ncol=2,
+            frameon=True,
+            framealpha=0.65,
+            facecolor="white",
+            edgecolor="none",
+            title="Replicate",
+            fontsize=REP_LEGEND_FONT,
+            borderaxespad=0.0,
+            handletextpad=0.5,
+            columnspacing=0.9,
+            labelspacing=0.35,
+        )
+
+        # Metric legend (stacked above)
+        metric_bbox = (TOPLEG_BBOX[0], TOPLEG_BBOX[1] + TOPLEG_STACK_UP_DY)
+        metric_leg = axL_b.legend(
+            handles=metric_handles,
+            loc=TOPLEG_LOC,
+            bbox_to_anchor=metric_bbox,
+            ncol=1,
+            frameon=True,
+            framealpha=0.65,
+            facecolor="white",
+            edgecolor="none",
+            fontsize=METRIC_FONT,
+            borderaxespad=0.0,
+            handletextpad=0.5,
+            labelspacing=0.35,
+        )
+
+        axL_b.add_artist(rep_leg)
+
+    def add_single_bottom_legend(fig):
+        """
+        Remove legends from bottom panels and add ONE shared legend to bottom-middle (e).
+        """
+        groups = _group_axes_by_position(fig)
+        bot_keys = _row_keys(groups, "bottom")
+        if len(bot_keys) < 2:
+            return
+
+        mid_key = bot_keys[len(bot_keys)//2]
+        ax_mid = groups.get(mid_key, [None])[0]
+        if ax_mid is None:
+            return
+
+        label_to_handle = {}
+
+        for key in bot_keys:
+            ax_list = groups.get(key, [])
+            if len(ax_list) != 1:
+                continue
+            ax = ax_list[0]
+
+            leg = ax.get_legend()
+            if leg is not None:
+                try:
+                    leg.remove()
+                except Exception:
+                    pass
+
+            for ln in ax.get_lines():
+                lab = ln.get_label() or ""
+                if (not lab) or lab.startswith("_") or lab == "_nolegend_":
+                    continue
+                if lab not in label_to_handle:
+                    label_to_handle[lab] = ln
+
+        if not label_to_handle:
+            return
+
+        def _lab_key(s):
+            m = re.search(r"([0-9.]+)", s)
+            return float(m.group(1)) if m else 1e9
+
+        labels_sorted = sorted(label_to_handle.keys(), key=_lab_key)
+        handles_sorted = [label_to_handle[l] for l in labels_sorted]
+
+        ax_mid.legend(
+            handles_sorted, labels_sorted,
+            loc=BOTTOM_LEGEND_LOC,
+            bbox_to_anchor=BOTTOM_LEGEND_BBOX,
+            frameon=False,
+            fontsize=BOTTOM_LEGEND_FONT,
+            handlelength=2.4,
+            labelspacing=0.35,
+            borderaxespad=0.0,
+        )
+
+    def _apply_word_layout(fig):
+        fig.set_size_inches(WORD_FIGSIZE[0], WORD_FIGSIZE[1], forward=True)
+        fig.subplots_adjust(**SUBPLOT_ADJUST)
+        fig.canvas.draw()
+
+    def _add_snowflake(fig):
+        # A small, consistent "extreme cold" marker in figure coordinates
+        fig.text(
+            SNOWFLAKE_POS[0], SNOWFLAKE_POS[1], SNOWFLAKE_TEXT,
+            ha="left", va="top",
+            fontsize=SNOWFLAKE_FONT,
+            fontweight="bold",
+        )
 
     # ---------------- build data (Trial 3 only) ----------------
     files_with_source = find_discharge_files(base_dir, old_directory, temp_tag="-51")
@@ -5171,27 +5081,13 @@ def main_7():
             "total_additive": get_total_additive(electrolyte),
         }
 
-    # --- COPY/PASTE PATCH: replace your alpha colormap block with this ---
-
     unique_alphas = sorted({get_alpha_prefix(c) for c in groups.keys()})
-
-    # High-contrast / colorblind-friendly categorical palette (hex)
     high_contrast_colors = [
-        "#1f77b4",  # blue
-        "#d62728",  # red
-        "#2ca02c",  # green
-        "#ff7f0e",  # orange
-        "#9467bd",  # purple
-        "#8c564b",  # brown
-        "#e377c2",  # pink
-        "#17becf",  # cyan
-        "#7f7f7f",  # gray
+        "#1f77b4", "#d62728", "#2ca02c", "#ff7f0e", "#9467bd",
+        "#8c564b", "#e377c2", "#17becf", "#7f7f7f",
     ]
-
-    alpha_colors = {
-        a: high_contrast_colors[i % len(high_contrast_colors)]
-        for i, a in enumerate(unique_alphas)
-    }
+    alpha_colors = {a: high_contrast_colors[i % len(high_contrast_colors)]
+                    for i, a in enumerate(unique_alphas)}
 
     dfm = compute_cell_discharge_metrics(
         groups, lookup, cell_meta,
@@ -5200,6 +5096,7 @@ def main_7():
     )
     dfm = dfm[dfm["Trial"] == 3].copy()
     debug_marker_collisions(dfm, trial=3)
+
     cap_col = f"cap_at_{CAPACITY_VOLTAGE:.1f}V"
     v_col = "MidpointDischargeV_V"
 
@@ -5211,7 +5108,7 @@ def main_7():
         plt.close = lambda *args, **kwargs: None
 
         with plt.rc_context(rc):
-            # --- VC shift combined ---
+            # -------- VC shift combined --------
             before = list(plt.get_fignums())
             plot_effect_of_vc_shift_cap_and_midV_with_curves(
                 dfm, groups, lookup, alpha_colors, plots_dir,
@@ -5229,16 +5126,21 @@ def main_7():
             _bold_top_panel_titles(fig_vc)
 
             _recolor_toprow_points_and_errorbars(fig_vc, GRID_VC_LEVELS)
-            _recolor_and_relabel_bottom_vc_blue(fig_vc, GRID_VC_LEVELS)
+            _recolor_and_relabel_bottom_vc(fig_vc, GRID_VC_LEVELS)
             _set_toprow_ticks_and_ylabels_switched(fig_vc)
-            _bump_tick_fonts(fig_vc)
+            _shrink_shift_xlabels(fig_vc)
             _print_bestfits_vc_shift(fig_vc, dfm, cap_col, v_col)
-            #add_replicate_marker_legend_to_top_left(fig_vc, dfm[dfm["Trial"] == 3],)
-            #add_metric_fill_legend_to_top_left(fig_vc)
-            add_top_left_legends(fig_vc, dfm[dfm["Trial"] == 3])
-            #add_top_left_legends(fig_fec, dfm[dfm["Trial"] == 3])
 
-            # --- FEC shift combined ---
+            #add_top_legends_to_panel_b(fig_vc, dfm[dfm["Trial"] == 3])
+            #add_single_bottom_legend(fig_vc)
+
+            set_all_ticks_inward(fig_vc)
+            _add_subplot_letters(fig_vc, start_letter="a")
+            _apply_word_layout(fig_vc)
+            _format_bottom_row(fig_vc)
+            #_add_snowflake(fig_vc)
+
+            # -------- FEC shift combined --------
             before = list(plt.get_fignums())
             plot_effect_of_fec_shift_cap_and_midV_with_curves(
                 dfm, groups, lookup, alpha_colors, plots_dir,
@@ -5256,41 +5158,41 @@ def main_7():
             _bold_top_panel_titles(fig_fec)
 
             _recolor_toprow_points_and_errorbars(fig_fec, GRID_FEC_LEVELS)
-            _recolor_and_relabel_bottom_fec_blue(fig_fec, GRID_FEC_LEVELS)
+            _recolor_and_relabel_bottom_fec(fig_fec, GRID_FEC_LEVELS)
             _set_toprow_ticks_and_ylabels_switched(fig_fec)
-            _bump_tick_fonts(fig_fec)
+            _shrink_shift_xlabels(fig_fec)
             _print_bestfits_fec_shift(fig_fec, dfm, cap_col, v_col)
-            #add_replicate_marker_legend_to_top_left(fig_fec, dfm[dfm["Trial"] == 3])
-            #add_metric_fill_legend_to_top_left(fig_fec)
-            #add_top_left_legends(fig_vc, dfm[dfm["Trial"] == 3])
-            add_top_left_legends(fig_fec, dfm[dfm["Trial"] == 3])
-            set_all_ticks_inward(fig_vc)
+
+            #add_top_legends_to_panel_b(fig_fec, dfm[dfm["Trial"] == 3])
+            #add_single_bottom_legend(fig_fec)
+
             set_all_ticks_inward(fig_fec)
-            _add_subplot_letters(fig_vc, start_letter="a")
             _add_subplot_letters(fig_fec, start_letter="a")
-            # ----------- NEW: resize to screen (or override) and save final figs -----------
-            figsize_in = FIGSIZE_OVERRIDE
-            if figsize_in is None and USE_SCREEN_SIZE:
-                figsize_in = _get_screen_figsize_inches(dpi=SAVE_DPI, frac=SCREEN_FRAC)
+            _apply_word_layout(fig_fec)
+            _format_bottom_row(fig_fec)
+            #_add_snowflake(fig_fec)
 
-            if figsize_in is not None:
-                fig_vc.set_size_inches(figsize_in[0], figsize_in[1], forward=True)
-                fig_fec.set_size_inches(figsize_in[0], figsize_in[1], forward=True)
-
-            # Use orig_savefig because Figure.savefig is monkeypatched to no-op above
-            out_vc = os.path.join(SAVE_DIR, "vc_shift_cap_and_midV_trial3.png")
+            # -------- save final figs --------
+            out_vc  = os.path.join(SAVE_DIR, "vc_shift_cap_and_midV_trial3.png")
             out_fec = os.path.join(SAVE_DIR, "fec_shift_cap_and_midV_trial3.png")
 
-            orig_savefig(fig_vc, out_vc, dpi=SAVE_DPI, bbox_inches="tight")
-            orig_savefig(fig_fec, out_fec, dpi=SAVE_DPI, bbox_inches="tight")
+            save_kwargs = dict(dpi=SAVE_DPI, facecolor="white")
+            if SAVE_BBOX_TIGHT:
+                save_kwargs.update(dict(bbox_inches="tight", pad_inches=0.02))
+
+            orig_savefig(fig_vc,  out_vc,  **save_kwargs)
+            orig_savefig(fig_fec, out_fec, **save_kwargs)
 
             print(f"Saved:\n  {out_vc}\n  {out_fec}")
-
             plt.show()
 
     finally:
         Figure.savefig = orig_savefig
         plt.close = orig_close
+
+
+
+
 
 
 if __name__ == "__main__":
