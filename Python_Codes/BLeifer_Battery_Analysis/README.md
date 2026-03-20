@@ -127,6 +127,28 @@ file_list = utils.get_file_list('/path/to/data_directory')
 utils.batch_import_files(file_list, sample_name_pattern=r'cell_([A-Z0-9]+)_')
 ```
 
+The CLI importer (`python -m battery_analysis.utils.import_directory ...`) now
+uses a pipelined execution model designed for large directories:
+
+- **Discovery stays ordered and single-threaded** so include/exclude filtering,
+  resume handling, and directory walk semantics remain predictable.
+- **Worker threads overlap file preparation with discovery** by hashing files,
+  consulting `.import_state.json`, and only parsing metadata when
+  `--sample-lookup` requires it.
+- **Coordinator updates stay serialized** so `ImportJob`,
+  `ImportJobSummary`, Redis progress messages, state-file writes, and optional
+  reports are emitted in a consistent order.
+
+Operational notes:
+
+- Progress can appear before the full directory tree has been scanned because
+  work begins as soon as files are prepared.
+- The reported total may grow during the run while additional files finish
+  preparation.
+- `--preview-samples` still pauses before importing; it overlaps discovery with
+  sample preparation, prints the resolved sample names, optionally writes a
+  sample-map template, and only starts imports after confirmation.
+
 ### Hierarchical Sample Management
 
 ```python

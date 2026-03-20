@@ -37,7 +37,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Mapping
 import configparser
-import tomllib
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
+    import tomli as tomllib
 
 __all__ = ["load_config"]
 
