@@ -37,6 +37,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Mapping
 import configparser
+
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover - Python < 3.11

@@ -190,6 +190,15 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         median_internal_resistance: float | None = None
         file_hash: str | None = None
         file_path: str | None = None
+        sample: Sample | None = None
+        tester: str | None = None
+        name: str | None = None
+        date: datetime.datetime | None = None
+        file_path: str | None = None
+        initial_capacity: float = 0.0
+        final_capacity: float = 0.0
+        capacity_retention: float = 0.0
+        avg_coulombic_eff: float = 0.0
         metadata: dict = dc_field(default_factory=dict)
         last_cycle_complete: bool | None = None
         c_rates: list = dc_field(default_factory=list)
@@ -198,6 +207,12 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         created_by: str | None = None
         last_modified_by: str | None = None
         notes_log: list = dc_field(default_factory=list)
+        created_at: datetime.datetime = dc_field(
+            default_factory=datetime.datetime.utcnow
+        )
+        updated_at: datetime.datetime = dc_field(
+            default_factory=datetime.datetime.utcnow
+        )
 
         _registry: ClassVar[dict[str, "TestResult"]] = {}
 
@@ -256,6 +271,11 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
                 else:
                     items = [obj for obj in items if getattr(obj, key, None) == value]
             return _Q(items)
+
+        def clean(self) -> "TestResult":
+            self.updated_at = datetime.datetime.utcnow()
+            self.metadata = inherit_metadata(self)
+            return self
 
     @dataclass
     class Sample:  # type: ignore
