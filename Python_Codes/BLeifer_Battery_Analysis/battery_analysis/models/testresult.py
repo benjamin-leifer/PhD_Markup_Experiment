@@ -125,17 +125,33 @@ class TestResult(Document):
     # Persistence helpers
     # ------------------------------------------------------------------
     def save(self, *args, **kwargs):  # type: ignore[override]
-        """Persist the test result and refresh sample aggregates."""
+        """Persist the test result and optionally synchronize its sample.
+
+        Parameters
+        ----------
+        sync_sample:
+            When ``True`` (default), add this test reference to the owning
+            sample using ``$addToSet`` so concurrent imports do not race on
+            in-memory list mutation.
+        recompute_sample_metrics:
+            When ``True`` (default), refresh aggregated sample metrics after the
+            save. Import workers should disable this and defer recomputation to a
+            single post-import consolidation pass.
+        """
+
+        sync_sample = kwargs.pop("sync_sample", True)
+        recompute_sample_metrics = kwargs.pop("recompute_sample_metrics", True)
         result = super().save(*args, **kwargs)
         try:
             sample = (
                 self.sample.fetch() if hasattr(self.sample, "fetch") else self.sample
             )
-            if sample is not None:
-                existing_ids = [getattr(ref, "id", None) for ref in sample.tests]
-                if self.id not in existing_ids:
-                    sample.tests.append(self)
-                sample.recompute_metrics()
+            if sample is not None and getattr(sample, "id", None) is not None:
+                if sync_sample and self.id is not None:
+                    sample.__class__.objects(id=sample.id).update_one(add_to_set__tests=self.id)
+                    sample.reload()
+                if recompute_sample_metrics:
+                    sample.recompute_metrics()
         except Exception:  # pragma: no cover - best-effort update
             pass
         return result

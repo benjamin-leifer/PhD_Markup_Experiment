@@ -1,10 +1,14 @@
 # battery_analysis/models/sample.py
 
 import datetime
-from typing import List
+from typing import TYPE_CHECKING, List
 
 import numpy as np
-from mongoengine import Document, fields, ReferenceField, ValidationError
+from mongoengine import Document, ValidationError, fields
+from mongoengine.errors import NotUniqueError
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from .testresult import TestResult
 
 
 class Sample(Document):
@@ -39,7 +43,7 @@ class Sample(Document):
     # Remove CASCADE to break circular dependency
     tests = fields.ListField(fields.LazyReferenceField("TestResult"))
     images = fields.ListField(fields.LazyReferenceField("RawDataFile"))
-    default_dataset = ReferenceField("CellDataset")
+    default_dataset = fields.ReferenceField("CellDataset")
 
     created_at = fields.DateTimeField(default=datetime.datetime.utcnow)
     updated_at = fields.DateTimeField(default=datetime.datetime.utcnow)
@@ -81,11 +85,28 @@ class Sample(Document):
 
     @classmethod
     def get_or_create(cls, name: str, **attrs) -> "Sample":
-        """Retrieve a sample by name or create and save a new one."""
-        sample = cls.get_by_name(name)
-        if sample is None:
-            sample = cls(name=name, **attrs)
-            sample.save()
+        """Atomically fetch or create a sample by name.
+
+        MongoDB performs the lookup and insert as a single upsert so concurrent
+        import workers do not race on the unique ``name`` constraint. Any
+        ``attrs`` are applied only when the sample is first inserted.
+        """
+
+        now = datetime.datetime.utcnow()
+        update = {
+            "set_on_insert__name": name,
+            "set_on_insert__created_at": now,
+            "set_on_insert__updated_at": now,
+        }
+        for key, value in attrs.items():
+            update[f"set_on_insert__{key}"] = value
+
+        try:
+            sample = cls.objects(name=name).modify(upsert=True, new=True, **update)
+        except NotUniqueError:
+            sample = cls.objects(name=name).get()
+        if sample is None:  # pragma: no cover - defensive fallback
+            sample = cls.objects(name=name).get()
         return sample
 
     def clean(self):
@@ -126,20 +147,27 @@ class Sample(Document):
     # Metric aggregation
     # ------------------------------------------------------------------
     def recompute_metrics(self) -> None:
-        """Recalculate aggregated metrics from associated ``TestResult``s.
+        """Recalculate aggregated metrics from current ``TestResult`` rows.
 
-        This method fetches each test referenced in :attr:`tests`, computes
-        averages or medians of the available metrics, updates the corresponding
-        fields on the sample, and persists the changes.
+        The aggregation queries ``TestResult`` documents by ``sample`` instead of
+        trusting :attr:`tests` to already be in sync. The stored ``tests`` list is
+        then refreshed in one update so import workers can safely add results
+        without racing on in-memory list mutation.
         """
 
-        fetched_tests: List = []
-        for ref in self.tests:
-            try:
-                test = ref.fetch() if hasattr(ref, "fetch") else ref
-            except Exception:  # pragma: no cover - defensive against bad refs
-                continue
-            fetched_tests.append(test)
+        fetched_tests: List["TestResult"]
+        if self.id is not None:
+            from .testresult import TestResult
+
+            fetched_tests = list(TestResult.objects(sample=self.id))
+        else:
+            fetched_tests = []
+            for ref in self.tests:
+                try:
+                    test = ref.fetch() if hasattr(ref, "fetch") else ref
+                except Exception:  # pragma: no cover - defensive against bad refs
+                    continue
+                fetched_tests.append(test)
 
         init_caps = [
             t.initial_capacity
@@ -173,13 +201,23 @@ class Sample(Document):
             and t.median_internal_resistance is not None
         ]
 
-        self.avg_initial_capacity = float(np.mean(init_caps)) if init_caps else None
-        self.avg_final_capacity = float(np.mean(final_caps)) if final_caps else None
-        self.avg_capacity_retention = float(np.mean(retentions)) if retentions else None
-        self.avg_coulombic_eff = float(np.mean(coul_eff)) if coul_eff else None
-        self.avg_energy_efficiency = float(np.mean(energy_eff)) if energy_eff else None
-        self.median_internal_resistance = (
-            float(np.median(resistances)) if resistances else None
-        )
+        metrics = {
+            "avg_initial_capacity": float(np.mean(init_caps)) if init_caps else None,
+            "avg_final_capacity": float(np.mean(final_caps)) if final_caps else None,
+            "avg_capacity_retention": float(np.mean(retentions)) if retentions else None,
+            "avg_coulombic_eff": float(np.mean(coul_eff)) if coul_eff else None,
+            "avg_energy_efficiency": float(np.mean(energy_eff)) if energy_eff else None,
+            "median_internal_resistance": (
+                float(np.median(resistances)) if resistances else None
+            ),
+        }
 
-        self.save()
+        test_ids = [test.id for test in fetched_tests if getattr(test, "id", None) is not None]
+        if self.id is not None:
+            self.update(set__tests=test_ids, **{f"set__{key}": value for key, value in metrics.items()})
+            self.reload()
+        else:  # pragma: no cover - unsaved instance fallback
+            self.tests = fetched_tests
+            for key, value in metrics.items():
+                setattr(self, key, value)
+

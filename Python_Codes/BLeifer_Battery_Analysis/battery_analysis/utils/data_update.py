@@ -138,7 +138,15 @@ def find_matching_tests(identifiers, sample_id):
     return list(query.filter(combined))
 
 
-def update_test_data(existing_test, new_cycles, metadata, strategy="append"):
+def update_test_data(
+    existing_test,
+    new_cycles,
+    metadata,
+    strategy="append",
+    *,
+    sync_sample=True,
+    recompute_sample=True,
+):
     """
     Update an existing test with new data.
 
@@ -234,7 +242,10 @@ def update_test_data(existing_test, new_cycles, metadata, strategy="append"):
             setattr(existing_test, key, value)
 
     # Save changes
-    existing_test.save()
+    existing_test.save(
+        sync_sample=sync_sample,
+        recompute_sample_metrics=recompute_sample,
+    )
 
     # Store detailed cycle data if available
     if detailed_cycles:
@@ -250,8 +261,9 @@ def update_test_data(existing_test, new_cycles, metadata, strategy="append"):
         except Exception as e:
             logging.error(f"Error storing detailed cycle data: {e}")
 
-    # Update the sample
-    update_sample_properties(existing_test.sample.fetch())
+    # Update the sample when requested
+    if recompute_sample:
+        update_sample_properties(existing_test.sample.fetch())
 
     return existing_test
 
@@ -300,7 +312,13 @@ def _match_experiment_plans(sample, test_result):
                 pass
 
 
-def process_file_with_update(file_path, sample):
+def process_file_with_update(
+    file_path,
+    sample,
+    *,
+    sync_sample=True,
+    recompute_sample=True,
+):
     """
     Process a file with automatic update detection.
 
@@ -374,7 +392,12 @@ def process_file_with_update(file_path, sample):
         # Update the existing test
         existing_test = matching_tests[0]
         updated_test = update_test_data(
-            existing_test, parsed_data, metadata, strategy="append"
+            existing_test,
+            parsed_data,
+            metadata,
+            strategy="append",
+            sync_sample=sync_sample,
+            recompute_sample=recompute_sample,
         )
 
         # Store detailed cycle data if available
@@ -416,6 +439,8 @@ def process_file_with_update(file_path, sample):
             cycles_summary=parsed_data,
             tester=metadata.get("tester", "Unknown"),
             metadata=metadata,
+            sync_sample=sync_sample,
+            recompute_sample=recompute_sample,
         )
 
         # Store detailed cycle data if available

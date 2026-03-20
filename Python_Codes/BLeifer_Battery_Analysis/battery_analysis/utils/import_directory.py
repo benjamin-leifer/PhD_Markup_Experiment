@@ -43,11 +43,16 @@ import datetime
 from dataclasses import dataclass, field
 import fnmatch
 import hashlib
+import inspect
 import json
 import os
 import tarfile
 import tempfile
 import time
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
+    import tomli as tomllib
 import zipfile
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from pathlib import Path
@@ -484,7 +489,19 @@ def process_file_with_update(
     """
 
     abs_path = os.path.abspath(path)
-    test, was_update = data_update.process_file_with_update(abs_path, sample)
+    process = data_update.process_file_with_update
+    params = inspect.signature(process).parameters
+    if "sync_sample" in params or any(
+        p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()
+    ):
+        test, was_update = process(
+            abs_path,
+            sample,
+            sync_sample=True,
+            recompute_sample=False,
+        )
+    else:
+        test, was_update = process(abs_path, sample)
 
     h = hashlib.sha256()
     with open(abs_path, "rb") as fh:
@@ -517,7 +534,7 @@ def process_file_with_update(
                 logger.warning("Failed to archive %s: %s", path, exc)
 
         try:
-            test.save()
+            test.save(sync_sample=True, recompute_sample_metrics=False)
         except Exception:  # pragma: no cover - best effort
             pass
 
@@ -679,6 +696,46 @@ def import_directory(
     if sample_map and os.path.exists(sample_map):
         sample_map_data = _load_sample_map(sample_map)
 
+            metadata = None
+            try:
+                _, metadata = parsers.parse_file(abs_path)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.error("Failed to parse %s: %s", abs_path, exc)
+
+            name = metadata.get("sample_code") if metadata else None
+            if not name:
+                name = os.path.basename(os.path.dirname(abs_path)) or "unknown"
+            attrs: Dict[str, object] = {}
+            if metadata and sample_lookup:
+                attrs = {
+                    k: v
+                    for k, v in metadata.items()
+                    if k not in {"sample_code", "name"}
+                }
+
+            entries.append(
+                {
+                    "path": abs_path,
+                    "mtime": mtime,
+                    "hash": file_hash,
+                    "sample": name,
+                    "attrs": attrs,
+                }
+            )
+
+    if not reset:
+        missing_paths = set(state.keys()) - current_paths
+        if missing_paths:
+            for path in missing_paths:
+                state.pop(path, None)
+            state_dirty = True
+
+    if resume and processed_paths:
+        entries = [e for e in entries if e["path"] not in processed_paths]
+
+    entries.sort(key=lambda entry: cast(str, entry["path"]))
+
+    total = start_idx + len(entries)
     processed_samples: Set[str] = set()
     report_entries: List[Tuple[str, str, object | None]] = []
     current_paths: Set[str] = set()
@@ -995,6 +1052,19 @@ def import_directory(
         return 0
 
     if dry_run:
+        for name in processed:
+            logger.info("Would consolidate sample metrics for %s", name)
+            logger.info("Would refresh dataset for %s", name)
+    else:
+        for name in processed:
+            sample = Sample.get_by_name(name)
+            if sample is None:
+                continue
+            try:
+                sample.recompute_metrics()
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.error("Failed to consolidate sample %s: %s", name, exc)
+                continue
         for name in processed_samples:
             logger.info("Would refresh dataset for %s", name)
     else:

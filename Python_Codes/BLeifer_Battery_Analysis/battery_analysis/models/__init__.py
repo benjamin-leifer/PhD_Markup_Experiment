@@ -97,6 +97,9 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
     # Provide very small dataclass implementations used in tests
     import datetime
     import uuid
+    from statistics import median
+
+    import numpy as np
     from dataclasses import dataclass
     from dataclasses import field as dc_field
     from typing import ClassVar
@@ -172,7 +175,21 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
 
     @dataclass
     class TestResult:  # type: ignore
+        id: str = dc_field(default_factory=lambda: str(uuid.uuid4()))
         parent: Cell | None = None
+        sample: "Sample | None" = None
+        tester: str = "Other"
+        name: str | None = None
+        cycles: list = dc_field(default_factory=list)
+        cycle_count: int | None = None
+        initial_capacity: float | None = 0.0
+        final_capacity: float | None = 0.0
+        capacity_retention: float | None = 0.0
+        avg_coulombic_eff: float | None = 0.0
+        avg_energy_efficiency: float | None = None
+        median_internal_resistance: float | None = None
+        file_hash: str | None = None
+        file_path: str | None = None
         sample: Sample | None = None
         tester: str | None = None
         name: str | None = None
@@ -197,11 +214,63 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
             default_factory=datetime.datetime.utcnow
         )
 
+        _registry: ClassVar[dict[str, "TestResult"]] = {}
+
         @classmethod
         def from_parent(cls, parent: Cell, **kwargs):  # type: ignore
             obj = cls(parent=parent, **kwargs)
             obj.metadata = inherit_metadata(obj)
             return obj
+
+        def save(
+            self,
+            *,
+            sync_sample: bool = True,
+            recompute_sample_metrics: bool = True,
+            **_kwargs,
+        ) -> "TestResult":
+            self.__class__._registry[self.id] = self
+            if self.sample is not None and sync_sample and self not in self.sample.tests:
+                self.sample.tests.append(self)
+            if self.sample is not None and recompute_sample_metrics:
+                self.sample.recompute_metrics()
+            return self
+
+        @classmethod
+        def objects(cls, **query):
+            class _Q(list):
+                def first(self):
+                    return self[0] if self else None
+
+                def count(self):
+                    return len(self)
+
+                def filter(self, *args, **kwargs):
+                    items = list(self)
+                    if kwargs:
+                        for key, value in kwargs.items():
+                            items = [obj for obj in items if getattr(obj, key, None) == value]
+                    return _Q(items)
+
+                def delete(self):
+                    for obj in list(self):
+                        cls._registry.pop(getattr(obj, "id", None), None)
+                        sample = getattr(obj, "sample", None)
+                        if sample is not None:
+                            sample.tests = [t for t in sample.tests if getattr(t, "id", None) != obj.id]
+
+            items = list(cls._registry.values())
+            for key, value in query.items():
+                if key == "sample":
+                    sample_id = getattr(value, "id", value)
+                    items = [
+                        obj
+                        for obj in items
+                        if getattr(getattr(obj, "sample", None), "id", None) == sample_id
+                    ]
+                else:
+                    items = [obj for obj in items if getattr(obj, key, None) == value]
+            return _Q(items)
 
         def clean(self) -> "TestResult":
             self.updated_at = datetime.datetime.utcnow()
@@ -210,7 +279,8 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
 
     @dataclass
     class Sample:  # type: ignore
-        name: str
+        id: str = dc_field(default_factory=lambda: str(uuid.uuid4()))
+        name: str = ""
         tests: list = dc_field(default_factory=list)
         nominal_capacity: float | None = None
         avg_initial_capacity: float | None = None
@@ -236,9 +306,50 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         def get_by_name(cls, name: str) -> "Sample | None":
             return cls._registry.get(name)
 
+        @classmethod
+        def objects(cls, **query):
+            class _Q(list):
+                def first(self):
+                    return self[0] if self else None
+
+                def count(self):
+                    return len(self)
+
+            items = list(cls._registry.values())
+            for key, value in query.items():
+                items = [obj for obj in items if getattr(obj, key, None) == value]
+            return _Q(items)
+
         def save(self) -> "Sample":
             self.__class__._registry[self.name] = self
             return self
+
+        def reload(self) -> "Sample":
+            return self
+
+        def recompute_metrics(self) -> None:
+            tests = list(TestResult.objects(sample=self.id))
+            self.tests = tests
+            initial_caps = [t.initial_capacity for t in tests if t.initial_capacity is not None]
+            final_caps = [t.final_capacity for t in tests if t.final_capacity is not None]
+            retentions = [t.capacity_retention for t in tests if t.capacity_retention is not None]
+            effs = [t.avg_coulombic_eff for t in tests if t.avg_coulombic_eff is not None]
+            energy_effs = [
+                t.avg_energy_efficiency
+                for t in tests
+                if getattr(t, "avg_energy_efficiency", None) is not None
+            ]
+            resistances = [
+                t.median_internal_resistance
+                for t in tests
+                if getattr(t, "median_internal_resistance", None) is not None
+            ]
+            self.avg_initial_capacity = float(np.mean(initial_caps)) if initial_caps else None
+            self.avg_final_capacity = float(np.mean(final_caps)) if final_caps else None
+            self.avg_capacity_retention = float(np.mean(retentions)) if retentions else None
+            self.avg_coulombic_eff = float(np.mean(effs)) if effs else None
+            self.avg_energy_efficiency = float(np.mean(energy_effs)) if energy_effs else None
+            self.median_internal_resistance = float(median(resistances)) if resistances else None
 
         @classmethod
         def get_or_create(cls, name: str, **attrs) -> "Sample":
