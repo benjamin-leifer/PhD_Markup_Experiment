@@ -276,6 +276,70 @@ The `TestResult` document represents a test performed on a sample:
 2. Update `compute_metrics()` in `analysis.py` to calculate the new metric
 3. Update `update_sample_properties()` to propagate the new metric
 
+## Migration Notes
+
+Use [`battery_analysis.utils.migrate_metadata_backfill`](battery_analysis/utils/migrate_metadata_backfill.py)
+for the README backfill migration tasks. The utility performs two passes:
+
+1. it finds `TestResult` documents missing `created_at` or `updated_at` and fills
+   the missing timestamp fields deterministically from the test date, metadata,
+   linked raw-file upload time, or finally the MongoDB object id timestamp; and
+2. it scans `raw_data_files` and backfills missing `sample`, `operator`,
+   `acquisition_device`, `tags`, and metadata keys when those values can be
+   inferred from the linked `test_result`, stored file path, or existing
+   metadata.
+
+### How to run it
+
+From `Python_Codes/BLeifer_Battery_Analysis` (or from any environment where the
+package is installed in editable mode), use the module entry point:
+
+```bash
+cd Python_Codes/BLeifer_Battery_Analysis
+python -m battery_analysis.utils.migrate_metadata_backfill --dry-run
+python -m battery_analysis.utils.migrate_metadata_backfill
+```
+
+Add `--json` if you want machine-readable counts for shell scripts or CI logs:
+
+```bash
+python -m battery_analysis.utils.migrate_metadata_backfill --dry-run --json
+```
+
+### Dry-run behavior
+
+`--dry-run` never saves any documents. It evaluates the same matching and
+backfill logic as a real run, reports how many `TestResult` and `RawDataFile`
+documents would change, and exits without writing updates.
+
+### Verifying counts before and after
+
+A practical verification flow is:
+
+1. Run a dry-run before the migration to capture the candidate counts.
+2. Run the migration without `--dry-run`.
+3. Run the dry-run again. An idempotent, fully applied migration should now
+   report `changed: 0` for both `test_results` and `raw_data_files`.
+
+Example:
+
+```bash
+python -m battery_analysis.utils.migrate_metadata_backfill --dry-run --json
+python -m battery_analysis.utils.migrate_metadata_backfill --json
+python -m battery_analysis.utils.migrate_metadata_backfill --dry-run --json
+```
+
+### Idempotence
+
+Yes. The migration is designed to be idempotent:
+
+- missing `TestResult` timestamps are derived from stable document data, so the
+  same document gets the same backfilled value every time; and
+- `RawDataFile` updates only add missing derivable fields or normalize merged
+  tags/metadata into the same final shape, so re-running the migration should
+  not produce additional writes after the first successful apply.
+
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
