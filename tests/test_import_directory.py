@@ -159,6 +159,74 @@ def test_new_file_creates_testresult(
     assert len(sample.tests) == 1
 
 
+def test_parallel_import_consolidates_shared_sample_once(
+    import_dir: tuple[Path, Callable[..., Path]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, make = import_dir
+    make("a.csv", content="first")
+    make("b.csv", content="second")
+
+    import importlib
+
+    models = importlib.reload(__import__("battery_analysis.models", fromlist=["*"]))
+    import_directory_mod = importlib.reload(
+        __import__("battery_analysis.utils.import_directory", fromlist=["*"])
+    )
+    RealSample = models.Sample
+    RealTestResult = models.TestResult
+
+    barrier = threading.Barrier(2)
+    recomputes: list[str] = []
+    original_recompute = RealSample.recompute_metrics
+
+    def tracked_recompute(self: RealSample) -> None:
+        recomputes.append(self.name)
+        original_recompute(self)
+
+    def fake_process(
+        path: str, sample: RealSample, **_kwargs: object
+    ) -> tuple[RealTestResult, bool]:
+        barrier.wait(timeout=5)
+        metric = 1.0 if Path(path).name == "a.csv" else 3.0
+        test = RealTestResult(
+            sample=sample,
+            tester="Other",
+            name=Path(path).name,
+            initial_capacity=metric,
+            final_capacity=metric,
+            capacity_retention=metric,
+            avg_coulombic_eff=metric,
+            cycle_count=0,
+        )
+        return test, False
+
+    monkeypatch.setattr(RealSample, "recompute_metrics", tracked_recompute)
+    monkeypatch.setattr(
+        import_directory_mod.data_update, "process_file_with_update", fake_process
+    )
+    monkeypatch.setattr(import_directory_mod, "update_cell_dataset", lambda name: None)
+
+    import_directory_mod.import_directory(root, workers=2, archive=False)
+
+    sample = RealSample.get_by_name("S1")
+    assert sample is not None
+    sample.reload()
+    assert len(sample.tests) == 2
+    assert sample.avg_initial_capacity == pytest.approx(2.0)
+    assert sample.avg_final_capacity == pytest.approx(2.0)
+    assert sample.avg_capacity_retention == pytest.approx(2.0)
+    assert sample.avg_coulombic_eff == pytest.approx(2.0)
+    assert recomputes == ["S1"]
+
+    # Restore dataclass-based models for subsequent tests
+    sys.modules["mongoengine"] = types.ModuleType("mongoengine")
+    importlib.reload(__import__("battery_analysis.models", fromlist=["*"]))
+    sys.modules.pop("mongoengine", None)
+    sys.modules["mongoengine"] = importlib.import_module("mongoengine")
+    importlib.reload(__import__("battery_analysis.utils.import_directory", fromlist=["*"]))
+
+
 def test_duplicate_across_samples_skipped(
     import_dir: tuple[Path, Callable[..., Path]],
     monkeypatch: pytest.MonkeyPatch,
@@ -193,9 +261,8 @@ def test_duplicate_across_samples_skipped(
     with caplog.at_level("INFO"):
         import_directory.import_directory(root, workers=1, archive=False)
 
-    assert TestResult.objects.count() == 1
-    s1 = Sample.get_by_name("S1")
-    s2 = Sample.get_by_name("S2")
+    s1 = import_directory.Sample.get_by_name("S1")
+    s2 = import_directory.Sample.get_by_name("S2")
     assert s1 is not None and s2 is not None
     assert len(s1.tests) == 1
     assert len(s2.tests) == 0

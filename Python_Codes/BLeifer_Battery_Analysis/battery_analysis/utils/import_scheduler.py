@@ -5,7 +5,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
+    import tomli as tomllib
 from pathlib import Path
 from typing import Dict, List
 

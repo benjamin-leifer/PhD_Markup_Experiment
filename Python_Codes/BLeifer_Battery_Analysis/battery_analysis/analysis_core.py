@@ -19,7 +19,15 @@ except ImportError:  # pragma: no cover - allow running as script
 import pandas as pd
 
 
-def create_test_result(sample, cycles_summary, tester, metadata=None):
+def create_test_result(
+    sample,
+    cycles_summary,
+    tester,
+    metadata=None,
+    *,
+    sync_sample=True,
+    recompute_sample=True,
+):
     """
     Create a TestResult document from parsed cycle data and attach it to a Sample.
 
@@ -133,14 +141,19 @@ def create_test_result(sample, cycles_summary, tester, metadata=None):
     try:
         if hasattr(test_result, "full_clean"):
             test_result.full_clean()
-        test_result.save()
+        if hasattr(test_result, "save"):
+            test_result.save(
+                sync_sample=sync_sample,
+                recompute_sample_metrics=recompute_sample,
+            )
 
-        # Link this test to the sample
-        sample.tests.append(test_result)
-        sample.save()
+        if sync_sample and not hasattr(test_result, "_data"):
+            # Dataclass fallback stores relationships in-memory instead.
+            sample.tests.append(test_result)
+            sample.save()
 
-        # Update inferred properties on the sample
-        update_sample_properties(sample)
+        if recompute_sample:
+            update_sample_properties(sample)
 
         return test_result
 

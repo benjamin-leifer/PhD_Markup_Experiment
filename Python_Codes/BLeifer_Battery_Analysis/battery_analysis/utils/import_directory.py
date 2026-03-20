@@ -42,12 +42,16 @@ import csv
 import datetime
 import fnmatch
 import hashlib
+import inspect
 import json
 import os
 import tarfile
 import tempfile
 import time
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
+    import tomli as tomllib
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -189,7 +193,19 @@ def process_file_with_update(
     """
 
     abs_path = os.path.abspath(path)
-    test, was_update = data_update.process_file_with_update(abs_path, sample)
+    process = data_update.process_file_with_update
+    params = inspect.signature(process).parameters
+    if "sync_sample" in params or any(
+        p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()
+    ):
+        test, was_update = process(
+            abs_path,
+            sample,
+            sync_sample=True,
+            recompute_sample=False,
+        )
+    else:
+        test, was_update = process(abs_path, sample)
 
     h = hashlib.sha256()
     with open(abs_path, "rb") as fh:
@@ -222,7 +238,7 @@ def process_file_with_update(
                 logger.warning("Failed to archive %s: %s", path, exc)
 
         try:
-            test.save()
+            test.save(sync_sample=True, recompute_sample_metrics=False)
         except Exception:  # pragma: no cover - best effort
             pass
 
@@ -458,6 +474,8 @@ def import_directory(
     if resume and processed_paths:
         entries = [e for e in entries if e["path"] not in processed_paths]
 
+    entries.sort(key=lambda entry: cast(str, entry["path"]))
+
     total = start_idx + len(entries)
     created = 0
     updated = 0
@@ -686,9 +704,18 @@ def import_directory(
 
     if dry_run:
         for name in processed:
+            logger.info("Would consolidate sample metrics for %s", name)
             logger.info("Would refresh dataset for %s", name)
     else:
         for name in processed:
+            sample = Sample.get_by_name(name)
+            if sample is None:
+                continue
+            try:
+                sample.recompute_metrics()
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.error("Failed to consolidate sample %s: %s", name, exc)
+                continue
             try:
                 update_cell_dataset(name)
             except Exception as exc:  # pragma: no cover - defensive
