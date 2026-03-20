@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import csv
 import datetime
+from dataclasses import dataclass, field
 import fnmatch
 import hashlib
 import json
@@ -47,13 +48,17 @@ import os
 import tarfile
 import tempfile
 import time
-import tomllib
 import zipfile
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from pathlib import Path
 from typing import BinaryIO, Dict, Iterator, List, Set, Tuple, cast
 
 from pandas.errors import ParserError
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
+    import tomli as tomllib
 
 try:
     import redis
@@ -85,6 +90,40 @@ RETRY_EXCEPTIONS: tuple[type[Exception], ...] = (ParserError, ConnectionError)
 RETRY_BASE_DELAY = 0.5
 
 CONTROL_FILE = Path(__file__).resolve().parents[4] / ".import_control"
+
+
+@dataclass(frozen=True)
+class _DiscoveredFile:
+    """Filesystem candidate yielded by the discovery stage."""
+
+    index: int
+    path: str
+    mtime: float
+
+
+@dataclass
+class _PreparedFile:
+    """Worker output produced after hashing and optional metadata lookup."""
+
+    index: int
+    path: str
+    mtime: float
+    file_hash: str
+    sample: str
+    attrs: Dict[str, object] = field(default_factory=dict)
+    status: str = "ready"
+    state_entry: Dict[str, object] | None = None
+
+
+@dataclass
+class _ImportResult:
+    """Final per-file import result consumed by the coordinator stage."""
+
+    prepared: _PreparedFile
+    sample_name: str
+    action: str
+    test_id: object | None = None
+    error: str | None = None
 
 
 def _read_control_command() -> str | None:
@@ -150,6 +189,262 @@ def _write_sample_map(path: str, pairs: List[Tuple[str, str]]) -> None:
                 fh.write(f'"{fp_esc}" = "{sample_esc}"\n')
     else:  # pragma: no cover - defensive
         raise ValueError("Unsupported mapping format; use CSV or TOML")
+
+
+def _hash_file(path: str) -> str:
+    """Return the MD5 digest for ``path`` using chunked reads."""
+
+    h = hashlib.md5()
+    with open(path, "rb") as bin_fh:
+        reader = cast(BinaryIO, bin_fh)
+        for chunk in iter(lambda: reader.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _default_sample_name(path: str) -> str:
+    """Infer the default sample name from ``path`` without parser metadata."""
+
+    return os.path.basename(os.path.dirname(path)) or "unknown"
+
+
+def _iter_candidate_files(
+    root: str,
+    *,
+    include: list[str],
+    exclude: list[str],
+    supported: set[str],
+) -> Iterator[_DiscoveredFile]:
+    """Yield supported files from ``root`` in discovery order.
+
+    Discovery remains single-threaded so include/exclude filtering and walk
+    ordering behave exactly as before, while downstream worker stages can start
+    hashing and importing each yielded path immediately.
+    """
+
+    def _match(path: str, patterns: list[str]) -> bool:
+        return any(fnmatch.fnmatch(path, pat) for pat in patterns)
+
+    idx = 0
+    for dirpath, _, filenames in os.walk(root):
+        if exclude and _match(dirpath, exclude):
+            continue
+        dir_included = True if not include else _match(dirpath, include)
+        for filename in filenames:
+            if exclude and _match(filename, exclude):
+                continue
+            if include and not (dir_included or _match(filename, include)):
+                continue
+            ext = os.path.splitext(filename)[1].lower()
+            if ext not in supported:
+                continue
+            abs_path = os.path.abspath(os.path.join(dirpath, filename))
+            yield _DiscoveredFile(index=idx, path=abs_path, mtime=os.path.getmtime(abs_path))
+            idx += 1
+
+
+def _prepare_file(
+    candidate: _DiscoveredFile,
+    *,
+    reset: bool,
+    previous_state: Dict[str, object],
+    sample_lookup: bool,
+    sample_map_data: Dict[str, str],
+) -> _PreparedFile:
+    """Hash a candidate file and resolve its sample metadata.
+
+    The worker only calls :func:`battery_analysis.parsers.parse_file` when
+    ``sample_lookup`` requires parser metadata. This keeps plain imports from
+    eagerly parsing every file during discovery.
+    """
+
+    abs_path = candidate.path
+    file_hash = _hash_file(abs_path)
+
+    if not reset and abs_path in previous_state:
+        entry = previous_state[abs_path]
+        if isinstance(entry, dict):
+            prev_mtime = entry.get("mtime")
+            prev_hash = entry.get("hash")
+        else:
+            prev_mtime = entry
+            prev_hash = None
+
+        if prev_mtime == candidate.mtime and prev_hash == file_hash:
+            return _PreparedFile(
+                index=candidate.index,
+                path=abs_path,
+                mtime=candidate.mtime,
+                file_hash=file_hash,
+                sample=sample_map_data.get(abs_path, _default_sample_name(abs_path)),
+                status="unchanged",
+            )
+
+        if prev_mtime == candidate.mtime and prev_hash is None:
+            return _PreparedFile(
+                index=candidate.index,
+                path=abs_path,
+                mtime=candidate.mtime,
+                file_hash=file_hash,
+                sample=sample_map_data.get(abs_path, _default_sample_name(abs_path)),
+                status="unchanged",
+                state_entry={"mtime": candidate.mtime, "hash": file_hash},
+            )
+
+    metadata: Dict[str, object] = {}
+    if sample_lookup:
+        try:
+            _, parsed_metadata = parsers.parse_file(abs_path)
+            if parsed_metadata:
+                metadata = dict(parsed_metadata)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error("Failed to parse %s: %s", abs_path, exc)
+
+    name = _default_sample_name(abs_path)
+    if sample_lookup:
+        name = cast(str, metadata.get("sample_code") or name)
+    if abs_path in sample_map_data:
+        name = sample_map_data[abs_path]
+
+    attrs: Dict[str, object] = {}
+    if sample_lookup and metadata:
+        attrs = {
+            k: v
+            for k, v in metadata.items()
+            if k not in {"sample_code", "name"}
+        }
+
+    return _PreparedFile(
+        index=candidate.index,
+        path=abs_path,
+        mtime=candidate.mtime,
+        file_hash=file_hash,
+        sample=name,
+        attrs=attrs,
+        state_entry={"mtime": candidate.mtime, "hash": file_hash},
+    )
+
+
+def _process_prepared_file(
+    prepared: _PreparedFile,
+    *,
+    archive: bool,
+    dry_run: bool,
+    job: ImportJob | None,
+    retries: int,
+    tags: list[str] | None,
+) -> _ImportResult:
+    """Import a prepared file or report what would happen during dry runs."""
+
+    if not ensure_connection():
+        logger.error("Database connection not available")
+        return _ImportResult(
+            prepared=prepared,
+            sample_name=prepared.sample,
+            action="skipped",
+            error="Database connection not available",
+        )
+
+    if dry_run:
+        logger.info("Would process %s for sample %s", prepared.path, prepared.sample)
+        return _ImportResult(
+            prepared=prepared,
+            sample_name=prepared.sample,
+            action="dry_run",
+        )
+
+    sample = Sample.get_or_create(prepared.sample, **prepared.attrs)
+    if tags:
+        try:
+            sample.tags = list({*(getattr(sample, "tags", []) or []), *tags})
+            sample.save()
+        except Exception:
+            pass
+
+    attempt = 0
+    while True:
+        try:
+            test, was_update = process_file_with_update(
+                prepared.path, sample, archive=archive, job=job, tags=tags
+            )
+            break
+        except RETRY_EXCEPTIONS as exc:
+            if attempt >= retries:
+                msg = f"{exc} after {attempt} retries"
+                logger.error(
+                    "Failed to process %s after %s retries: %s",
+                    prepared.path,
+                    attempt,
+                    exc,
+                )
+                return _ImportResult(
+                    prepared=prepared,
+                    sample_name=prepared.sample,
+                    action="skipped",
+                    error=msg,
+                )
+            time.sleep(2**attempt * RETRY_BASE_DELAY)
+            attempt += 1
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error("Failed to process %s: %s", prepared.path, exc)
+            return _ImportResult(
+                prepared=prepared,
+                sample_name=prepared.sample,
+                action="skipped",
+                error=str(exc),
+            )
+
+    action = "updated" if was_update else "created"
+    logger.info(
+        "%s test %s for sample %s",
+        action.title(),
+        getattr(test, "id", None),
+        sample.name,
+    )
+    return _ImportResult(
+        prepared=prepared,
+        sample_name=prepared.sample,
+        action=action,
+        test_id=getattr(test, "id", None),
+    )
+
+
+def _process_candidate_file(
+    candidate: _DiscoveredFile,
+    *,
+    reset: bool,
+    previous_state: Dict[str, object],
+    sample_lookup: bool,
+    sample_map_data: Dict[str, str],
+    archive: bool,
+    dry_run: bool,
+    job: ImportJob | None,
+    retries: int,
+    tags: list[str] | None,
+) -> _ImportResult:
+    """Prepare and import a candidate file inside one worker task."""
+
+    prepared = _prepare_file(
+        candidate,
+        reset=reset,
+        previous_state=previous_state,
+        sample_lookup=sample_lookup,
+        sample_map_data=sample_map_data,
+    )
+    if prepared.status == "unchanged":
+        return _ImportResult(
+            prepared=prepared,
+            sample_name=prepared.sample,
+            action="unchanged",
+        )
+    return _process_prepared_file(
+        prepared,
+        archive=archive,
+        dry_run=dry_run,
+        job=job,
+        retries=retries,
+        tags=tags,
+    )
 
 
 def process_file_with_update(
@@ -250,25 +545,39 @@ def import_directory(
 ) -> int:
     """Import all supported files within ``root``.
 
+    The importer now runs as a three-stage pipeline:
+
+    1. **Discovery** walks the directory tree and yields supported file paths.
+    2. **Worker tasks** hash files, compare ``.import_state.json``, optionally
+       parse metadata for ``sample_lookup``, resolve sample names, and then
+       import each prepared file.
+    3. **Coordination** runs on the calling thread and is solely responsible for
+       ordered bookkeeping: updating :class:`ImportJob` /
+       :class:`ImportJobSummary`, publishing Redis progress messages, updating
+       ``.import_state.json``, and writing the optional report.
+
+    Because discovery and worker tasks overlap, operators may see progress begin
+    before the full walk finishes. The reported ``total`` grows as files finish
+    preparation and are confirmed as work items. ``preview_samples`` still lists
+    samples before import; in that mode discovery overlaps only with the
+    preparation stage and import starts only after preview confirmation.
+
     Parameters
     ----------
     root:
         Root directory to search for files.
     sample_lookup:
-        When ``True`` the parser is invoked to extract metadata (such as a
-        ``sample_code``) to determine the sample.  Otherwise the parent
-        directory name is used.
-
+        When ``True`` parser metadata (for example ``sample_code``) is used to
+        determine the sample and any extra sample attributes.
     reset:
         When ``True`` any existing import state is ignored and all files are
         reprocessed.
     dry_run:
-        When ``True`` parse files and report what would happen without creating
-        samples, importing tests, or refreshing datasets.
+        When ``True`` report what would happen without creating samples,
+        importing tests, or refreshing datasets.
     workers:
-        Number of worker threads to use when importing files. ``None`` uses the
-        CPU count.
-
+        Number of worker threads to use when preparing and importing files.
+        ``None`` uses the CPU count.
     include:
         Glob patterns that must match either the directory path or filename for
         a file to be processed. If omitted, all paths are included.
@@ -293,8 +602,8 @@ def import_directory(
         does not exist so users may edit the names before confirming the import.
     resume:
         Identifier of an :class:`ImportJob` to continue. Files already recorded
-        for the job are skipped and new imports are appended to the existing
-        job record.
+        for the job are skipped and new imports are appended to the existing job
+        record.
     report:
         Optional path to write a per-file processing report in CSV or JSON
         format.
@@ -348,15 +657,9 @@ def import_directory(
 
     include = include or []
     exclude = exclude or []
-
-    def _match(path: str, patterns: list[str]) -> bool:
-        return any(fnmatch.fnmatch(path, pat) for pat in patterns)
-
     supported = {ext.lower() for ext in parsers.get_supported_formats()}
-    processed: Set[str] = set()
-    entries: List[Dict[str, object]] = []
-    skipped = 0
-    report_entries: List[Tuple[str, str, object | None]] = []
+    workers = workers or (os.cpu_count() or 1)
+    max_in_flight = max(1, workers * 2)
 
     state_path = os.path.join(root, ".import_state.json")
     state: Dict[str, object] = {}
@@ -372,95 +675,21 @@ def import_directory(
     else:
         original_state = {}
 
+    sample_map_data: Dict[str, str] = {}
+    if sample_map and os.path.exists(sample_map):
+        sample_map_data = _load_sample_map(sample_map)
+
+    processed_samples: Set[str] = set()
+    report_entries: List[Tuple[str, str, object | None]] = []
     current_paths: Set[str] = set()
-
-    for dirpath, _, filenames in os.walk(root):
-        if exclude and _match(dirpath, exclude):
-            continue
-        dir_included = True if not include else _match(dirpath, include)
-        for filename in filenames:
-            if exclude and _match(filename, exclude):
-                continue
-            if include and not (dir_included or _match(filename, include)):
-                continue
-            ext = os.path.splitext(filename)[1].lower()
-            if ext not in supported:
-                continue
-            file_path = os.path.join(dirpath, filename)
-            abs_path = os.path.abspath(file_path)
-            current_paths.add(abs_path)
-            mtime = os.path.getmtime(abs_path)
-
-            # compute hash of file contents
-            h = hashlib.md5()
-            with open(abs_path, "rb") as bin_fh:
-                reader = cast(BinaryIO, bin_fh)
-                for chunk in iter(lambda: reader.read(8192), b""):
-                    h.update(chunk)
-            file_hash = h.hexdigest()
-
-            if not reset and abs_path in state:
-                entry = state[abs_path]
-                if isinstance(entry, dict):
-                    prev_mtime = entry.get("mtime")
-                    prev_hash = entry.get("hash")
-                else:
-                    prev_mtime = entry
-                    prev_hash = None
-
-                if prev_mtime == mtime and prev_hash == file_hash:
-                    logger.info("Skipping %s; already imported", abs_path)
-                    skipped += 1
-                    continue
-
-                if prev_mtime == mtime and prev_hash is None:
-                    logger.info("Skipping %s; already imported", abs_path)
-                    if not dry_run:
-                        state[abs_path] = {"mtime": mtime, "hash": file_hash}
-                        state_dirty = True
-                    skipped += 1
-                    continue
-
-            metadata = None
-            try:
-                _, metadata = parsers.parse_file(abs_path)
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.error("Failed to parse %s: %s", abs_path, exc)
-
-            name = metadata.get("sample_code") if metadata else None
-            if not name:
-                name = os.path.basename(os.path.dirname(abs_path)) or "unknown"
-            attrs: Dict[str, object] = {}
-            if metadata and sample_lookup:
-                attrs = {
-                    k: v
-                    for k, v in metadata.items()
-                    if k not in {"sample_code", "name"}
-                }
-
-            entries.append(
-                {
-                    "path": abs_path,
-                    "mtime": mtime,
-                    "hash": file_hash,
-                    "sample": name,
-                    "attrs": attrs,
-                }
-            )
-
-    if not reset:
-        missing_paths = set(state.keys()) - current_paths
-        if missing_paths:
-            for path in missing_paths:
-                state.pop(path, None)
-            state_dirty = True
-
-    if resume and processed_paths:
-        entries = [e for e in entries if e["path"] not in processed_paths]
-
-    total = start_idx + len(entries)
+    prepared_entries: list[_PreparedFile] = []
+    discovered_work = 0
+    completed_work = 0
     created = 0
     updated = 0
+    skipped = 0
+    cancelled = False
+    paused = False
 
     pub = None
     channel = CONFIG.get("redis_channel", "import_progress")
@@ -470,236 +699,313 @@ def import_directory(
         except Exception:
             pub = None
 
-    if summary is not None:
-        summary.total_count = total
-        summary.processed_count = start_idx
-        summary.created_count = created
-        summary.updated_count = updated
-        summary.skipped_count = skipped
-        try:
-            summary.save()
-        except Exception:
-            pass
-
-    if job is not None:
-        job.total_count = max(job.total_count, total)
-        job.processed_count = start_idx
-        try:
-            job.save()
-        except Exception:
-            pass
-        if pub:
-            try:
-                pub.publish(
-                    channel,
-                    json.dumps({"job_id": str(job.id), "total": job.total_count}),
-                )
-            except Exception:
-                pass
-
-    pairs = [(e["path"], e["sample"]) for e in entries]
-
-    if sample_map:
-        if os.path.exists(sample_map):
-            mapping = _load_sample_map(sample_map)
-            for e in entries:
-                if e["path"] in mapping:
-                    e["sample"] = mapping[e["path"]]
-        elif preview_samples:
-            _write_sample_map(sample_map, pairs)
-        pairs = [(e["path"], e["sample"]) for e in entries]
-
-    if preview_samples:
-        max_len = max((len(p) for p, _ in pairs), default=10)
-        header = "File Path".ljust(max_len) + " | Sample"
-        print(header)
-        print("-" * len(header))
-        for fp, sample in pairs:
-            print(fp.ljust(max_len) + " | " + sample)
-        if sample_map and not os.path.exists(sample_map):
-            print(f"Sample map written to {sample_map}")
-        if not confirm:
-            return 0
-
-    workers = workers or (os.cpu_count() or 1)
-
-    def _process(
-        abs_path: str,
-        mtime: float,
-        file_hash: str,
-        name: str,
-        attrs: Dict[str, object],
-    ) -> tuple[str, str, str, float, str, object | None, str | None]:
-        """Worker function processing a single file."""
-        if not ensure_connection():
-            logger.error("Database connection not available")
-            return (
-                "",
-                "skipped",
-                abs_path,
-                mtime,
-                file_hash,
-                None,
-                "Database connection not available",
-            )
-
+    def _save_state_file() -> None:
         if dry_run:
-            logger.info("Would process %s for sample %s", abs_path, name)
-            return name, "dry_run", abs_path, mtime, file_hash, None, None
+            return
+        try:
+            with open(state_path, "w", encoding="utf-8") as fh:
+                json.dump(state, fh, indent=2, sort_keys=True)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error("Failed to write state to %s: %s", state_path, exc)
 
-        sample = Sample.get_or_create(name, **attrs)
-        if tags:
+    def _publish_progress(payload: Dict[str, object]) -> None:
+        if not pub:
+            return
+        try:
+            pub.publish(channel, json.dumps(payload))
+        except Exception:
+            pass
+
+    def _sync_progress(*, force: bool = False, current_file: str | None = None) -> None:
+        if summary is not None:
+            summary.total_count = start_idx + discovered_work
+            summary.processed_count = start_idx + completed_work
+            summary.created_count = created
+            summary.updated_count = updated
+            summary.skipped_count = skipped
             try:
-                sample.tags = list({*(getattr(sample, "tags", []) or []), *tags})
-                sample.save()
+                if force or ((start_idx + completed_work) % 5 == 0):
+                    summary.save()
             except Exception:
                 pass
-        attempt = 0
-        while True:
+
+        if job is not None:
+            job.total_count = max(job.total_count, start_idx + discovered_work)
+            job.processed_count = start_idx + completed_work
+            if current_file is not None:
+                job.current_file = current_file
             try:
-                test, was_update = process_file_with_update(
-                    abs_path, sample, archive=archive, job=job, tags=tags
-                )
-                break
-            except RETRY_EXCEPTIONS as exc:
-                if attempt >= retries:
-                    msg = f"{exc} after {attempt} retries"
-                    logger.error(
-                        "Failed to process %s after %s retries: %s",
-                        abs_path,
-                        attempt,
-                        exc,
-                    )
-                    return name, "skipped", abs_path, mtime, file_hash, None, msg
-                time.sleep(2**attempt * RETRY_BASE_DELAY)
-                attempt += 1
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.error("Failed to process %s: %s", abs_path, exc)
-                return name, "skipped", abs_path, mtime, file_hash, None, str(exc)
+                if force or ((start_idx + completed_work) % 5 == 0):
+                    job.save()
+            except Exception:
+                pass
+            payload: Dict[str, object] = {
+                "job_id": str(job.id),
+                "processed": start_idx + completed_work,
+                "total": job.total_count,
+            }
+            if current_file is not None:
+                payload["current_file"] = current_file
+            if force or current_file is not None:
+                _publish_progress(payload)
 
-        action = "updated" if was_update else "created"
-        logger.info(
-            "%s test %s for sample %s",
-            action.title(),
-            getattr(test, "id", None),
-            sample.name,
-        )
-        return name, action, abs_path, mtime, file_hash, getattr(test, "id", None), None
+    def _handle_control() -> None:
+        nonlocal cancelled, paused
+        cmd = _read_control_command()
+        if cmd == "cancel":
+            logger.info("Import cancelled via control file")
+            cancelled = True
+            return
+        if cmd != "pause":
+            return
 
-    idx = 0
-    cancelled = False
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        for batch in _chunked(entries, max(1, workers)):
-            futures = [
-                executor.submit(
-                    _process, e["path"], e["mtime"], e["hash"], e["sample"], e["attrs"]
-                )
-                for e in batch
-            ]
-            for fut in as_completed(futures):
-                idx += 1
-                name, action, abs_path, mtime, file_hash, test_id, error = fut.result()
-                if name:
-                    processed.add(name)
-                if action == "updated":
-                    updated += 1
-                elif action == "created":
-                    created += 1
-                elif action == "skipped":
-                    skipped += 1
-                if action in {"updated", "created"} and not dry_run:
-                    state[abs_path] = {"mtime": mtime, "hash": file_hash}
-                    try:
-                        with open(state_path, "w", encoding="utf-8") as fh:
-                            json.dump(state, fh, indent=2, sort_keys=True)
-                    except Exception as exc:  # pragma: no cover - defensive
-                        logger.error("Failed to write state to %s: %s", state_path, exc)
-                detail = str(test_id) if test_id is not None else error
-                report_entries.append((abs_path, action, detail))
-                if summary is not None:
-                    if error is not None:
-                        summary.errors.append(error)
-                    summary.processed_count = start_idx + idx
-                    summary.created_count = created
-                    summary.updated_count = updated
-                    summary.skipped_count = skipped
-                    try:
-                        if (start_idx + idx) % 5 == 0 or (start_idx + idx) == total:
-                            summary.save()
-                    except Exception:
-                        pass
-                if job is not None:
-                    entry = {"path": abs_path, "action": action}
-                    if test_id is not None:
-                        entry["test_id"] = str(test_id)
-                    if error is not None:
-                        entry["error"] = error
-                        job.errors.append(error)
-                    job.files.append(entry)
-                    job.current_file = abs_path
-                    job.processed_count = start_idx + idx
-                    if (start_idx + idx) % 5 == 0 or (start_idx + idx) == total:
-                        try:
-                            job.save()
-                        except Exception:
-                            pass
-                        if pub:
-                            try:
-                                pub.publish(
-                                    channel,
-                                    json.dumps(
-                                        {
-                                            "job_id": str(job.id),
-                                            "current_file": abs_path,
-                                            "processed": start_idx + idx,
-                                            "total": total,
-                                        }
-                                    ),
-                                )
-                            except Exception:
-                                pass
-                if (start_idx + idx) % 10 == 0 or (start_idx + idx) == total:
-                    logger.info("Processed %s/%s", start_idx + idx, total)
-
+        if not paused:
+            logger.info("Import paused via control file")
+            paused = True
+        while True:
+            time.sleep(0.2)
             cmd = _read_control_command()
             if cmd == "cancel":
                 logger.info("Import cancelled via control file")
                 cancelled = True
-                break
-            if cmd == "pause":
-                logger.info("Import paused via control file")
-                while True:
-                    time.sleep(0.2)
-                    cmd = _read_control_command()
-                    if cmd == "cancel":
-                        logger.info("Import cancelled via control file")
-                        cancelled = True
-                        break
-                    if cmd != "pause":
-                        logger.info("Import resumed")
-                        break
+                return
+            if cmd != "pause":
+                logger.info("Import resumed")
+                paused = False
+                return
+
+    _sync_progress(force=True)
+
+    if job is not None:
+        _publish_progress({"job_id": str(job.id), "total": job.total_count})
+
+    prepare_futures: Dict[Future[_PreparedFile], _DiscoveredFile] = {}
+    work_futures: Dict[Future[_ImportResult], _PreparedFile | _DiscoveredFile] = {}
+
+    def _submit_import(executor: ThreadPoolExecutor, prepared: _PreparedFile) -> None:
+        nonlocal discovered_work
+        discovered_work += 1
+        prepared_entries.append(prepared)
+        future = executor.submit(
+            _process_prepared_file,
+            prepared,
+            archive=archive,
+            dry_run=dry_run,
+            job=job,
+            retries=retries,
+            tags=tags,
+        )
+        work_futures[future] = prepared
+        _sync_progress(force=True)
+
+    def _record_completed_result(result: _ImportResult) -> None:
+        nonlocal completed_work, created, updated, skipped, state_dirty
+
+        completed_work += 1
+        if result.action == "updated":
+            updated += 1
+            processed_samples.add(result.sample_name)
+        elif result.action == "created":
+            created += 1
+            processed_samples.add(result.sample_name)
+        elif result.action == "dry_run":
+            processed_samples.add(result.sample_name)
+        elif result.action == "skipped":
+            skipped += 1
+
+        if result.action in {"updated", "created"} and not dry_run:
+            state[result.prepared.path] = result.prepared.state_entry or {
+                "mtime": result.prepared.mtime,
+                "hash": result.prepared.file_hash,
+            }
+            state_dirty = True
+            _save_state_file()
+
+        detail = str(result.test_id) if result.test_id is not None else result.error
+        report_entries.append((result.prepared.path, result.action, detail))
+
+        if summary is not None and result.error is not None:
+            summary.errors.append(result.error)
+        if job is not None:
+            entry = {"path": result.prepared.path, "action": result.action}
+            if result.test_id is not None:
+                entry["test_id"] = str(result.test_id)
+            if result.error is not None:
+                entry["error"] = result.error
+                job.errors.append(result.error)
+            job.files.append(entry)
+
+        _sync_progress(
+            force=((start_idx + completed_work) == (start_idx + discovered_work)),
+            current_file=result.prepared.path,
+        )
+        if (start_idx + completed_work) % 10 == 0 or (start_idx + completed_work) == (
+            start_idx + discovered_work
+        ):
+            logger.info("Processed %s/%s", start_idx + completed_work, start_idx + discovered_work)
+
+    def _drain_futures(
+        executor: ThreadPoolExecutor,
+        *,
+        block: bool,
+        allow_import_submission: bool,
+    ) -> None:
+        nonlocal discovered_work, skipped, state_dirty
+
+        while True:
+            active = list(prepare_futures) + list(work_futures)
+            if not active:
+                return
+            timeout = None if block else 0
+            done, _ = wait(active, timeout=timeout, return_when=FIRST_COMPLETED)
+            if not done:
+                return
+            for future in done:
+                if future in prepare_futures:
+                    prepare_futures.pop(future)
+                    prepared = future.result()
+                    if prepared.status == "unchanged":
+                        skipped += 1
+                        if prepared.state_entry is not None and not dry_run:
+                            state[prepared.path] = prepared.state_entry
+                            state_dirty = True
+                        _sync_progress(force=True)
+                        _handle_control()
+                        if cancelled:
+                            return
+                        continue
+                    if allow_import_submission:
+                        _submit_import(executor, prepared)
+                    else:
+                        prepared_entries.append(prepared)
+                else:
+                    source = work_futures.pop(future)
+                    result = future.result()
+                    if result.action == "unchanged":
+                        skipped += 1
+                        if result.prepared.state_entry is not None and not dry_run:
+                            state[result.prepared.path] = result.prepared.state_entry
+                            state_dirty = True
+                        _sync_progress(force=True)
+                    else:
+                        if isinstance(source, _DiscoveredFile):
+                            discovered_work += 1
+                        _record_completed_result(result)
+                _handle_control()
+                if cancelled:
+                    return
+            if not block:
+                return
+
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        for candidate in _iter_candidate_files(
+            root,
+            include=include,
+            exclude=exclude,
+            supported=supported,
+        ):
+            current_paths.add(candidate.path)
+            if resume and candidate.path in processed_paths:
+                continue
+
+            while len(prepare_futures) + len(work_futures) >= max_in_flight:
+                _drain_futures(executor, block=True, allow_import_submission=not preview_samples)
                 if cancelled:
                     break
+            if cancelled:
+                break
+
+            if preview_samples:
+                future = executor.submit(
+                    _prepare_file,
+                    candidate,
+                    reset=reset,
+                    previous_state=original_state,
+                    sample_lookup=sample_lookup,
+                    sample_map_data=sample_map_data,
+                )
+                prepare_futures[future] = candidate
+            else:
+                future = executor.submit(
+                    _process_candidate_file,
+                    candidate,
+                    reset=reset,
+                    previous_state=original_state,
+                    sample_lookup=sample_lookup,
+                    sample_map_data=sample_map_data,
+                    archive=archive,
+                    dry_run=dry_run,
+                    job=job,
+                    retries=retries,
+                    tags=tags,
+                )
+                work_futures[future] = candidate
+            _drain_futures(executor, block=False, allow_import_submission=not preview_samples)
+            if cancelled:
+                break
+
+        if not cancelled:
+            _drain_futures(executor, block=True, allow_import_submission=not preview_samples)
+
+        if not reset:
+            missing_paths = set(state.keys()) - current_paths
+            if missing_paths:
+                for missing_path in missing_paths:
+                    state.pop(missing_path, None)
+                state_dirty = True
+
+        if preview_samples:
+            prepared_entries.sort(key=lambda entry: entry.index)
+            pairs = [(entry.path, entry.sample) for entry in prepared_entries]
+            wrote_sample_map = False
+            if sample_map and not os.path.exists(sample_map):
+                _write_sample_map(sample_map, pairs)
+                wrote_sample_map = True
+            if sample_map and os.path.exists(sample_map):
+                mapping = _load_sample_map(sample_map)
+                for entry in prepared_entries:
+                    if entry.path in mapping:
+                        entry.sample = mapping[entry.path]
+                pairs = [(entry.path, entry.sample) for entry in prepared_entries]
+
+            max_len = max((len(p) for p, _ in pairs), default=10)
+            header = "File Path".ljust(max_len) + " | Sample"
+            print(header)
+            print("-" * len(header))
+            for fp, sample in pairs:
+                print(fp.ljust(max_len) + " | " + sample)
+            if sample_map and wrote_sample_map:
+                print(f"Sample map written to {sample_map}")
+            if not confirm or cancelled:
+                return 0
+            else:
+                for prepared in prepared_entries:
+                    while len(work_futures) >= max_in_flight:
+                        _drain_futures(executor, block=True, allow_import_submission=False)
+                        if cancelled:
+                            break
+                    if cancelled:
+                        break
+                    _submit_import(executor, prepared)
+                    _drain_futures(executor, block=False, allow_import_submission=False)
+                if not cancelled:
+                    _drain_futures(executor, block=True, allow_import_submission=False)
 
     if cancelled:
         return 0
 
     if dry_run:
-        for name in processed:
+        for name in processed_samples:
             logger.info("Would refresh dataset for %s", name)
     else:
-        for name in processed:
+        for name in processed_samples:
             try:
                 update_cell_dataset(name)
             except Exception as exc:  # pragma: no cover - defensive
                 logger.error("Failed to refresh dataset for %s: %s", name, exc)
 
     if (state_dirty or (not reset and state != original_state)) and not dry_run:
-        try:
-            with open(state_path, "w", encoding="utf-8") as fh:
-                json.dump(state, fh, indent=2, sort_keys=True)
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.error("Failed to write state to %s: %s", state_path, exc)
+        _save_state_file()
 
     logger.info(
         "Summary: created=%s, updated=%s, skipped=%s",
@@ -708,9 +1014,11 @@ def import_directory(
         skipped,
     )
 
+    final_total = start_idx + discovered_work
     if summary is not None:
         summary.end_time = datetime.datetime.utcnow()
-        summary.processed_count = total
+        summary.total_count = final_total
+        summary.processed_count = start_idx + completed_work
         summary.created_count = created
         summary.updated_count = updated
         summary.skipped_count = skipped
@@ -723,18 +1031,13 @@ def import_directory(
     if job is not None:
         job.end_time = datetime.datetime.utcnow()
         job.current_file = None
-        job.processed_count = total
+        job.total_count = max(job.total_count, final_total)
+        job.processed_count = start_idx + completed_work
         try:
             job.save()
         except Exception:  # pragma: no cover - best effort
             pass
-        if pub:
-            try:
-                pub.publish(
-                    channel, json.dumps({"job_id": str(job.id), "status": "completed"})
-                )
-            except Exception:
-                pass
+        _publish_progress({"job_id": str(job.id), "status": "completed"})
 
     if notify:
         msg = f"Import job completed: created={created}, updated={updated}, skipped={skipped}"
