@@ -174,6 +174,10 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
     class TestResult:  # type: ignore
         parent: Cell | None = None
         sample: Sample | None = None
+        tester: str | None = None
+        name: str | None = None
+        date: datetime.datetime | None = None
+        file_path: str | None = None
         initial_capacity: float = 0.0
         final_capacity: float = 0.0
         capacity_retention: float = 0.0
@@ -186,12 +190,23 @@ except Exception:  # pragma: no cover - executed when mongoengine is missing
         created_by: str | None = None
         last_modified_by: str | None = None
         notes_log: list = dc_field(default_factory=list)
+        created_at: datetime.datetime = dc_field(
+            default_factory=datetime.datetime.utcnow
+        )
+        updated_at: datetime.datetime = dc_field(
+            default_factory=datetime.datetime.utcnow
+        )
 
         @classmethod
         def from_parent(cls, parent: Cell, **kwargs):  # type: ignore
             obj = cls(parent=parent, **kwargs)
             obj.metadata = inherit_metadata(obj)
             return obj
+
+        def clean(self) -> "TestResult":
+            self.updated_at = datetime.datetime.utcnow()
+            self.metadata = inherit_metadata(self)
+            return self
 
     @dataclass
     class Sample:  # type: ignore
