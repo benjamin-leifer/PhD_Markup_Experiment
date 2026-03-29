@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import io
-import json
 import logging
 from multiprocessing import Process
 from typing import Any, Dict, List, Optional, Tuple
@@ -451,7 +450,7 @@ def _render_matplotlib(fig_dict: Dict[str, Any], backend: str | None = None) -> 
             logging.exception("Failed to set Matplotlib backend to %s", backend)
     import matplotlib.pyplot as plt
 
-    fig = go.Figure(json.loads(json.dumps(fig_dict), cls=PlotlyJSONDecoder))
+    fig = go.Figure(fig_dict)
     try:
         plt.figure()
         for tr in fig.data:
